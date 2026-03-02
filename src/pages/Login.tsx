@@ -1,12 +1,11 @@
 import { useState } from "react"
-import { useNavigate } from "react-router-dom"
+import { useNavigate, Link } from "react-router-dom"
 import { supabase } from "@/lib/supabase"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Lock, Mail, Loader2, ShieldCheck, FileText, Trash2 } from "lucide-react"
-import { Modal } from "@/components/ui/modal"
 import { TERMS_OF_USE, PRIVACY_POLICY, DATA_DELETION_TEXT } from "@/constants/legal"
 
 export function Login() {
@@ -14,9 +13,6 @@ export function Login() {
     const [password, setPassword] = useState("")
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState<string | null>(null)
-    const [isTermsOpen, setIsTermsOpen] = useState(false)
-    const [isPrivacyOpen, setIsPrivacyOpen] = useState(false)
-    const [isDeletionOpen, setIsDeletionOpen] = useState(false)
     const navigate = useNavigate()
 
     const handleLogin = async (e: React.FormEvent) => {
@@ -101,66 +97,33 @@ export function Login() {
                         </Button>
 
                         <div className="flex items-center justify-center gap-4 pt-2">
-                            <button
-                                type="button"
-                                onClick={() => setIsTermsOpen(true)}
+                            <Link
+                                to="/terms"
                                 className="text-[10px] uppercase font-bold text-muted-foreground hover:text-primary transition-colors flex items-center gap-1"
                             >
                                 <FileText className="w-3 h-3" />
                                 Termos de Uso
-                            </button>
+                            </Link>
                             <span className="text-muted-foreground/30">•</span>
-                            <button
-                                type="button"
-                                onClick={() => setIsPrivacyOpen(true)}
+                            <Link
+                                to="/privacy"
                                 className="text-[10px] uppercase font-bold text-muted-foreground hover:text-primary transition-colors flex items-center gap-1"
                             >
                                 <ShieldCheck className="w-3 h-3" />
                                 Privacidade
-                            </button>
+                            </Link>
                             <span className="text-muted-foreground/30">•</span>
-                            <button
-                                type="button"
-                                onClick={() => setIsDeletionOpen(true)}
+                            <Link
+                                to="/deletion"
                                 className="text-[10px] uppercase font-bold text-muted-foreground hover:text-primary transition-colors flex items-center gap-1"
                             >
                                 <Trash2 className="w-3 h-3" />
                                 Excluir Dados
-                            </button>
+                            </Link>
                         </div>
                     </form>
                 </CardContent>
             </Card>
-
-            <Modal
-                isOpen={isTermsOpen}
-                onClose={() => setIsTermsOpen(false)}
-                title="Termos de Uso"
-            >
-                <div className="whitespace-pre-wrap text-sm text-muted-foreground leading-relaxed">
-                    {TERMS_OF_USE}
-                </div>
-            </Modal>
-
-            <Modal
-                isOpen={isPrivacyOpen}
-                onClose={() => setIsPrivacyOpen(false)}
-                title="Política de Privacidade"
-            >
-                <div className="whitespace-pre-wrap text-sm text-muted-foreground leading-relaxed">
-                    {PRIVACY_POLICY}
-                </div>
-            </Modal>
-
-            <Modal
-                isOpen={isDeletionOpen}
-                onClose={() => setIsDeletionOpen(false)}
-                title="Instruções para Exclusão de Dados"
-            >
-                <div className="whitespace-pre-wrap text-sm text-muted-foreground leading-relaxed">
-                    {DATA_DELETION_TEXT}
-                </div>
-            </Modal>
         </div>
     )
 }
