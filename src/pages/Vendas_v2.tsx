@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Modal } from "@/components/ui/modal"
-import { Search, Filter, Trash2, Printer, Plus, X, UserPlus, PackagePlus, DollarSign } from "lucide-react"
+import { Search, Filter, Trash2, Printer, Plus, X, UserPlus, PackagePlus, DollarSign, ShoppingCart } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 
 interface Venda {
@@ -126,7 +126,7 @@ export function Vendas() {
     }
 
     const handleAddItem = () => {
-        setVendaItems([...vendaItems, { produto_id: '', quantidade: 1, preco_unitario: 0, subtotal: 0 }])
+        setVendaItems([...vendaItems, { produto_id: '', quantidade: 1, preco_unitario: 0, subtotal: 0, _search: '' }])
     }
 
     const handleRemoveItem = (index: number) => {
@@ -181,7 +181,7 @@ export function Vendas() {
 
             alert('Venda realizada com sucesso!')
             setIsNovoPedidoModalOpen(false)
-            setVendaItems([{ produto_id: '', quantidade: 1, preco_unitario: 0, subtotal: 0 }])
+            setVendaItems([{ produto_id: '', quantidade: 1, preco_unitario: 0, subtotal: 0, _search: '' }])
             fetchVendas()
         } catch (err: any) {
             alert('Erro ao criar venda: ' + err.message)
@@ -419,54 +419,106 @@ export function Vendas() {
                             <div key={idx} className="grid grid-cols-12 gap-3 items-end border-b pb-4">
                                 <div className="col-span-12 md:col-span-5 space-y-1">
                                     <div className="flex items-center justify-between">
-                                        <Label className="text-[10px] uppercase">Produto</Label>
-                                        <div className="flex gap-2">
-                                            <input
-                                                type="text"
-                                                placeholder="Buscar SKU/Nome..."
-                                                className="h-5 text-[9px] px-1 border rounded bg-muted"
+                                        <Label className="text-[10px] uppercase font-bold text-muted-foreground italic">Pesquisar Produto (SKU ou Nome)</Label>
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="sm"
+                                            className="h-4 p-0 text-[10px] gap-1 text-primary hover:bg-transparent"
+                                            onClick={() => setIsNovoProdutoModalOpen(true)}
+                                        >
+                                            <PackagePlus className="w-3.5 h-3.5" /> Novo
+                                        </Button>
+                                    </div>
+
+                                    {!item.produto_id ? (
+                                        <div className="relative group">
+                                            <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
+                                            <Input
+                                                placeholder="Digite partes do nome ou SKU..."
+                                                className="pl-10 h-10 text-sm border-2 focus-visible:ring-primary shadow-sm"
+                                                autoFocus
+                                                value={item._search || ''}
                                                 onChange={(e) => {
-                                                    const val = e.target.value.toLowerCase();
-                                                    // This is a local UI filter for the dropdown
-                                                    const filtered = produtos.filter(p =>
-                                                        p.nome.toLowerCase().includes(val) ||
-                                                        (p.sku && p.sku.toLowerCase().includes(val))
-                                                    );
-                                                    // We can't easily change the global 'produtos' without affecting other rows,
-                                                    // but we can provide a better UI. For now, let's keep it simple by filtering the map below.
-                                                    (e.target as any)._lastSearch = val;
-                                                    setVendaItems([...vendaItems]); // trigger re-render
+                                                    const val = e.target.value;
+                                                    const newItems = [...vendaItems];
+                                                    newItems[idx]._search = val;
+                                                    setVendaItems(newItems);
                                                 }}
                                             />
+                                            {item._search && item._search.length >= 2 && (
+                                                <div className="absolute z-[100] w-[140%] mt-1 bg-background border-2 rounded-xl shadow-2xl max-h-72 overflow-y-auto overflow-x-hidden animate-in fade-in zoom-in duration-200">
+                                                    {produtos
+                                                        .filter(p => {
+                                                            const s = item._search.toLowerCase().split(' ').filter(x => x.length > 0);
+                                                            const pName = p.nome.toLowerCase();
+                                                            const pSku = (p.sku || '').toLowerCase();
+                                                            // Match ALL parts of the search string (intelligent partial match)
+                                                            return s.every(part => pName.includes(part) || pSku.includes(part));
+                                                        })
+                                                        .map(p => (
+                                                            <div
+                                                                key={p.id}
+                                                                className="px-4 py-3 text-sm hover:bg-primary/10 cursor-pointer border-b last:border-0 flex justify-between items-center transition-colors group"
+                                                                onClick={() => {
+                                                                    handleItemChange(idx, 'produto_id', p.id);
+                                                                    const newItems = [...vendaItems];
+                                                                    newItems[idx]._search = '';
+                                                                    setVendaItems(newItems);
+                                                                }}
+                                                            >
+                                                                <div className="flex flex-col gap-0.5 flex-1 min-w-0">
+                                                                    <span className="font-bold text-foreground truncate group-hover:text-primary transition-colors">{p.nome}</span>
+                                                                    <div className="flex items-center gap-2">
+                                                                        <span className="text-[10px] px-1.5 py-0.5 bg-muted rounded font-mono uppercase tracking-wider">SKU: {p.sku || 'N/A'}</span>
+                                                                        <span className={`text-[10px] font-bold ${p.estoque_atual <= 5 ? 'text-destructive' : 'text-emerald-500'}`}>
+                                                                            📦 {p.estoque_atual} un
+                                                                        </span>
+                                                                    </div>
+                                                                </div>
+                                                                <div className="ml-4 text-right">
+                                                                    <span className="font-black text-primary text-base">
+                                                                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(p.preco_venda)}
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                        ))
+                                                    }
+                                                    {produtos.filter(p => {
+                                                        const s = item._search.toLowerCase().split(' ').filter(x => x.length > 0);
+                                                        const pName = p.nome.toLowerCase();
+                                                        const pSku = (p.sku || '').toLowerCase();
+                                                        return s.every(part => pName.includes(part) || pSku.includes(part));
+                                                    }).length === 0 && (
+                                                            <div className="px-4 py-8 text-sm text-center text-muted-foreground flex flex-col items-center gap-2">
+                                                                <ShoppingCart className="w-8 h-8 opacity-20" />
+                                                                <p className="italic">Nenhum produto encontrado com "{item._search}"</p>
+                                                            </div>
+                                                        )}
+                                                </div>
+                                            )}
+                                        </div>
+                                    ) : (
+                                        <div className="flex items-center gap-3 p-3 border-2 rounded-xl bg-primary/5 border-primary/20 shadow-inner group">
+                                            <div className="flex-1 overflow-hidden">
+                                                <p className="text-sm font-black truncate text-primary uppercase tracking-tight">
+                                                    {produtos.find(p => p.id === item.produto_id)?.nome}
+                                                </p>
+                                                <p className="text-[10px] font-mono text-muted-foreground">
+                                                    SKU: {produtos.find(p => p.id === item.produto_id)?.sku || '---'}
+                                                </p>
+                                            </div>
                                             <Button
                                                 type="button"
-                                                variant="ghost"
+                                                variant="outline"
                                                 size="sm"
-                                                className="h-4 p-0 text-[9px] gap-1 text-primary hover:bg-transparent"
-                                                onClick={() => setIsNovoProdutoModalOpen(true)}
+                                                className="h-8 text-[11px] font-bold border-primary/30 text-primary hover:bg-primary hover:text-white transition-all shadow-sm"
+                                                onClick={() => handleItemChange(idx, 'produto_id', '')}
                                             >
-                                                <PackagePlus className="w-3 h-3" /> Novo
+                                                Mudar
                                             </Button>
                                         </div>
-                                    </div>
-                                    <select
-                                        className="w-full h-9 px-2 rounded-md border text-sm bg-background text-foreground"
-                                        value={item.produto_id}
-                                        onChange={e => handleItemChange(idx, 'produto_id', e.target.value)}
-                                        required
-                                    >
-                                        <option value="" className="bg-background text-foreground">Selecione...</option>
-                                        {produtos.filter(p => {
-                                            const search = (document.activeElement as any)?._lastSearch || "";
-                                            // The above is a bit hacky for a quick fix. A better way is a state for search.
-                                            // Let's add a search state per row index.
-                                            return true; // placeholder for now, will implement properly below
-                                        }).map(p => (
-                                            <option key={p.id} value={p.id} className="bg-background text-foreground">
-                                                {p.sku ? `[${p.sku}] ` : ''}{p.nome} (Est: {p.estoque_atual})
-                                            </option>
-                                        ))}
-                                    </select>
+                                    )}
                                 </div>
                                 <div className="col-span-4 md:col-span-2 space-y-1">
                                     <Label className="text-[10px] uppercase">Qtd</Label>
