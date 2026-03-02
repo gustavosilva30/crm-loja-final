@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom"
-import { LayoutDashboard, Package, ShoppingCart, DollarSign, Users, Truck, Settings, LogOut, FileText, Bell, BarChart, Wallet, MessageCircle } from "lucide-react"
+import { LayoutDashboard, Package, ShoppingCart, DollarSign, Users, Truck, Settings, LogOut, FileText, Bell, BarChart, Wallet, MessageCircle, CheckCircle2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { ModeToggle } from "./ModeToggle"
 import { supabase } from "@/lib/supabase"
@@ -11,6 +11,7 @@ const navItems = [
   { icon: Bell, label: "Lembretes", href: "/lembretes" },
   { icon: Package, label: "Estoque", href: "/produtos" },
   { icon: ShoppingCart, label: "Vendas", href: "/vendas" },
+  { icon: CheckCircle2, label: "Vendas Concluídas", href: "/vendas-concluidas" },
   { icon: FileText, label: "Orçamentos", href: "/orcamentos" },
   { icon: Wallet, label: "Controle de Caixa", href: "/caixa" },
   { icon: DollarSign, label: "Financeiro", href: "/financeiro" },

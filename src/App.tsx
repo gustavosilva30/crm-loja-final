@@ -7,6 +7,7 @@ import { Dashboard } from "./pages/Dashboard"
 import { Produtos } from "./pages/Produtos"
 import { Orcamentos } from "./pages/Orcamentos"
 import { Vendas } from "./pages/Vendas"
+import { VendasConcluidas } from "./pages/VendasConcluidas"
 import { Financeiro } from "./pages/Financeiro"
 import { Clientes } from "./pages/Clientes"
 import { Entregas } from "./pages/Entregas"
@@ -57,6 +58,7 @@ export default function App() {
                 <Route path="produtos" element={<Produtos />} />
                 <Route path="orcamentos" element={<Orcamentos />} />
                 <Route path="vendas" element={<Vendas />} />
+                <Route path="vendas-concluidas" element={<VendasConcluidas />} />
                 <Route path="financeiro" element={<Financeiro />} />
                 <Route path="clientes" element={<Clientes />} />
                 <Route path="entregas" element={<Entregas />} />
