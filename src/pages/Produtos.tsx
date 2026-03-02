@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select } from "@/components/ui/select"
 import { Modal } from "@/components/ui/modal"
-import { Plus, Search, Filter, LayoutGrid, List, Package, Trash2, Pencil, ShoppingCart, FileText } from "lucide-react"
+import { Plus, Search, Filter, LayoutGrid, List, Package, Trash2, Pencil, ShoppingCart, FileText, Camera, Upload, X } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 
 interface Produto {
@@ -38,6 +38,8 @@ export function Produtos() {
   const [submitting, setSubmitting] = useState(false)
   const [isCompatModalOpen, setIsCompatModalOpen] = useState(false)
   const [selectedCompat, setSelectedCompat] = useState<string | null>(null)
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [imagePreview, setImagePreview] = useState<string | null>(null)
 
   // Resources
   const [categorias, setCategorias] = useState<{ id: string, nome: string }[]>([])
@@ -87,11 +89,33 @@ export function Produtos() {
     e.preventDefault()
     setSubmitting(true)
     try {
+      let finalImageUrl = newProduto.imagem_url
+
+      // 1. Upload imagem se houver arquivo selecionado
+      if (selectedFile) {
+        const fileExt = selectedFile.name.split('.').pop()
+        const fileName = `${Math.random()}.${fileExt}`
+        const filePath = `product-images/${fileName}`
+
+        const { error: uploadError, data } = await supabase.storage
+          .from('produtos')
+          .upload(filePath, selectedFile)
+
+        if (uploadError) throw uploadError
+
+        const { data: { publicUrl } } = supabase.storage
+          .from('produtos')
+          .getPublicUrl(filePath)
+
+        finalImageUrl = publicUrl
+      }
+
       if (editingProduto) {
         const { error } = await supabase
           .from('produtos')
           .update({
             ...newProduto,
+            imagem_url: finalImageUrl,
             categoria_id: newProduto.categoria_id || null
           })
           .eq('id', editingProduto.id)
@@ -101,6 +125,7 @@ export function Produtos() {
           .from('produtos')
           .insert([{
             ...newProduto,
+            imagem_url: finalImageUrl,
             categoria_id: newProduto.categoria_id || null
           }])
         if (error) throw error
@@ -119,6 +144,8 @@ export function Produtos() {
         imagem_url: '',
         compatibilidade: ''
       })
+      setSelectedFile(null)
+      setImagePreview(null)
       fetchProdutos()
       setIsModalOpen(false)
     } catch (err) {
@@ -151,6 +178,8 @@ export function Produtos() {
       imagem_url: produto.imagem_url || '',
       compatibilidade: produto.compatibilidade || ''
     })
+    setImagePreview(produto.imagem_url || null)
+    setSelectedFile(null)
     setIsModalOpen(true)
   }
 
@@ -208,6 +237,8 @@ export function Produtos() {
             imagem_url: '',
             compatibilidade: ''
           })
+          setImagePreview(null)
+          setSelectedFile(null)
           setIsModalOpen(true)
         }}>
           <Plus className="w-4 h-4" />
@@ -370,9 +401,60 @@ export function Produtos() {
             <Label>Descrição</Label>
             <Input placeholder="Detalhes do produto..." value={newProduto.descricao} onChange={e => setNewProduto({ ...newProduto, descricao: e.target.value })} />
           </div>
-          <div className="space-y-2">
-            <Label>Link da Imagem (URL)</Label>
-            <Input placeholder="https://exemplo.com/imagem.jpg" value={newProduto.imagem_url} onChange={e => setNewProduto({ ...newProduto, imagem_url: e.target.value })} />
+          <div className="space-y-4">
+            <Label>Foto do Produto (PC ou Celular)</Label>
+            <div className="flex items-center gap-4">
+              <div className="relative w-32 h-32 rounded-lg border-2 border-dashed border-muted-foreground/20 bg-muted/30 flex items-center justify-center overflow-hidden group">
+                {imagePreview ? (
+                  <>
+                    <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setImagePreview(null)
+                        setSelectedFile(null)
+                        setNewProduto(prev => ({ ...prev, imagem_url: '' }))
+                      }}
+                      className="absolute top-1 right-1 bg-destructive text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </>
+                ) : (
+                  <Camera className="w-8 h-8 text-muted-foreground/40" />
+                )}
+              </div>
+
+              <div className="flex flex-col gap-2 flex-1">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="gap-2 w-full justify-start"
+                  onClick={() => document.getElementById('product-image-upload')?.click()}
+                >
+                  <Upload className="w-4 h-4" />
+                  {imagePreview ? "Trocar Foto" : "Selecionar Foto / Abrir Câmera"}
+                </Button>
+                <input
+                  id="product-image-upload"
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0]
+                    if (file) {
+                      setSelectedFile(file)
+                      const reader = new FileReader()
+                      reader.onloadend = () => {
+                        setImagePreview(reader.result as string)
+                      }
+                      reader.readAsDataURL(file)
+                    }
+                  }}
+                />
+                <p className="text-[10px] text-muted-foreground">Suporta JPG, PNG. O arquivo será enviado para o servidor ao salvar.</p>
+              </div>
+            </div>
           </div>
           <div className="space-y-2">
             <Label>Compatibilidade (Mercado Livre)</Label>
