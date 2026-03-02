@@ -166,6 +166,39 @@ export function Vendas() {
         }
     }
 
+    const handleCreateNovoCliente = async (e: React.FormEvent) => {
+        e.preventDefault()
+        setSubmitting(true)
+        try {
+            const { data, error } = await supabase.from('clientes').insert(novoClienteForm).select().single()
+            if (error) throw error
+            await fetchResources()
+            setVendaForm({ ...vendaForm, cliente_id: data.id })
+            setIsNovoClienteModalOpen(false)
+            setNovoClienteForm({ nome: '', telefone: '', documento: '' })
+        } catch (err: any) { alert('Erro: ' + err.message) }
+        finally { setSubmitting(false) }
+    }
+
+    const handleCreateNovoProduto = async (e: React.FormEvent, index: number) => {
+        e.preventDefault()
+        setSubmitting(true)
+        try {
+            const { data, error } = await supabase.from('produtos').insert({
+                ...novoProdutoForm,
+                preco_venda: novoProdutoForm.preco,
+                sku: `AUTO-${Date.now().toString().slice(-6)}`
+            }).select().single()
+            if (error) throw error
+            await fetchResources()
+            handleItemChange(index, 'produto_id', data.id)
+            setIsNovoProdutoModalOpen(false)
+            setNovoProdutoForm({ nome: '', preco: 0, estoque_atual: 0 })
+        } catch (err: any) { alert('Erro: ' + err.message) }
+        finally { setSubmitting(false) }
+    }
+
+
     const handleOpenReceipt = async (vendaId: string) => {
         setLoading(true)
         try {
@@ -428,6 +461,7 @@ export function Vendas() {
                 </form>
             </Modal>
         </div>
+
     )
 }
 
