@@ -100,8 +100,8 @@ export function Atendimento() {
         setNewMessage("")
 
         try {
-            // Chama o backend Node.js
-            await axios.post('http://localhost:5000/api/whatsapp/send', {
+            const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
+            await axios.post(`${apiUrl}/api/whatsapp/send`, {
                 conversa_id: selectedConversa.id,
                 telefone: selectedConversa.telefone,
                 conteudo: msgContent
@@ -109,7 +109,7 @@ export function Atendimento() {
             // A mensagem aparecerá via Realtime
         } catch (err) {
             console.error(err)
-            alert("Erro ao enviar mensagem. Certifique-se que o backend Node.js está rodando na porta 5000.")
+            alert("Erro ao enviar mensagem. Certifique-se que o backend Node.js está rodando e a URL de API está correta.")
         }
     }
 
@@ -198,8 +198,8 @@ export function Atendimento() {
                                 mensagens.map(msg => (
                                     <div key={msg.id} className={`flex ${msg.tipo_envio === 'sent' ? 'justify-end' : 'justify-start'}`}>
                                         <div className={`max-w-[75%] p-3 rounded-2xl shadow-sm text-sm relative group ${msg.tipo_envio === 'sent'
-                                                ? 'bg-primary text-primary-foreground rounded-tr-none'
-                                                : 'bg-muted/80 text-foreground rounded-tl-none border border-border/50'
+                                            ? 'bg-primary text-primary-foreground rounded-tr-none'
+                                            : 'bg-muted/80 text-foreground rounded-tl-none border border-border/50'
                                             }`}>
                                             {msg.conteudo}
                                             <div className={`text-[9px] mt-1 opacity-60 text-right font-mono`}>
