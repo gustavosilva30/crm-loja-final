@@ -41,6 +41,15 @@ export function Vendas() {
     const [clientes, setClientes] = useState<any[]>([])
     const [produtos, setProdutos] = useState<any[]>([])
 
+    // Quick Creation Modals State
+    const [isNovoClienteModalOpen, setIsNovoClienteModalOpen] = useState(false)
+    const [isNovoProdutoModalOpen, setIsNovoProdutoModalOpen] = useState(false)
+
+    // Form states for quick creation
+    const [novoClienteForm, setNovoClienteForm] = useState({ nome: '', telefone: '', documento: '' })
+    const [novoProdutoForm, setNovoProdutoForm] = useState({ nome: '', preco: 0, estoque_atual: 0 })
+
+
     // New Sale Form State
     const [vendaItems, setVendaItems] = useState<any[]>([{ produto_id: '', quantidade: 1, preco_unitario: 0, subtotal: 0 }])
     const [vendaForm, setVendaForm] = useState({
@@ -242,28 +251,43 @@ export function Vendas() {
                 <form onSubmit={handleCreateVenda} className="space-y-6">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2">
-                            <Label>Cliente</Label>
+                            <div className="flex items-center justify-between">
+                                <Label>Cliente</Label>
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-6 text-[10px] gap-1 text-primary"
+                                    onClick={() => setIsNovoClienteModalOpen(true)}
+                                >
+                                    <UserPlus className="w-3 h-3" /> Novo Cliente
+                                </Button>
+                            </div>
                             <select
-                                className="w-full h-10 px-3 rounded-md border border-input bg-background"
+                                className="w-full h-10 px-3 rounded-md border border-input bg-background text-foreground"
                                 value={vendaForm.cliente_id}
                                 onChange={e => setVendaForm({ ...vendaForm, cliente_id: e.target.value })}
                             >
-                                <option value="">Consumidor Final</option>
-                                {clientes.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
+                                <option value="" className="bg-background text-foreground">Consumidor Final</option>
+                                {clientes.map(c => (
+                                    <option key={c.id} value={c.id} className="bg-background text-foreground">
+                                        {c.nome}
+                                    </option>
+                                ))}
                             </select>
                         </div>
                         <div className="space-y-2">
                             <Label>Forma de Pagamento</Label>
                             <select
-                                className="w-full h-10 px-3 rounded-md border border-input bg-background"
+                                className="w-full h-10 px-3 rounded-md border border-input bg-background text-foreground"
                                 value={vendaForm.forma_pagamento}
                                 onChange={e => setVendaForm({ ...vendaForm, forma_pagamento: e.target.value })}
                             >
-                                <option value="Dinheiro">Dinheiro</option>
-                                <option value="Pix">PIX</option>
-                                <option value="Cartão Crédito">Cartão de Crédito</option>
-                                <option value="Cartão Débito">Cartão de Débito</option>
-                                <option value="Haver Cliente">Haver Cliente</option>
+                                <option value="Dinheiro" className="bg-background text-foreground">Dinheiro</option>
+                                <option value="Pix" className="bg-background text-foreground">PIX</option>
+                                <option value="Cartão Crédito" className="bg-background text-foreground">Cartão de Crédito</option>
+                                <option value="Cartão Débito" className="bg-background text-foreground">Cartão de Débito</option>
+                                <option value="Haver Cliente" className="bg-background text-foreground">Haver Cliente</option>
                             </select>
                         </div>
                     </div>
@@ -276,15 +300,30 @@ export function Vendas() {
                         {vendaItems.map((item, idx) => (
                             <div key={idx} className="grid grid-cols-12 gap-3 items-end border-b pb-4">
                                 <div className="col-span-12 md:col-span-5 space-y-1">
-                                    <Label className="text-[10px] uppercase">Produto</Label>
+                                    <div className="flex items-center justify-between">
+                                        <Label className="text-[10px] uppercase">Produto</Label>
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="sm"
+                                            className="h-4 p-0 text-[9px] gap-1 text-primary hover:bg-transparent"
+                                            onClick={() => setIsNovoProdutoModalOpen(true)}
+                                        >
+                                            <PackagePlus className="w-3 h-3" /> Novo
+                                        </Button>
+                                    </div>
                                     <select
-                                        className="w-full h-9 px-2 rounded-md border text-sm"
+                                        className="w-full h-9 px-2 rounded-md border text-sm bg-background text-foreground"
                                         value={item.produto_id}
                                         onChange={e => handleItemChange(idx, 'produto_id', e.target.value)}
                                         required
                                     >
-                                        <option value="">Selecione...</option>
-                                        {produtos.map(p => <option key={p.id} value={p.id}>{p.nome} (Estoque: {p.estoque_atual})</option>)}
+                                        <option value="" className="bg-background text-foreground">Selecione...</option>
+                                        {produtos.map(p => (
+                                            <option key={p.id} value={p.id} className="bg-background text-foreground">
+                                                {p.nome} (Est: {p.estoque_atual})
+                                            </option>
+                                        ))}
                                     </select>
                                 </div>
                                 <div className="col-span-4 md:col-span-2 space-y-1">
@@ -340,6 +379,55 @@ export function Vendas() {
                     </div>
                 )}
             </Modal>
+            {/* MODAL NOVO CLIENTE RÁPIDO */}
+            <Modal isOpen={isNovoClienteModalOpen} onClose={() => setIsNovoClienteModalOpen(false)} title="Cadastrar Cliente Rápido" className="max-w-md">
+                <form onSubmit={handleCreateNovoCliente} className="space-y-4">
+                    <div className="space-y-2">
+                        <Label>Nome Completo</Label>
+                        <Input required value={novoClienteForm.nome} onChange={e => setNovoClienteForm({ ...novoClienteForm, nome: e.target.value })} />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <Label>Telefone</Label>
+                            <Input value={novoClienteForm.telefone} onChange={e => setNovoClienteForm({ ...novoClienteForm, telefone: e.target.value })} />
+                        </div>
+                        <div className="space-y-2">
+                            <Label>CPF/CNPJ</Label>
+                            <Input value={novoClienteForm.documento} onChange={e => setNovoClienteForm({ ...novoClienteForm, documento: e.target.value })} />
+                        </div>
+                    </div>
+                    <div className="flex justify-end gap-3 pt-4 border-t">
+                        <Button type="button" variant="outline" onClick={() => setIsNovoClienteModalOpen(false)}>Cancelar</Button>
+                        <Button type="submit" disabled={submitting}>Salvar e Selecionar</Button>
+                    </div>
+                </form>
+            </Modal>
+
+            {/* MODAL NOVO PRODUTO RÁPIDO */}
+            <Modal isOpen={isNovoProdutoModalOpen} onClose={() => setIsNovoProdutoModalOpen(false)} title="Cadastrar Produto Rápido" className="max-w-md">
+                <form onSubmit={(e) => handleCreateNovoProduto(e, vendaItems.length - 1)} className="space-y-4">
+                    <div className="space-y-2">
+                        <Label>Nome do Produto</Label>
+                        <Input required value={novoProdutoForm.nome} onChange={e => setNovoProdutoForm({ ...novoProdutoForm, nome: e.target.value })} />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <Label>Preço de Venda</Label>
+                            <Input type="number" step="0.01" required value={novoProdutoForm.preco || ''} onChange={e => setNovoProdutoForm({ ...novoProdutoForm, preco: parseFloat(e.target.value) || 0 })} />
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Estoque Inicial</Label>
+                            <Input type="number" required value={novoProdutoForm.estoque_atual || ''} onChange={e => setNovoProdutoForm({ ...novoProdutoForm, estoque_atual: parseInt(e.target.value) || 0 })} />
+                        </div>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground">O SKU será gerado automaticamente.</p>
+                    <div className="flex justify-end gap-3 pt-4 border-t">
+                        <Button type="button" variant="outline" onClick={() => setIsNovoProdutoModalOpen(false)}>Cancelar</Button>
+                        <Button type="submit" disabled={submitting}>Salvar e Selecionar</Button>
+                    </div>
+                </form>
+            </Modal>
         </div>
     )
 }
+
