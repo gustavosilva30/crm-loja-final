@@ -529,8 +529,8 @@ export function Vendas() {
             v.id.toLowerCase().includes(termLower);
 
         const matchesTab = activeTab === "aberto"
-            ? ['Pendente', 'Pago', 'Enviado'].includes(v.status)
-            : ['Entregue', 'Cancelado'].includes(v.status);
+            ? v.status === 'Pendente'
+            : ['Pago', 'Enviado', 'Entregue', 'Cancelado'].includes(v.status);
 
         const matchesStatus = filterStatus === "todos" || v.status === filterStatus;
 
@@ -721,7 +721,7 @@ export function Vendas() {
                                     className="gap-2 h-8 px-4"
                                     onClick={() => setActiveTab("aberto")}
                                 >
-                                    Fila de Pedidos (Abertos)
+                                    Vendas Pendentes
                                 </Button>
                                 <Button
                                     variant={activeTab === "concluido" ? "secondary" : "ghost"}
@@ -729,7 +729,7 @@ export function Vendas() {
                                     className="gap-2 h-8 px-4"
                                     onClick={() => setActiveTab("concluido")}
                                 >
-                                    Histórico (Entregue/Cancelado)
+                                    Vendas Concluídas
                                 </Button>
                             </div>
                             <div className="flex items-center gap-2">
