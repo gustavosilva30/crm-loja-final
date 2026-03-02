@@ -22,6 +22,7 @@ interface Venda {
     created_at: string
     clientes?: { id: string, nome: string, documento?: string, email?: string, telefone?: string, endereco?: string }
     atendentes?: { nome: string }
+    vendas_itens?: { produtos: { nome: string } }[]
 }
 
 export function Vendas() {
@@ -72,14 +73,14 @@ export function Vendas() {
         try {
             const { data, error } = await supabase
                 .from('vendas')
-                .select(`*, clientes ( id, nome, documento, email, telefone, endereco ), atendentes ( nome )`)
+                .select(`*, clientes ( id, nome, documento, email, telefone, endereco ), atendentes ( nome ), vendas_itens ( produtos ( nome ) )`)
                 .order('data_venda', { ascending: false })
 
             if (error) {
                 // Fallback if atendentes join fails
                 const { data: fallbackData, error: fallbackError } = await supabase
                     .from('vendas')
-                    .select(`*, clientes ( id, nome, documento, email, telefone, endereco )`)
+                    .select(`*, clientes ( id, nome, documento, email, telefone, endereco ), vendas_itens ( produtos ( nome ) )`)
                     .order('data_venda', { ascending: false })
 
                 if (fallbackError) throw fallbackError
@@ -313,6 +314,7 @@ export function Vendas() {
                                 <TableHead>Pedido</TableHead>
                                 <TableHead>Cliente</TableHead>
                                 <TableHead>Vendedor</TableHead>
+                                <TableHead>Produtos</TableHead>
                                 <TableHead>Total</TableHead>
                                 <TableHead>Status</TableHead>
                                 <TableHead className="text-right">Ações</TableHead>
@@ -328,6 +330,9 @@ export function Vendas() {
                                     <TableCell className="font-mono">#{formatNumPedido(venda.numero_pedido)}</TableCell>
                                     <TableCell>{venda.clientes?.nome || 'Consumidor Final'}</TableCell>
                                     <TableCell className="text-xs">{venda.atendentes?.nome || '-'}</TableCell>
+                                    <TableCell className="max-w-[150px] truncate text-[11px] text-muted-foreground" title={venda.vendas_itens?.map((i: any) => i.produtos?.nome).join(', ')}>
+                                        {venda.vendas_itens?.map((i: any) => i.produtos?.nome).join(', ') || '-'}
+                                    </TableCell>
                                     <TableCell className="font-bold">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(venda.total)}</TableCell>
                                     <TableCell><Badge variant="outline">{venda.status}</Badge></TableCell>
                                     <TableCell className="text-right space-x-1">
