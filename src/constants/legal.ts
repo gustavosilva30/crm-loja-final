@@ -8,14 +8,14 @@ Estes Termos de Uso regulam o acesso e a utilização do sistema CRM-DOURADOS AU
 
 O sistema CRM-DOURADOS AUTO PEÇAS é uma ferramenta de uso interno, utilizada para atendimento, organização de contatos, gestão de relacionamento com clientes (CRM), suporte e comunicação por meio da WhatsApp Cloud API, da Meta.
 
-Ao interagir com os canais, sistemas, páginas ou recursos vinculados ao domínio AUTOPECASDOURADOS.TECH, o usuário declara ciência e concordância com estes Termos, na medida aplicável à sua relação com a empresa.
+Ao interagir com os canais, sistemas, páginas ou recursos vinculados ao domínio DOURADOSAUTOPECAS.TECH, o usuário declara ciência e concordância com estes Termos, na medida aplicável à sua relação com a empresa.
 
 1. Identificação da empresa
 DOURADOS AUTO PEÇAS
 CNPJ: 21.894.110/0001-14
 Endereço: Av. Marcelino Pires, 5235, Vila Ubiratã, Dourados/MS, Brasil
 E-mail de contato: privacidadecrmddos@gmail.com
-Domínio: AUTOPECASDOURADOS.TECH
+Domínio: DOURADOSAUTOPECAS.TECH
 
 2. Objeto
 O presente instrumento tem por objeto estabelecer as regras para utilização, acesso e interação com o sistema CRM-DOURADOS AUTO PEÇAS, bem como disciplinar as condições aplicáveis ao uso dos canais de comunicação integrados ao sistema.
@@ -76,7 +76,7 @@ A empresa poderá, a seu exclusivo critério e sempre que cabível, suspender, r
 
 14. Alterações destes Termos
 A DOURADOS AUTO PEÇAS poderá alterar estes Termos de Uso a qualquer momento para refletir mudanças legais, operacionais, técnicas, regulatórias ou relacionadas a integrações com terceiros.
-A versão mais atual estará disponível em: AUTOPECASDOURADOS.TECH
+A versão mais atual estará disponível em: DOURADOSAUTOPECAS.TECH
 O uso continuado dos canais e serviços após a publicação de alterações poderá ser interpretado como ciência da nova versão, quando aplicável.
 
 15. Legislação e foro
@@ -100,13 +100,13 @@ A DOURADOS AUTO PEÇAS, inscrita no CNPJ nº 21.894.110/0001-14, com sede em Av.
 
 Esta Política de Privacidade descreve como os dados pessoais são coletados, utilizados, armazenados, compartilhados e protegidos no uso do sistema CRM-DOURADOS AUTO PEÇAS, ferramenta de uso interno utilizada para atendimento, gestão de relacionamento com clientes (CRM), suporte e comunicação por meio da WhatsApp Cloud API, fornecida pela Meta.
 
-Ao interagir com nossos canais de atendimento, serviços e sistemas vinculados ao domínio AUTOPECASDOURADOS.TECH, o titular declara estar ciente das práticas descritas nesta Política, nos limites aplicáveis.
+Ao interagir com nossos canais de atendimento, serviços e sistemas vinculados ao domínio DOURADOSAUTOPECAS.TECH, o titular declara estar ciente das práticas descritas nesta Política, nos limites aplicáveis.
 
 1. Identificação da controladora
 Razão/Nome empresarial: DOURADOS AUTO PEÇAS
 CNPJ: 21.894.110/0001-14
 E-mail de contato: privacidadecrmddos@gmail.com
-Domínio: AUTOPECASDOURADOS.TECH
+Domínio: DOURADOSAUTOPECAS.TECH
 
 2. Sobre o aplicativo e finalidade do sistema
 O CRM-DOURADOS AUTO PEÇAS é um sistema de uso interno, utilizado exclusivamente pela equipe da empresa para: atendimento ao cliente, envio e recebimento de mensagens, organização de contatos, registro e consulta de histórico de conversas, suporte operacional e comercial.
@@ -115,7 +115,7 @@ O CRM-DOURADOS AUTO PEÇAS é um sistema de uso interno, utilizado exclusivament
 Poderemos tratar dados como: nome, número de telefone, foto de perfil, conteúdo de mensagens, identificador do usuário (ID), e-mail, IP, logs de acesso e informações fornecidas espontaneamente.
 
 4. Como os dados são coletados
-Coletados quando o titular entra em contato via WhatsApp, utiliza recursos no domínio AUTOPECASDOURADOS.TECH ou automaticamente por logs e mecanismos de segurança.
+Coletados quando o titular entra em contato via WhatsApp, utiliza recursos no domínio DOURADOSAUTOPECAS.TECH ou automaticamente por logs e mecanismos de segurança.
 
 5. Finalidades do tratamento
 Atendimento, suporte, organização do relacionamento com clientes, manutenção de histórico, segurança, auditoria e cumprimento de obrigações legais.
