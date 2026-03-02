@@ -39,7 +39,9 @@ export function Vendas() {
 
     // resources for new sale
     const [clientes, setClientes] = useState<any[]>([])
+    const [atendentes, setAtendentes] = useState<any[]>([])
     const [produtos, setProdutos] = useState<any[]>([])
+    const [filterStatus, setFilterStatus] = useState<string>("Pendente")
 
     // Quick Creation Modals State
     const [isNovoClienteModalOpen, setIsNovoClienteModalOpen] = useState(false)
@@ -53,6 +55,7 @@ export function Vendas() {
     const [vendaItems, setVendaItems] = useState<any[]>([{ produto_id: '', quantidade: 1, preco_unitario: 0, subtotal: 0 }])
     const [vendaForm, setVendaForm] = useState({
         cliente_id: '',
+        atendente_id: '',
         status: 'Pendente' as const,
         forma_pagamento: 'Dinheiro'
     })
@@ -82,8 +85,10 @@ export function Vendas() {
 
     const fetchResources = async () => {
         const { data: c } = await supabase.from('clientes').select('*').order('nome')
+        const { data: a } = await supabase.from('atendentes').select('*').order('nome')
         const { data: p } = await supabase.from('produtos').select('*').gt('estoque_atual', 0).order('nome')
         if (c) setClientes(c)
+        if (a) setAtendentes(a)
         if (p) setProdutos(p)
     }
 
@@ -142,6 +147,7 @@ export function Vendas() {
             const total = calculateTotal()
             const { data: venda, error: vErr } = await supabase.from('vendas').insert({
                 cliente_id: vendaForm.cliente_id || null,
+                atendente_id: vendaForm.atendente_id || null,
                 total,
                 status: vendaForm.status,
                 forma_pagamento: vendaForm.forma_pagamento,
@@ -282,9 +288,11 @@ export function Vendas() {
                             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                             <Input placeholder="Buscar venda..." className="pl-9" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
                         </div>
-                        <Button variant="outline" className="gap-2" onClick={() => setIsFilterOpen(!isFilterOpen)}>
-                            <Filter className="w-4 h-4" /> Filtros
-                        </Button>
+                        <div className="flex items-center gap-2">
+                            <Button variant="outline" className="gap-2" onClick={() => setIsFilterOpen(!isFilterOpen)}>
+                                <Filter className="w-4 h-4" /> Filtros
+                            </Button>
+                        </div>
                     </div>
                 </CardHeader>
                 <CardContent>
@@ -293,6 +301,7 @@ export function Vendas() {
                             <TableRow>
                                 <TableHead>Pedido</TableHead>
                                 <TableHead>Cliente</TableHead>
+                                <TableHead>Vendedor</TableHead>
                                 <TableHead>Total</TableHead>
                                 <TableHead>Status</TableHead>
                                 <TableHead className="text-right">Ações</TableHead>
@@ -307,6 +316,7 @@ export function Vendas() {
                                 <TableRow key={venda.id}>
                                     <TableCell className="font-mono">#{formatNumPedido(venda.numero_pedido)}</TableCell>
                                     <TableCell>{venda.clientes?.nome || 'Consumidor Final'}</TableCell>
+                                    <TableCell className="text-xs">{venda.atendentes?.nome || '-'}</TableCell>
                                     <TableCell className="font-bold">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(venda.total)}</TableCell>
                                     <TableCell><Badge variant="outline">{venda.status}</Badge></TableCell>
                                     <TableCell className="text-right space-x-1">
@@ -324,7 +334,7 @@ export function Vendas() {
             {/* MODAL NOVA VENDA */}
             <Modal isOpen={isNovoPedidoModalOpen} onClose={() => setIsNovoPedidoModalOpen(false)} title="Nova Venda" className="max-w-4xl">
                 <form onSubmit={handleCreateVenda} className="space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div className="space-y-2">
                             <div className="flex items-center justify-between">
                                 <Label>Cliente</Label>
@@ -347,6 +357,21 @@ export function Vendas() {
                                 {clientes.map(c => (
                                     <option key={c.id} value={c.id} className="bg-background text-foreground">
                                         {c.nome}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Vendedor (Atendente)</Label>
+                            <select
+                                className="w-full h-10 px-3 rounded-md border border-input bg-background text-foreground"
+                                value={vendaForm.atendente_id}
+                                onChange={e => setVendaForm({ ...vendaForm, atendente_id: e.target.value })}
+                            >
+                                <option value="" className="bg-background text-foreground">Selecione o Vendedor...</option>
+                                {atendentes.map(a => (
+                                    <option key={a.id} value={a.id} className="bg-background text-foreground">
+                                        {a.nome}
                                     </option>
                                 ))}
                             </select>

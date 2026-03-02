@@ -162,8 +162,7 @@ export function VendasConcluidas() {
         const termLower = searchTerm.toLowerCase().trim();
         const numPedidoStr = v.numero_pedido ? String(v.numero_pedido).padStart(6, '0') : '';
         const matchesSearch = !termLower || numPedidoStr.includes(termLower) || (v.clientes?.nome?.toLowerCase() || '').includes(termLower);
-        const matchesTab = ['Pago', 'Enviado', 'Entregue', 'Cancelado'].includes(v.status);
-        const matchesStatus = filterStatus === "todos" || v.status === filterStatus;
+        const matchesStatus = filterStatus === "todos" ? v.status !== 'Pendente' : v.status === filterStatus;
         const matchesOrigem = filterOrigem === "todos" ? true : filterOrigem === "ml" ? v.origem_ml : !v.origem_ml;
 
         let matchesPeriodo = true;
@@ -172,7 +171,7 @@ export function VendasConcluidas() {
             if (filterDataInicio && dataVenda < filterDataInicio) matchesPeriodo = false;
             if (filterDataFim && dataVenda > filterDataFim) matchesPeriodo = false;
         }
-        return matchesSearch && matchesTab && matchesStatus && matchesOrigem && matchesPeriodo;
+        return matchesSearch && matchesStatus && matchesOrigem && matchesPeriodo;
     })
 
     const faturamentoTotal = vendas.filter(v => v.status !== 'Cancelado').reduce((acc, v) => acc + (v.total || 0), 0)
@@ -225,7 +224,7 @@ export function VendasConcluidas() {
                     {isFilterOpen && (
                         <div className="grid grid-cols-4 gap-4 mb-6 p-4 border rounded-lg bg-muted/20">
                             <Select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
-                                <option value="todos">Todos Status</option>
+                                <option value="todos">Todos (exceto pendentes)</option>
                                 <option value="Pago">Pago</option>
                                 <option value="Enviado">Enviado</option>
                                 <option value="Entregue">Entregue</option>
@@ -242,6 +241,7 @@ export function VendasConcluidas() {
                             <TableRow>
                                 <TableHead>Pedido</TableHead>
                                 <TableHead>Cliente</TableHead>
+                                <TableHead>Vendedor</TableHead>
                                 <TableHead>Total</TableHead>
                                 <TableHead>Status</TableHead>
                                 <TableHead className="text-right">Ações</TableHead>
@@ -252,6 +252,7 @@ export function VendasConcluidas() {
                                 <TableRow key={venda.id}>
                                     <TableCell className="font-mono">#{formatNumPedido(venda.numero_pedido)}</TableCell>
                                     <TableCell>{venda.clientes?.nome || 'Consumidor Final'}</TableCell>
+                                    <TableCell className="text-xs">{venda.atendentes?.nome || '-'}</TableCell>
                                     <TableCell className="font-bold">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(venda.total)}</TableCell>
                                     <TableCell><Badge variant={venda.status === 'Cancelado' ? 'destructive' : 'default'}>{venda.status}</Badge></TableCell>
                                     <TableCell className="text-right space-x-1">
