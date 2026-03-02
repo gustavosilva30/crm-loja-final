@@ -4,12 +4,21 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Label } from "@/components/ui/label"
+import { Input } from "@/components/ui/input"
+import { Select } from "@/components/ui/select"
+import { Modal } from "@/components/ui/modal"
 import { Plus, Search, Filter, MoreHorizontal, Truck, PackageCheck, Package, MapPin, Calendar, Clock, AlertTriangle, Trash2 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 
 interface Entrega {
     id: string
-    venda_id: string
+    venda_id: string | null
+    cliente_nome: string | null
+    cliente_contato: string | null
+    rua: string | null
+    bairro: string | null
+    numero: string | null
     transportadora_id: string | null
     codigo_rastreio: string | null
     status: string
@@ -27,6 +36,17 @@ export function Entregas() {
     const [searchTerm, setSearchTerm] = useState("")
     const [entregas, setEntregas] = useState<Entrega[]>([])
     const [loading, setLoading] = useState(true)
+    const [isModalOpen, setIsModalOpen] = useState(false)
+    const [submitting, setSubmitting] = useState(false)
+    const [formData, setFormData] = useState({
+        cliente_nome: '',
+        cliente_contato: '',
+        rua: '',
+        bairro: '',
+        numero: '',
+        status_pagamento: 'A Receber' as const,
+        status: 'Preparando'
+    })
     const navigate = useNavigate()
 
     const fetchEntregas = async () => {
@@ -82,6 +102,30 @@ export function Entregas() {
         if (!error) fetchEntregas()
     }
 
+    const handleCreateEntrega = async (e: React.FormEvent) => {
+        e.preventDefault()
+        setSubmitting(true)
+        try {
+            const { error } = await supabase.from('entregas').insert([formData])
+            if (error) throw error
+            setIsModalOpen(false)
+            setFormData({
+                cliente_nome: '',
+                cliente_contato: '',
+                rua: '',
+                bairro: '',
+                numero: '',
+                status_pagamento: 'A Receber',
+                status: 'Preparando'
+            })
+            fetchEntregas()
+        } catch (err: any) {
+            alert('Erro ao cadastrar entrega: ' + err.message)
+        } finally {
+            setSubmitting(false)
+        }
+    }
+
     const filteredEntregas = entregas.filter(e =>
         e.vendas?.clientes?.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
         e.codigo_rastreio?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -98,10 +142,16 @@ export function Entregas() {
                     <h1 className="text-3xl font-bold tracking-tight">Entregas</h1>
                     <p className="text-muted-foreground mt-1">Gerencie a logística, rastreio e prazos de entrega.</p>
                 </div>
-                <Button className="gap-2" onClick={() => navigate('/configuracoes')}>
-                    <Truck className="w-4 h-4" />
-                    Configurar Logística
-                </Button>
+                <div className="flex gap-2">
+                    <Button variant="outline" className="gap-2" onClick={() => navigate('/configuracoes')}>
+                        <Truck className="w-4 h-4" />
+                        Configurar Logística
+                    </Button>
+                    <Button className="gap-2" onClick={() => setIsModalOpen(true)}>
+                        <Plus className="w-4 h-4" />
+                        Nova Entrega
+                    </Button>
+                </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -187,10 +237,11 @@ export function Entregas() {
                                 ) : filteredEntregas.map((entrega) => (
                                     <TableRow key={entrega.id}>
                                         <TableCell className="font-mono text-xs italic shrink-0">
-                                            #{entrega.vendas?.id.slice(0, 8)}
+                                            {entrega.venda_id ? `#${entrega.vendas?.id.slice(0, 8)}` : "MANUAL"}
                                         </TableCell>
                                         <TableCell>
-                                            <div className="font-medium text-sm">{entrega.vendas?.clientes?.nome || "Consumidor Final"}</div>
+                                            <div className="font-medium text-sm">{entrega.vendas?.clientes?.nome || entrega.cliente_nome || "Cliente Eventual"}</div>
+                                            {entrega.cliente_contato && <div className="text-[10px] text-muted-foreground">{entrega.cliente_contato}</div>}
                                         </TableCell>
                                         <TableCell>
                                             <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-mono tracking-tighter">
@@ -241,6 +292,65 @@ export function Entregas() {
                     )}
                 </CardContent>
             </Card>
+
+            <Modal
+                isOpen={isModalOpen}
+                onClose={() => setIsModalOpen(false)}
+                title="Novo Cadastro de Entrega"
+                className="max-w-md"
+            >
+                <form onSubmit={handleCreateEntrega} className="space-y-4">
+                    <div className="space-y-2">
+                        <Label>Nome do Cliente</Label>
+                        <Input required value={formData.cliente_nome} onChange={e => setFormData({ ...formData, cliente_nome: e.target.value })} />
+                    </div>
+                    <div className="space-y-2">
+                        <Label>Contato (Telefone/Email)</Label>
+                        <Input value={formData.cliente_contato} onChange={e => setFormData({ ...formData, cliente_contato: e.target.value })} />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <Label>Bairro</Label>
+                            <Input value={formData.bairro} onChange={e => setFormData({ ...formData, bairro: e.target.value })} />
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Número</Label>
+                            <Input value={formData.numero} onChange={e => setFormData({ ...formData, numero: e.target.value })} />
+                        </div>
+                    </div>
+                    <div className="space-y-2">
+                        <Label>Rua / Endereço Completo</Label>
+                        <Input required value={formData.rua} onChange={e => setFormData({ ...formData, rua: e.target.value })} />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <Label>Pagamento</Label>
+                            <Select
+                                value={formData.status_pagamento}
+                                onChange={e => setFormData({ ...formData, status_pagamento: e.target.value as any })}
+                            >
+                                <option value="A Receber">A Receber</option>
+                                <option value="Pago">Pago</option>
+                            </Select>
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Status Inicial</Label>
+                            <Select
+                                value={formData.status}
+                                onChange={e => setFormData({ ...formData, status: e.target.value })}
+                            >
+                                <option value="Preparando">Preparando</option>
+                                <option value="Em Trânsito">Em Trânsito</option>
+                                <option value="Entregue">Entregue</option>
+                            </Select>
+                        </div>
+                    </div>
+                    <div className="flex justify-end gap-2 pt-4">
+                        <Button type="button" variant="outline" onClick={() => setIsModalOpen(false)}>Cancelar</Button>
+                        <Button type="submit" disabled={submitting}>Cadastrar Entrega</Button>
+                    </div>
+                </form>
+            </Modal>
         </div>
     )
 }

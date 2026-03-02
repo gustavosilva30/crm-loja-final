@@ -18,6 +18,7 @@ interface Orcamento {
   total: number
   data_inicio: string | null
   validade: string | null
+  condicao_pagamento: string | null
   status: string
   clientes?: { nome: string }
   atendentes?: { nome: string }
@@ -40,12 +41,13 @@ export function Orcamentos() {
 
   // Resources for Form
   const [clientes, setClientes] = useState<{ id: string, nome: string }[]>([])
-  const [produtos, setProdutos] = useState<{ id: string, nome: string, preco: number }[]>([])
+  const [produtos, setProdutos] = useState<{ id: string, nome: string, preco: number, preco_prazo?: number }[]>([])
 
   // Form State
   const [formData, setFormData] = useState({
     cliente_id: '',
     vendedor_id: '',
+    condicao_pagamento: 'À Vista',
     validade: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
     status: 'Aberto'
   })
@@ -98,7 +100,7 @@ export function Orcamentos() {
 
   const fetchResources = async () => {
     const { data: clients } = await supabase.from('clientes').select('id, nome')
-    const { data: products } = await supabase.from('produtos').select('id, nome, preco')
+    const { data: products } = await supabase.from('produtos').select('id, nome, preco, preco_prazo')
     const { data: staff } = await supabase.from('atendentes').select('id, nome')
     if (clients) setClientes(clients)
     if (products) setProdutos(products)
@@ -194,6 +196,7 @@ export function Orcamentos() {
         const { error: updErr } = await supabase.from('orcamentos').update({
           cliente_id: formData.cliente_id || null,
           vendedor_id: formData.vendedor_id || null,
+          condicao_pagamento: formData.condicao_pagamento,
           validade: formData.validade,
           status: formData.status,
           total: total
@@ -223,6 +226,7 @@ export function Orcamentos() {
       const payload: any = {
         cliente_id: formData.cliente_id || null,
         vendedor_id: formData.vendedor_id || null,
+        condicao_pagamento: formData.condicao_pagamento,
         validade: formData.validade,
         status: formData.status,
         total: total,
@@ -277,6 +281,7 @@ export function Orcamentos() {
       setFormData({
         cliente_id: '',
         vendedor_id: '',
+        condicao_pagamento: 'À Vista',
         validade: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
         status: 'Aberto'
       })
@@ -296,6 +301,7 @@ export function Orcamentos() {
     setFormData({
       cliente_id: orc.cliente_id || '',
       vendedor_id: orc.vendedor_id || '',
+      condicao_pagamento: orc.condicao_pagamento || 'À Vista',
       validade: orc.validade ? orc.validade.split('T')[0] : '',
       status: orc.status
     });
@@ -386,6 +392,7 @@ export function Orcamentos() {
           setFormData({
             cliente_id: '',
             vendedor_id: '',
+            condicao_pagamento: 'À Vista',
             validade: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
             status: 'Aberto'
           })
@@ -426,6 +433,7 @@ export function Orcamentos() {
                   <TableHead>ID</TableHead>
                   <TableHead>Cliente</TableHead>
                   <TableHead>Vendedor</TableHead>
+                  <TableHead>Condição</TableHead>
                   <TableHead>Total</TableHead>
                   <TableHead>Período (Início/Fim)</TableHead>
                   <TableHead>Status</TableHead>
@@ -450,6 +458,9 @@ export function Orcamentos() {
                     </TableCell>
                     <TableCell className="text-xs italic text-muted-foreground">
                       {orcamento.atendentes?.nome || "-"}
+                    </TableCell>
+                    <TableCell className="text-xs">
+                      {orcamento.condicao_pagamento || 'À Vista'}
                     </TableCell>
                     <TableCell className="font-bold">
                       {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(orcamento.total)}
@@ -530,6 +541,34 @@ export function Orcamentos() {
             </div>
           </div>
 
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Condição de Pagamento</Label>
+              <Select
+                value={formData.condicao_pagamento}
+                onChange={e => {
+                  const newCond = e.target.value;
+                  setFormData({ ...formData, condicao_pagamento: newCond });
+                  // Update all item prices based on new condition
+                  setItems(items.map(item => {
+                    const p = produtos.find(pp => pp.id === item.produto_id);
+                    if (p) {
+                      const newPrice = newCond === 'A Prazo' && p.preco_prazo && p.preco_prazo > 0 ? p.preco_prazo : p.preco;
+                      return { ...item, preco_unitario: newPrice };
+                    }
+                    return item;
+                  }));
+                }}
+              >
+                <option value="À Vista">À Vista</option>
+                <option value="A Prazo">A Prazo</option>
+              </Select>
+            </div>
+            <div className="space-y-2 invisible">
+              {/* Spacer */}
+            </div>
+          </div>
+
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
@@ -552,7 +591,13 @@ export function Orcamentos() {
                     <Label className="text-[10px]">Produto</Label>
                     <Select
                       value={item.produto_id}
-                      onChange={e => updateItem(index, 'produto_id', e.target.value)}
+                      onChange={e => {
+                        const pid = e.target.value;
+                        const p = produtos.find(pp => pp.id === pid);
+                        const price = p ? (formData.condicao_pagamento === 'A Prazo' && p.preco_prazo && p.preco_prazo > 0 ? p.preco_prazo : p.preco) : 0;
+                        updateItem(index, 'produto_id', pid);
+                        updateItem(index, 'preco_unitario', price);
+                      }}
                     >
                       <option value="">Buscar produto...</option>
                       {produtos.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}

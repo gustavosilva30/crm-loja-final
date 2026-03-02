@@ -20,6 +20,7 @@ interface Produto {
   estoque_minimo: number
   custo: number
   preco: number
+  preco_prazo?: number
   categoria_id: string | null
   imagem_url: string | null
   status?: string
@@ -47,6 +48,7 @@ export function Produtos() {
     estoque_minimo: 5,
     custo: 0,
     preco: 0,
+    preco_prazo: 0,
     categoria_id: '',
     imagem_url: ''
   })
@@ -100,8 +102,6 @@ export function Produtos() {
         if (error) throw error
       }
 
-      setIsModalOpen(false)
-      setEditingProduto(null)
       setNewProduto({
         sku: '',
         nome: '',
@@ -110,6 +110,7 @@ export function Produtos() {
         estoque_minimo: 5,
         custo: 0,
         preco: 0,
+        preco_prazo: 0,
         categoria_id: '',
         imagem_url: ''
       })
@@ -139,6 +140,7 @@ export function Produtos() {
       estoque_minimo: produto.estoque_minimo,
       custo: produto.custo,
       preco: produto.preco,
+      preco_prazo: produto.preco_prazo || 0,
       categoria_id: produto.categoria_id || '',
       imagem_url: produto.imagem_url || ''
     })
@@ -197,6 +199,7 @@ export function Produtos() {
             estoque_minimo: 5,
             custo: 0,
             preco: 0,
+            preco_prazo: 0,
             categoria_id: '',
             imagem_url: ''
           })
@@ -457,15 +460,26 @@ export function Produtos() {
             <p className="text-[10px] text-muted-foreground">Cole o link de uma imagem para aparecer no estoque.</p>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-3 gap-4">
             <div className="space-y-2">
-              <Label>Preço de Venda (R$)</Label>
+              <Label>Preço à Vista (R$)</Label>
               <Input
                 required
                 type="number"
                 step="0.01"
                 value={newProduto.preco}
                 onChange={e => setNewProduto({ ...newProduto, preco: parseFloat(e.target.value) || 0 })}
+                onFocus={e => e.target.select()}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Preço a Prazo (R$)</Label>
+              <Input
+                required
+                type="number"
+                step="0.01"
+                value={newProduto.preco_prazo}
+                onChange={e => setNewProduto({ ...newProduto, preco_prazo: parseFloat(e.target.value) || 0 })}
                 onFocus={e => e.target.select()}
               />
             </div>
