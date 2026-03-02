@@ -74,8 +74,19 @@ export function Vendas() {
                 .from('vendas')
                 .select(`*, clientes ( id, nome, documento, email, telefone, endereco ), atendentes ( nome )`)
                 .order('data_venda', { ascending: false })
-            if (error) throw error
-            setVendas(data || [])
+
+            if (error) {
+                // Fallback if atendentes join fails
+                const { data: fallbackData, error: fallbackError } = await supabase
+                    .from('vendas')
+                    .select(`*, clientes ( id, nome, documento, email, telefone, endereco )`)
+                    .order('data_venda', { ascending: false })
+
+                if (fallbackError) throw fallbackError
+                setVendas(fallbackData || [])
+            } else {
+                setVendas(data || [])
+            }
         } catch (err) {
             console.error('Error fetching vendas:', err)
         } finally {
@@ -263,7 +274,7 @@ export function Vendas() {
     const filteredVendas = vendas.filter(v => {
         const termLower = searchTerm.toLowerCase();
         const matchesSearch = !searchTerm || (v.clientes?.nome?.toLowerCase() || '').includes(termLower) || String(v.numero_pedido).includes(termLower);
-        const matchesStatus = v.status === 'Pendente';
+        const matchesStatus = String(v.status).toLowerCase() === 'pendente';
         return matchesSearch && matchesStatus;
     })
 
@@ -273,7 +284,7 @@ export function Vendas() {
         <div className="space-y-6">
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-3xl font-bold tracking-tight">Vendas Pendentes</h1>
+                    <h1 className="text-3xl font-bold tracking-tight">Vendas Pendentes ({filteredVendas.length})</h1>
                     <p className="text-muted-foreground mt-1">Gerencie suas vendas em aberto.</p>
                 </div>
                 <Button onClick={() => setIsNovoPedidoModalOpen(true)} className="gap-2 bg-primary hover:bg-primary/90">
@@ -309,9 +320,9 @@ export function Vendas() {
                         </TableHeader>
                         <TableBody>
                             {loading ? (
-                                <TableRow><TableCell colSpan={5} className="text-center">Carregando...</TableCell></TableRow>
+                                <TableRow><TableCell colSpan={6} className="text-center">Carregando...</TableCell></TableRow>
                             ) : filteredVendas.length === 0 ? (
-                                <TableRow><TableCell colSpan={5} className="text-center">Nenhuma venda pendente.</TableCell></TableRow>
+                                <TableRow><TableCell colSpan={6} className="text-center">Nenhuma venda pendente.</TableCell></TableRow>
                             ) : filteredVendas.map((venda) => (
                                 <TableRow key={venda.id}>
                                     <TableCell className="font-mono">#{formatNumPedido(venda.numero_pedido)}</TableCell>
