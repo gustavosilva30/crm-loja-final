@@ -257,7 +257,7 @@ export function VendasConcluidas() {
                                     <TableCell className="font-mono">#{formatNumPedido(venda.numero_pedido)}</TableCell>
                                     <TableCell>{venda.clientes?.nome || 'Consumidor Final'}</TableCell>
                                     <TableCell className="text-xs">{venda.atendentes?.nome || '-'}</TableCell>
-                                    <TableCell className="max-w-[150px] truncate text-[11px] text-muted-foreground" title={venda.vendas_itens?.map((i: any) => i.produtos?.nome).join(', ')}>
+                                    <TableCell className="max-w-[200px] truncate text-[13px] font-medium" title={venda.vendas_itens?.map((i: any) => i.produtos?.nome).join(', ')}>
                                         {venda.vendas_itens?.map((i: any) => i.produtos?.nome).join(', ') || '-'}
                                     </TableCell>
                                     <TableCell className="font-bold">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(venda.total)}</TableCell>
