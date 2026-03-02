@@ -20,7 +20,9 @@ interface Venda {
     ml_order_id: string | null
     data_venda: string
     created_at: string
-    clientes?: { nome: string, documento?: string, email?: string, telefone?: string, endereco?: string }
+    total_pago?: number
+    valor_aberto?: number
+    clientes?: { nome: string, documento?: string, email?: string, telefone?: string, endereco?: string, saldo_haver?: number }
     atendentes?: { nome: string }
     forma_pagamento?: string
     atendente_id?: string
@@ -75,6 +77,7 @@ export function Vendas() {
     const [finalizeForm, setFinalizeForm] = useState({
         venda_id: '',
         forma_pagamento: 'Dinheiro',
+        valor_pagar: 0,
         data_vencimento: new Date().toISOString().split('T')[0]
     })
     const [vendaItems, setVendaItems] = useState<ItemVenda[]>([])
@@ -136,7 +139,7 @@ export function Vendas() {
     }
 
     const fetchResources = async () => {
-        const { data: clients } = await supabase.from('clientes').select('*')
+        const { data: clients } = await supabase.from('clientes').select('id, nome, endereco, telefone, saldo_haver')
         const { data: products } = await supabase.from('produtos').select('id, nome, preco, sku')
         const { data: carriers } = await supabase.from('transportadoras').select('id, nome')
         const { data: staff } = await supabase.from('atendentes').select('id, nome')
@@ -363,30 +366,47 @@ export function Vendas() {
             const venda = vendas.find(v => v.id === finalizeForm.venda_id);
             if (!venda) return;
 
-            const isBoletoOuHaver = ['Boleto', 'Haver Cliente'].includes(finalizeForm.forma_pagamento);
-            const statusLancamento = isBoletoOuHaver ? 'Pendente' : 'Pago';
+            const valorPagar = finalizeForm.valor_pagar || 0;
+            if (valorPagar <= 0) return alert("Informe um valor maior que zero");
+
+            const novoTotalPago = (venda.total_pago || 0) + valorPagar;
+            const novoValorAberto = Math.max(0, venda.total - novoTotalPago);
+            const novoStatus = novoValorAberto <= 0 ? 'Pago' : 'Pendente';
 
             // 1. Update Venda
             const { error: updateErr } = await supabase.from('vendas')
                 .update({
-                    status: 'Pago',
-                    forma_pagamento: finalizeForm.forma_pagamento
+                    status: novoStatus,
+                    total_pago: novoTotalPago,
+                    valor_aberto: novoValorAberto,
+                    forma_pagamento: finalizeForm.forma_pagamento // Última forma usada
                 })
                 .eq('id', finalizeForm.venda_id);
 
             if (updateErr) throw updateErr;
 
-            // 2. Criar lançamento financeiro (Already partially handled by trigger if Dinheiro, but user wants manual override for pending finalization)
-            // Wait, the trigger on supabase updates_v2 is AFTER INSERT. This is an UPDATE. So we MUST insert the financial entry manually here.
+            // 2. Registra o pagamento no histórico
+            const { error: payErr } = await supabase.from('vendas_pagamentos')
+                .insert([{
+                    venda_id: venda.id,
+                    valor: valorPagar,
+                    forma_pagamento: finalizeForm.forma_pagamento
+                }]);
 
-            const desc = `Venda finalizada: #${venda.id.substring(0, 8)} - Finalizado em ${finalizeForm.forma_pagamento}`;
+            if (payErr) throw payErr;
+
+            // 3. Criar lançamento financeiro se for Dinheiro ou outros que entram no caixa
+            const desc = `Pagamento Parcial Venda #${venda.id.substring(0, 8)} - ${finalizeForm.forma_pagamento}`;
+
+            const isBoleto = finalizeForm.forma_pagamento === 'Boleto';
+            const statusLancamento = isBoleto ? 'Pendente' : 'Pago';
 
             const { error: finError } = await supabase.from('financeiro_lancamentos')
                 .insert([{
                     tipo: 'Receita',
-                    valor: venda.total,
-                    data_vencimento: isBoletoOuHaver ? finalizeForm.data_vencimento : new Date().toISOString().split('T')[0],
-                    data_pagamento: isBoletoOuHaver ? null : new Date().toISOString().split('T')[0],
+                    valor: valorPagar,
+                    data_vencimento: isBoleto ? finalizeForm.data_vencimento : new Date().toISOString().split('T')[0],
+                    data_pagamento: isBoleto ? null : new Date().toISOString().split('T')[0],
                     status: statusLancamento,
                     venda_id: venda.id,
                     forma_pagamento: finalizeForm.forma_pagamento,
@@ -395,23 +415,22 @@ export function Vendas() {
 
             if (finError) throw finError;
 
-            // Optional: If Haver Cliente, discount from client balance
+            // 4. Se for Haver Cliente, desconta do saldo do cliente
             if (finalizeForm.forma_pagamento === 'Haver Cliente' && venda.cliente_id) {
                 const client = clientes.find(c => c.id === venda.cliente_id);
                 if (client) {
-                    await supabase.rpc('update_saldo_haver', {
-                        p_cliente_id: venda.cliente_id,
-                        p_amount: -venda.total
-                    })
+                    const currentSaldo = (client as any).saldo_haver || 0;
+                    const novoSaldo = currentSaldo - valorPagar;
+                    await supabase.from('clientes').update({ saldo_haver: novoSaldo }).eq('id', client.id);
                 }
             }
 
-            setIsFinalizeModalOpen(false)
-            fetchVendas()
-            alert('Venda finalizada com sucesso!')
-        } catch (err: any) {
-            console.error('Error finalizing:', err)
-            alert('Erro ao finalizar venda: ' + err.message)
+            setIsFinalizeModalOpen(false);
+            fetchVendas();
+            alert(`Pagamento de ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valorPagar)} registrado!`);
+        } catch (err) {
+            console.error('Error:', err)
+            alert('Erro ao finalizar pagamento')
         } finally {
             setSubmitting(false)
         }
@@ -1198,52 +1217,94 @@ export function Vendas() {
                     </div>
                 </form>
             </Modal>
-            {/* FINALIZE VENDA MODAL */}
             <Modal
                 isOpen={isFinalizeModalOpen}
                 onClose={() => setIsFinalizeModalOpen(false)}
-                title="Finalizar Venda Pendente"
+                title="Registrar Pagamento"
                 className="max-w-md"
             >
-                <form onSubmit={handleFinalizeVenda} className="space-y-6">
-                    <div className="space-y-4">
-                        <div className="space-y-2">
-                            <Label>Selecione a Forma de Pagamento Final</Label>
-                            <Select
-                                value={finalizeForm.forma_pagamento}
-                                onChange={e => setFinalizeForm({ ...finalizeForm, forma_pagamento: e.target.value })}
-                            >
-                                <option value="Dinheiro">Dinheiro (Entra no Caixa Hoje)</option>
-                                <option value="Pix">PIX</option>
-                                <option value="Cartão Crédito">Cartão de Crédito</option>
-                                <option value="Cartão Débito">Cartão de Débito</option>
-                                <option value="Boleto">Boleto Bancário</option>
-                                <option value="Cheque">Cheque</option>
-                                <option value="Haver Cliente">Haver Cliente (Gasto de Crédito)</option>
-                            </Select>
-                        </div>
+                {(() => {
+                    const venda = vendas.find(v => v.id === finalizeForm.venda_id);
+                    if (!venda) return null;
+                    const aberto = venda.total - (venda.total_pago || 0);
 
-                        {['Boleto', 'Haver Cliente'].includes(finalizeForm.forma_pagamento) && (
-                            <div className="space-y-2 animate-in fade-in zoom-in duration-300">
-                                <Label className="text-primary font-bold">{finalizeForm.forma_pagamento === 'Boleto' ? 'Data de Vencimento do Boleto' : 'Data para Desconto do Limite'}</Label>
-                                <Input
-                                    type="date"
-                                    required
-                                    value={finalizeForm.data_vencimento}
-                                    onChange={e => setFinalizeForm({ ...finalizeForm, data_vencimento: e.target.value })}
-                                />
-                                <p className="text-[10px] text-muted-foreground uppercase tracking-widest leading-relaxed">
-                                    Será criado um registro pendente no Financeiro para essa data.
-                                </p>
+                    return (
+                        <form onSubmit={handleFinalizeVenda} className="space-y-6">
+                            <div className="bg-muted/50 p-4 rounded-lg space-y-2 border">
+                                <div className="flex justify-between text-sm">
+                                    <span className="text-muted-foreground uppercase font-bold text-[10px]">Total do Pedido</span>
+                                    <span className="font-bold">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(venda.total)}</span>
+                                </div>
+                                <div className="flex justify-between text-sm">
+                                    <span className="text-muted-foreground uppercase font-bold text-[10px]">Já Pago</span>
+                                    <span className="font-bold text-green-600">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(venda.total_pago || 0)}</span>
+                                </div>
+                                <div className="flex justify-between text-base border-t pt-2">
+                                    <span className="font-black uppercase text-[11px]">Saldo em Aberto</span>
+                                    <span className="font-black text-amber-600">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(aberto)}</span>
+                                </div>
                             </div>
-                        )}
-                    </div>
 
-                    <div className="flex justify-end gap-3 pt-4 border-t">
-                        <Button type="button" variant="outline" onClick={() => setIsFinalizeModalOpen(false)}>Cancelar</Button>
-                        <Button type="submit" disabled={submitting}> Confirmar Pagamento </Button>
-                    </div>
-                </form>
+                            <div className="space-y-4">
+                                <div className="space-y-2">
+                                    <Label>Valor a Pagar Agora</Label>
+                                    <div className="relative">
+                                        <span className="absolute left-3 top-2.5 text-muted-foreground font-bold">R$</span>
+                                        <Input
+                                            type="number"
+                                            step="0.01"
+                                            required
+                                            autoFocus
+                                            className="pl-10 text-lg font-bold"
+                                            value={finalizeForm.valor_pagar || ''}
+                                            onChange={e => setFinalizeForm({ ...finalizeForm, valor_pagar: parseFloat(e.target.value) || 0 })}
+                                        />
+                                    </div>
+                                    <p className="text-[10px] text-center text-muted-foreground flex justify-center gap-2">
+                                        <button type="button" onClick={() => setFinalizeForm({ ...finalizeForm, valor_pagar: aberto / 2 })} className="hover:text-primary underline">Pagar 50%</button>
+                                        <button type="button" onClick={() => setFinalizeForm({ ...finalizeForm, valor_pagar: aberto })} className="hover:text-primary underline font-bold">Pagar Tudo</button>
+                                    </p>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <Label>Forma de Pagamento</Label>
+                                    <Select
+                                        value={finalizeForm.forma_pagamento}
+                                        onChange={e => setFinalizeForm({ ...finalizeForm, forma_pagamento: e.target.value })}
+                                    >
+                                        <option value="Dinheiro">Dinheiro (Entra no Caixa)</option>
+                                        <option value="Pix">PIX</option>
+                                        <option value="Cartão Crédito">Cartão de Crédito</option>
+                                        <option value="Cartão Débito">Cartão de Débito</option>
+                                        <option value="Boleto">Boleto Bancário</option>
+                                        <option value="Haver Cliente">Haver Cliente (Usar Crédito)</option>
+                                    </Select>
+                                </div>
+
+                                {['Boleto', 'Haver Cliente'].includes(finalizeForm.forma_pagamento) && (
+                                    <div className="space-y-2 animate-in fade-in zoom-in duration-300">
+                                        <Label className="text-primary font-bold">
+                                            {finalizeForm.forma_pagamento === 'Boleto' ? 'Vencimento' : 'Data da Baixa'}
+                                        </Label>
+                                        <Input
+                                            type="date"
+                                            required
+                                            value={finalizeForm.data_vencimento}
+                                            onChange={e => setFinalizeForm({ ...finalizeForm, data_vencimento: e.target.value })}
+                                        />
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="flex justify-end gap-3 pt-4 border-t">
+                                <Button type="button" variant="outline" onClick={() => setIsFinalizeModalOpen(false)}>Cancelar</Button>
+                                <Button type="submit" disabled={submitting} className="bg-green-600 hover:bg-green-700">
+                                    {submitting ? "Processando..." : "Confirmar Recebimento"}
+                                </Button>
+                            </div>
+                        </form>
+                    );
+                })()}
             </Modal>
 
             {/* NOVO PRODUTO MODAL (Inside Vendas) */}
