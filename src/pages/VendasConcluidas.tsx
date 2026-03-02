@@ -275,6 +275,7 @@ export function VendasConcluidas() {
                             <h2 className="text-xl font-bold">Resumo do Pedido #{formatNumPedido(selectedVendaForReceipt.numero_pedido)}</h2>
                             <p>Data: {new Date(selectedVendaForReceipt.data_venda).toLocaleString('pt-BR')}</p>
                             <p>Cliente: {selectedVendaForReceipt.clientes?.nome || '---'}</p>
+                            <p>Forma de Pagamento: <strong>{selectedVendaForReceipt.forma_pagamento || '---'}</strong></p>
                             <div className="mt-4 border-t pt-4">
                                 <table className="w-full">
                                     <thead><tr className="border-b text-left"><th>Item</th><th>Qtd</th><th>Subtotal</th></tr></thead>

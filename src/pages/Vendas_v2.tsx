@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Modal } from "@/components/ui/modal"
-import { Search, Filter, Trash2, Printer, Plus, X, UserPlus, PackagePlus } from "lucide-react"
+import { Search, Filter, Trash2, Printer, Plus, X, UserPlus, PackagePlus, DollarSign } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 
 interface Venda {
@@ -18,6 +18,7 @@ interface Venda {
     origem_ml: boolean
     ml_order_id: string | null
     data_venda: string
+    forma_pagamento?: string
     created_at: string
     clientes?: { id: string, nome: string, documento?: string, email?: string, telefone?: string, endereco?: string }
     atendentes?: { nome: string }
@@ -54,6 +55,13 @@ export function Vendas() {
         cliente_id: '',
         status: 'Pendente' as const,
         forma_pagamento: 'Dinheiro'
+    })
+
+    const [isFinalizarModalOpen, setIsFinalizarModalOpen] = useState(false)
+    const [vendaParaFinalizar, setVendaParaFinalizar] = useState<any>(null)
+    const [finalizarForm, setFinalizarForm] = useState({
+        forma_pagamento: 'Dinheiro',
+        status: 'Pago' as const
     })
 
     const fetchVendas = async () => {
@@ -196,6 +204,42 @@ export function Vendas() {
         finally { setSubmitting(false) }
     }
 
+    const handleFinalizarVenda = async (e: React.FormEvent) => {
+        e.preventDefault()
+        if (!vendaParaFinalizar) return
+        setSubmitting(true)
+        try {
+            const { error } = await supabase.from('vendas').update({
+                status: finalizarForm.status,
+                forma_pagamento: finalizarForm.forma_pagamento
+            }).eq('id', vendaParaFinalizar.id)
+
+            if (error) throw error
+
+            // Se estiver sendo fechada para Pago ou entregue, garantir que lance no financeiro se for venda direta
+            if (finalizarForm.status === 'Pago') {
+                await supabase.from('financeiro_lancamentos').insert([{
+                    tipo: 'Receita',
+                    valor: vendaParaFinalizar.total,
+                    data_vencimento: new Date().toISOString().split('T')[0],
+                    data_pagamento: new Date().toISOString().split('T')[0],
+                    status: 'Pago',
+                    forma_pagamento: finalizarForm.forma_pagamento,
+                    venda_id: vendaParaFinalizar.id,
+                    descricao: `Venda #${formatNumPedido(vendaParaFinalizar.numero_pedido)}`
+                }])
+            }
+
+            alert('Venda finalizada com sucesso!')
+            setIsFinalizarModalOpen(false)
+            fetchVendas()
+        } catch (err: any) {
+            alert('Erro ao finalizar venda: ' + err.message)
+        } finally {
+            setSubmitting(false)
+        }
+    }
+
     const handleOpenReceipt = async (vendaId: string) => {
         setLoading(true)
         try {
@@ -267,6 +311,7 @@ export function Vendas() {
                                     <TableCell><Badge variant="outline">{venda.status}</Badge></TableCell>
                                     <TableCell className="text-right space-x-1">
                                         <Button variant="ghost" size="icon" onClick={() => handleOpenReceipt(venda.id)} title="Imprimir"><Printer className="w-4 h-4" /></Button>
+                                        <Button variant="outline" size="sm" className="h-8 gap-1 bg-emerald-500/10 text-emerald-500 border-emerald-500/20 hover:bg-emerald-500/20" onClick={() => { setVendaParaFinalizar(venda); setFinalizarForm({ ...finalizarForm, forma_pagamento: venda.forma_pagamento || 'Dinheiro' }); setIsFinalizarModalOpen(true); }}><DollarSign className="w-3 h-3" /> Fechar</Button>
                                         <Button variant="ghost" size="icon" className="text-destructive" onClick={() => handleCancelVenda(venda.id)} title="Excluir"><Trash2 className="w-4 h-4" /></Button>
                                     </TableCell>
                                 </TableRow>
@@ -318,6 +363,8 @@ export function Vendas() {
                                 <option value="Cartão Crédito" className="bg-background text-foreground">Cartão de Crédito</option>
                                 <option value="Cartão Débito" className="bg-background text-foreground">Cartão de Débito</option>
                                 <option value="Haver Cliente" className="bg-background text-foreground">Haver Cliente</option>
+                                <option value="Boleto" className="bg-background text-foreground">Boleto</option>
+                                <option value="Cheque" className="bg-background text-foreground">Cheque</option>
                             </select>
                         </div>
                     </div>
@@ -455,6 +502,62 @@ export function Vendas() {
                     <div className="flex justify-end gap-3 pt-4 border-t">
                         <Button type="button" variant="outline" onClick={() => setIsNovoProdutoModalOpen(false)}>Cancelar</Button>
                         <Button type="submit" disabled={submitting}>Salvar e Selecionar</Button>
+                    </div>
+                </form>
+            </Modal>
+
+            {/* MODAL FINALIZAR VENDA */}
+            <Modal isOpen={isFinalizarModalOpen} onClose={() => setIsFinalizarModalOpen(false)} title="Finalizar e Receber Venda" className="max-w-md">
+                <form onSubmit={handleFinalizarVenda} className="space-y-4">
+                    <div className="p-4 bg-muted/30 border rounded-lg space-y-2">
+                        <div className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">Pedido:</span>
+                            <span className="font-mono font-bold">#{formatNumPedido(vendaParaFinalizar?.numero_pedido)}</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">Cliente:</span>
+                            <span className="font-bold">{vendaParaFinalizar?.clientes?.nome || 'Consumidor Final'}</span>
+                        </div>
+                        <div className="flex justify-between text-lg pt-2 border-t">
+                            <span className="font-black">TOTAL:</span>
+                            <span className="font-black text-primary">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(vendaParaFinalizar?.total || 0)}</span>
+                        </div>
+                    </div>
+
+                    <div className="space-y-4">
+                        <div className="space-y-2">
+                            <Label>Como o cliente pagou?</Label>
+                            <select
+                                className="w-full h-10 px-3 rounded-md border border-input bg-background text-foreground"
+                                value={finalizarForm.forma_pagamento}
+                                onChange={e => setFinalizarForm({ ...finalizarForm, forma_pagamento: e.target.value })}
+                            >
+                                <option value="Dinheiro" className="bg-background text-foreground">Dinheiro</option>
+                                <option value="Pix" className="bg-background text-foreground">PIX</option>
+                                <option value="Cartão Crédito" className="bg-background text-foreground">Cartão de Crédito</option>
+                                <option value="Cartão Débito" className="bg-background text-foreground">Cartão de Débito</option>
+                                <option value="Haver Cliente" className="bg-background text-foreground">Haver Cliente (Fiado)</option>
+                                <option value="Boleto" className="bg-background text-foreground">Boleto</option>
+                                <option value="Cheque" className="bg-background text-foreground">Cheque</option>
+                            </select>
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label>Status Final</Label>
+                            <select
+                                className="w-full h-10 px-3 rounded-md border border-input bg-background text-foreground"
+                                value={finalizarForm.status}
+                                onChange={e => setFinalizarForm({ ...finalizarForm, status: e.target.value as any })}
+                            >
+                                <option value="Pago">Marcada como Paga</option>
+                                <option value="Entregue">Paga e Entregue</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div className="flex justify-end gap-3 pt-4 border-t">
+                        <Button type="button" variant="outline" onClick={() => setIsFinalizarModalOpen(false)}>Cancelar</Button>
+                        <Button type="submit" disabled={submitting} className="bg-emerald-600 hover:bg-emerald-700">{submitting ? 'Processando...' : 'Confirmar Pagamento'}</Button>
                     </div>
                 </form>
             </Modal>

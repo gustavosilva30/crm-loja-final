@@ -20,6 +20,7 @@ interface FinanceiroLancamento {
     categoria_financeira: string | null
     status: 'Pendente' | 'Pago' | 'Atrasado' | 'Cancelado'
     descricao: string | null
+    forma_pagamento: string | null
     created_at: string
 }
 
@@ -38,6 +39,7 @@ export function Financeiro() {
         data_vencimento: new Date().toISOString().split('T')[0],
         categoria_financeira: 'Geral',
         status: 'Pendente',
+        forma_pagamento: 'Dinheiro',
         descricao: ''
     })
 
@@ -84,6 +86,7 @@ export function Financeiro() {
                 data_vencimento: new Date().toISOString().split('T')[0],
                 categoria_financeira: 'Geral',
                 status: 'Pendente',
+                forma_pagamento: 'Dinheiro',
                 descricao: ''
             })
             fetchLancamentos()
@@ -235,6 +238,7 @@ export function Financeiro() {
                                         <TableHead>Categoria</TableHead>
                                         <TableHead>Tipo</TableHead>
                                         <TableHead>Valor</TableHead>
+                                        <TableHead>Forma</TableHead>
                                         <TableHead>Status</TableHead>
                                         <TableHead className="text-right">Ações</TableHead>
                                     </TableRow>
@@ -274,6 +278,11 @@ export function Financeiro() {
                                                 <div className={`font-bold ${lancamento.tipo === 'Receita' ? 'text-emerald-500' : 'text-rose-500'}`}>
                                                     {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(lancamento.valor)}
                                                 </div>
+                                            </TableCell>
+                                            <TableCell>
+                                                <Badge variant="secondary" className="text-[10px] font-medium">
+                                                    {lancamento.forma_pagamento || "-"}
+                                                </Badge>
                                             </TableCell>
                                             <TableCell>
                                                 <Badge
@@ -404,15 +413,31 @@ export function Financeiro() {
                         </div>
                     </div>
 
-                    <div className="space-y-2">
-                        <Label>Status Inicial</Label>
-                        <Select
-                            value={newEntry.status}
-                            onChange={e => setNewEntry({ ...newEntry, status: e.target.value as any })}
-                        >
-                            <option value="Pendente">Pendente</option>
-                            <option value="Pago">Pago / Recebido</option>
-                        </Select>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <Label>Status Inicial</Label>
+                            <Select
+                                value={newEntry.status}
+                                onChange={e => setNewEntry({ ...newEntry, status: e.target.value as any })}
+                            >
+                                <option value="Pendente">Pendente</option>
+                                <option value="Pago">Pago / Recebido</option>
+                            </Select>
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Forma de Pagamento</Label>
+                            <Select
+                                value={newEntry.forma_pagamento}
+                                onChange={e => setNewEntry({ ...newEntry, forma_pagamento: e.target.value })}
+                            >
+                                <option value="Dinheiro">Dinheiro</option>
+                                <option value="Pix">PIX</option>
+                                <option value="Cartão">Cartão</option>
+                                <option value="Boleto">Boleto</option>
+                                <option value="Cheque">Cheque</option>
+                                <option value="Haver Cliente">Haver Cliente</option>
+                            </Select>
+                        </div>
                     </div>
 
                     <div className="flex justify-end gap-3 pt-4">
