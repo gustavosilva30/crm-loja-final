@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select } from "@/components/ui/select"
 import { Modal } from "@/components/ui/modal"
-import { Search, Filter, MoreHorizontal, ShoppingCart, TrendingUp, Trash2, Printer, Truck, Plus, CheckCircle2 } from "lucide-react"
+import { Search, Filter, Trash2, Printer, Plus, X, UserPlus, PackagePlus } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 
 interface Venda {
@@ -20,44 +20,42 @@ interface Venda {
     ml_order_id: string | null
     data_venda: string
     created_at: string
-    total_pago?: number
-    valor_aberto?: number
-    clientes?: { id: string, nome: string, documento?: string, email?: string, telefone?: string, endereco?: string, saldo_haver?: number }
+    clientes?: { id: string, nome: string, documento?: string, email?: string, telefone?: string, endereco?: string }
     atendentes?: { nome: string }
-    forma_pagamento?: string
-    atendente_id?: string
-    itens?: any[]
 }
 
 export function Vendas() {
     const [searchTerm, setSearchTerm] = useState("")
     const [vendas, setVendas] = useState<Venda[]>([])
     const [loading, setLoading] = useState(true)
-
-    const [filterStatus, setFilterStatus] = useState<string>("todos")
-    const [filterOrigem, setFilterOrigem] = useState<string>("todos")
-    const [filterDataInicio, setFilterDataInicio] = useState<string>("")
-    const [filterDataFim, setFilterDataFim] = useState<string>("")
     const [isFilterOpen, setIsFilterOpen] = useState(false)
-
     const [submitting, setSubmitting] = useState(false)
+
+    // Modals State
+    const [isNovoPedidoModalOpen, setIsNovoPedidoModalOpen] = useState(false)
     const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false)
     const [selectedVendaForReceipt, setSelectedVendaForReceipt] = useState<any>(null)
-    const [printFormat, setPrintFormat] = useState<'a4' | 'a5' | 'cupom'>('a4')
     const [company, setCompany] = useState<any>(null)
+
+    // resources for new sale
+    const [clientes, setClientes] = useState<any[]>([])
+    const [produtos, setProdutos] = useState<any[]>([])
+
+    // New Sale Form State
+    const [vendaItems, setVendaItems] = useState<any[]>([{ produto_id: '', quantidade: 1, preco_unitario: 0, subtotal: 0 }])
+    const [vendaForm, setVendaForm] = useState({
+        cliente_id: '',
+        status: 'Pendente' as const,
+        forma_pagamento: 'Dinheiro'
+    })
 
     const fetchVendas = async () => {
         setLoading(true)
         try {
             const { data, error } = await supabase
                 .from('vendas')
-                .select(`
-                    *, 
-                    clientes ( id, nome, documento, email, telefone, endereco ),
-                    atendentes ( nome )
-                `)
+                .select(`*, clientes ( id, nome, documento, email, telefone, endereco ), atendentes ( nome )`)
                 .order('data_venda', { ascending: false })
-
             if (error) throw error
             setVendas(data || [])
         } catch (err) {
@@ -67,8 +65,16 @@ export function Vendas() {
         }
     }
 
+    const fetchResources = async () => {
+        const { data: c } = await supabase.from('clientes').select('*').order('nome')
+        const { data: p } = await supabase.from('produtos').select('*').gt('estoque_atual', 0).order('nome')
+        if (c) setClientes(c)
+        if (p) setProdutos(p)
+    }
+
     useEffect(() => {
         fetchVendas()
+        fetchResources()
         supabase.from('configuracoes_empresa').select('*').maybeSingle().then(({ data }) => setCompany(data))
     }, [])
 
@@ -87,28 +93,82 @@ export function Vendas() {
         }
     }
 
+    const handleAddItem = () => {
+        setVendaItems([...vendaItems, { produto_id: '', quantidade: 1, preco_unitario: 0, subtotal: 0 }])
+    }
+
+    const handleRemoveItem = (index: number) => {
+        setVendaItems(vendaItems.filter((_, i) => i !== index))
+    }
+
+    const handleItemChange = (index: number, field: string, value: any) => {
+        const newItems = [...vendaItems]
+        newItems[index][field] = value
+        if (field === 'produto_id') {
+            const prod = produtos.find(p => p.id === value)
+            if (prod) {
+                newItems[index].preco_unitario = prod.preco_venda
+                newItems[index].subtotal = prod.preco_venda * newItems[index].quantidade
+            }
+        }
+        if (field === 'quantidade' || field === 'preco_unitario') {
+            newItems[index].subtotal = newItems[index].quantidade * newItems[index].preco_unitario
+        }
+        setVendaItems(newItems)
+    }
+
+    const calculateTotal = () => vendaItems.reduce((acc, item) => acc + item.subtotal, 0)
+
+    const handleCreateVenda = async (e: React.FormEvent) => {
+        e.preventDefault()
+        if (!vendaForm.cliente_id && !confirm('Vender sem cliente?')) return
+        setSubmitting(true)
+        try {
+            const total = calculateTotal()
+            const { data: venda, error: vErr } = await supabase.from('vendas').insert({
+                cliente_id: vendaForm.cliente_id || null,
+                total,
+                status: vendaForm.status,
+                forma_pagamento: vendaForm.forma_pagamento,
+                data_venda: new Date().toISOString()
+            }).select().single()
+
+            if (vErr) throw vErr
+
+            const itensToInsert = vendaItems.map(item => ({
+                venda_id: venda.id,
+                produto_id: item.produto_id,
+                quantidade: item.quantidade,
+                preco_unitario: item.preco_unitario,
+                subtotal: item.subtotal
+            }))
+
+            const { error: iErr } = await supabase.from('vendas_itens').insert(itensToInsert)
+            if (iErr) throw iErr
+
+            alert('Venda realizada com sucesso!')
+            setIsNovoPedidoModalOpen(false)
+            setVendaItems([{ produto_id: '', quantidade: 1, preco_unitario: 0, subtotal: 0 }])
+            fetchVendas()
+        } catch (err: any) {
+            alert('Erro ao criar venda: ' + err.message)
+        } finally {
+            setSubmitting(false)
+        }
+    }
+
     const handleOpenReceipt = async (vendaId: string) => {
         setLoading(true)
         try {
             const { data: venda } = await supabase.from('vendas').select(`*, clientes(*), atendentes(nome)`).eq('id', vendaId).single()
             const { data: itens } = await supabase.from('vendas_itens').select(`*, produtos(nome, sku)`).eq('venda_id', vendaId)
-            const { data: entrega } = await supabase.from('entregas').select(`*, transportadoras(nome)`).eq('venda_id', vendaId).maybeSingle()
-            setSelectedVendaForReceipt({ ...venda, itens: itens || [], entrega: entrega || null })
+            setSelectedVendaForReceipt({ ...venda, itens: itens || [] })
             setIsReceiptModalOpen(true)
         } catch (err) {
             console.error(err)
         } finally {
             setLoading(false)
         }
-    }
-
-    const handlePrint = () => {
-        const content = document.getElementById('printable-receipt')
-        if (!content) return
-        const win = window.open('', '_blank')
-        win?.document.write(`<html><body>${content.innerHTML}</body></html>`)
-        win?.document.close()
-        win?.print()
     }
 
     const filteredVendas = vendas.filter(v => {
@@ -127,7 +187,7 @@ export function Vendas() {
                     <h1 className="text-3xl font-bold tracking-tight">Vendas Pendentes</h1>
                     <p className="text-muted-foreground mt-1">Gerencie suas vendas em aberto.</p>
                 </div>
-                <Button className="gap-2">
+                <Button onClick={() => setIsNovoPedidoModalOpen(true)} className="gap-2 bg-primary hover:bg-primary/90">
                     <Plus className="w-4 h-4" /> Nova Venda
                 </Button>
             </div>
@@ -177,14 +237,105 @@ export function Vendas() {
                 </CardContent>
             </Card>
 
+            {/* MODAL NOVA VENDA */}
+            <Modal isOpen={isNovoPedidoModalOpen} onClose={() => setIsNovoPedidoModalOpen(false)} title="Nova Venda" className="max-w-4xl">
+                <form onSubmit={handleCreateVenda} className="space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <Label>Cliente</Label>
+                            <select
+                                className="w-full h-10 px-3 rounded-md border border-input bg-background"
+                                value={vendaForm.cliente_id}
+                                onChange={e => setVendaForm({ ...vendaForm, cliente_id: e.target.value })}
+                            >
+                                <option value="">Consumidor Final</option>
+                                {clientes.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
+                            </select>
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Forma de Pagamento</Label>
+                            <select
+                                className="w-full h-10 px-3 rounded-md border border-input bg-background"
+                                value={vendaForm.forma_pagamento}
+                                onChange={e => setVendaForm({ ...vendaForm, forma_pagamento: e.target.value })}
+                            >
+                                <option value="Dinheiro">Dinheiro</option>
+                                <option value="Pix">PIX</option>
+                                <option value="Cartão Crédito">Cartão de Crédito</option>
+                                <option value="Cartão Débito">Cartão de Débito</option>
+                                <option value="Haver Cliente">Haver Cliente</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                            <Label className="text-lg font-bold">Itens do Pedido</Label>
+                            <Button type="button" size="sm" onClick={handleAddItem} className="gap-2"><Plus className="w-4 h-4" /> Adicionar Item</Button>
+                        </div>
+                        {vendaItems.map((item, idx) => (
+                            <div key={idx} className="grid grid-cols-12 gap-3 items-end border-b pb-4">
+                                <div className="col-span-12 md:col-span-5 space-y-1">
+                                    <Label className="text-[10px] uppercase">Produto</Label>
+                                    <select
+                                        className="w-full h-9 px-2 rounded-md border text-sm"
+                                        value={item.produto_id}
+                                        onChange={e => handleItemChange(idx, 'produto_id', e.target.value)}
+                                        required
+                                    >
+                                        <option value="">Selecione...</option>
+                                        {produtos.map(p => <option key={p.id} value={p.id}>{p.nome} (Estoque: {p.estoque_atual})</option>)}
+                                    </select>
+                                </div>
+                                <div className="col-span-4 md:col-span-2 space-y-1">
+                                    <Label className="text-[10px] uppercase">Qtd</Label>
+                                    <Input type="number" min="1" value={item.quantidade} onChange={e => handleItemChange(idx, 'quantidade', parseInt(e.target.value))} required />
+                                </div>
+                                <div className="col-span-4 md:col-span-2 space-y-1">
+                                    <Label className="text-[10px] uppercase">Preço</Label>
+                                    <Input type="number" step="0.01" value={item.preco_unitario} onChange={e => handleItemChange(idx, 'preco_unitario', parseFloat(e.target.value))} required />
+                                </div>
+                                <div className="col-span-3 md:col-span-2 space-y-1">
+                                    <Label className="text-[10px] uppercase">Subtotal</Label>
+                                    <div className="h-9 flex items-center font-bold text-sm">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.subtotal)}</div>
+                                </div>
+                                <div className="col-span-1 flex justify-end">
+                                    <Button type="button" variant="ghost" size="icon" className="text-destructive" onClick={() => handleRemoveItem(idx)} disabled={vendaItems.length === 1}><Trash2 className="w-4 h-4" /></Button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    <div className="flex items-center justify-between pt-4 border-t">
+                        <div className="text-2xl font-black">TOTAL: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(calculateTotal())}</div>
+                        <div className="flex gap-3">
+                            <Button type="button" variant="outline" onClick={() => setIsNovoPedidoModalOpen(false)}>Cancelar</Button>
+                            <Button type="submit" disabled={submitting}>{submitting ? 'Salvando...' : 'Finalizar Pedido'}</Button>
+                        </div>
+                    </div>
+                </form>
+            </Modal>
+
+            {/* MODAL RECIBO */}
             <Modal isOpen={isReceiptModalOpen} onClose={() => setIsReceiptModalOpen(false)} title="Pedido" className="max-w-4xl">
                 {selectedVendaForReceipt && (
                     <div className="space-y-4">
-                        <div className="flex justify-end"><Button onClick={handlePrint}><Printer className="w-4 h-4 mr-2" /> Imprimir</Button></div>
+                        <div className="flex justify-end"><Button onClick={() => window.print()}><Printer className="w-4 h-4 mr-2" /> Imprimir</Button></div>
                         <div id="printable-receipt" className="p-8 border bg-white text-black">
                             <h2 className="text-xl font-bold">Pedido #{formatNumPedido(selectedVendaForReceipt.numero_pedido)}</h2>
                             <p>Cliente: {selectedVendaForReceipt.clientes?.nome || '---'}</p>
-                            <p>Total: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(selectedVendaForReceipt.total)}</p>
+                            <p>Forma: {selectedVendaForReceipt.forma_pagamento}</p>
+                            <div className="my-4 border-t pt-4">
+                                <table className="w-full text-sm">
+                                    <thead><tr className="border-b text-left"><th>Produto</th><th>Qtd</th><th>Preço</th><th>Subtotal</th></tr></thead>
+                                    <tbody>
+                                        {selectedVendaForReceipt.itens?.map((i: any, idx: number) => (
+                                            <tr key={idx}><td>{i.produtos?.nome}</td><td>{i.quantidade}</td><td>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(i.preco_unitario)}</td><td>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(i.subtotal)}</td></tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                            <h3 className="text-right text-lg font-bold">TOTAL: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(selectedVendaForReceipt.total)}</h3>
                         </div>
                     </div>
                 )}
