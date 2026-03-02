@@ -139,8 +139,8 @@ export function Vendas() {
         if (field === 'produto_id') {
             const prod = produtos.find(p => p.id === value)
             if (prod) {
-                newItems[index].preco_unitario = prod.preco_venda
-                newItems[index].subtotal = prod.preco_venda * newItems[index].quantidade
+                newItems[index].preco_unitario = prod.preco
+                newItems[index].subtotal = prod.preco * newItems[index].quantidade
             }
         }
         if (field === 'quantidade' || field === 'preco_unitario') {
@@ -210,7 +210,7 @@ export function Vendas() {
         try {
             const { data, error } = await supabase.from('produtos').insert({
                 ...novoProdutoForm,
-                preco_venda: novoProdutoForm.preco,
+                preco: novoProdutoForm.preco,
                 sku: `AUTO-${Date.now().toString().slice(-6)}`
             }).select().single()
             if (error) throw error
@@ -478,7 +478,7 @@ export function Vendas() {
                                                                 </div>
                                                                 <div className="ml-4 text-right">
                                                                     <span className="font-black text-primary text-base">
-                                                                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(p.preco_venda)}
+                                                                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(p.preco)}
                                                                     </span>
                                                                 </div>
                                                             </div>
