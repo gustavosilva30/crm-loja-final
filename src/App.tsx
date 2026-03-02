@@ -17,6 +17,8 @@ import { Fiscal } from "./pages/Fiscal"
 import { ThemeProvider } from "./components/ThemeProvider"
 import { supabase } from "./lib/supabase"
 
+import { Legal } from "./pages/Legal"
+
 export default function App() {
   const [session, setSession] = useState<any>(null)
   const [loading, setLoading] = useState(true)
@@ -41,6 +43,10 @@ export default function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={!session ? <Login /> : <Navigate to="/" />} />
+          <Route path="/legal/:type" element={<Legal />} />
+          <Route path="/terms" element={<Navigate to="/legal/terms" />} />
+          <Route path="/privacy" element={<Navigate to="/legal/privacy" />} />
+          <Route path="/deletion" element={<Navigate to="/legal/deletion" />} />
 
           <Route path="/" element={session ? <Layout /> : <Navigate to="/login" />}>
             <Route index element={<Dashboard />} />
