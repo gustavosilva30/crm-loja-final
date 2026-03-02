@@ -338,6 +338,7 @@ export function Vendas() {
                     codigo_rastreio: entregaForm.codigo_rastreio || null,
                     endereco_entrega: entregaForm.endereco_entrega || null,
                     contato_entrega: entregaForm.contato_entrega || null,
+                    status_pagamento: entregaForm.status_pagamento,
                     status: 'Preparando'
                 }])
 

@@ -56,10 +56,32 @@ export function Relatorios() {
                 if (filterCliente) q = q.eq('cliente_id', filterCliente)
                 if (filterStatus !== 'todos') q = q.eq('status', filterStatus)
 
-                const { data: rows } = await q
-                setData(rows || [])
-                const tot = (rows || []).filter((v: any) => v.status !== 'Cancelado').reduce((a: number, v: any) => a + (v.total || 0), 0)
-                setTotals({ total: tot })
+                const { data: rows, error } = await q
+                if (error) {
+                    console.warn('Erro ao buscar relatorio de vendas com join, tentando sem atendentes...', error.message)
+                    let q2 = supabase
+                        .from('vendas')
+                        .select(`
+                            numero_pedido, data_venda, total, status, forma_pagamento,
+                            clientes (nome)
+                        `)
+                        .order('data_venda', { ascending: false })
+
+                    if (filterDataInicio) q2 = q2.gte('data_venda', filterDataInicio)
+                    if (filterDataFim) q2 = q2.lte('data_venda', filterDataFim + 'T23:59:59')
+                    if (filterCliente) q2 = q2.eq('cliente_id', filterCliente)
+                    if (filterStatus !== 'todos') q2 = q2.eq('status', filterStatus)
+
+                    const { data: rows2, error: err2 } = await q2
+                    if (err2) throw err2
+                    setData(rows2 || [])
+                    const tot = (rows2 || []).filter((v: any) => v.status !== 'Cancelado').reduce((a: number, v: any) => a + (v.total || 0), 0)
+                    setTotals({ total: tot })
+                } else {
+                    setData(rows || [])
+                    const tot = (rows || []).filter((v: any) => v.status !== 'Cancelado').reduce((a: number, v: any) => a + (v.total || 0), 0)
+                    setTotals({ total: tot })
+                }
             }
 
             else if (reportType === 'vendas_por_vendedor') {
@@ -71,8 +93,13 @@ export function Relatorios() {
                 if (filterDataInicio) q = q.gte('data_venda', filterDataInicio)
                 if (filterDataFim) q = q.lte('data_venda', filterDataFim + 'T23:59:59')
 
-                const { data: rows } = await q
-                if (rows) {
+                const { data: rows, error } = await q
+                if (error) {
+                    console.warn('Erro no relatório por vendedor:', error.message)
+                    // No fallback simple for this one as it relies on the join, return empty or handle gracefully
+                    setData([])
+                    setTotals({ total: 0 })
+                } else if (rows) {
                     const grouped: Record<string, { nome: string, qtd: number, total: number }> = {}
                     rows.forEach((v: any) => {
                         const nome = v.atendentes?.nome || 'Sem vendedor'
@@ -201,7 +228,7 @@ ${printContent.innerHTML}
         fluxo_caixa: 'Fluxo de Caixa'
     }
 
-    const reportIcons: Record<ReportType, JSX.Element> = {
+    const reportIcons: Record<ReportType, React.ReactNode> = {
         vendas: <ShoppingBag className="w-4 h-4" />,
         vendas_por_vendedor: <TrendingUp className="w-4 h-4" />,
         contas: <Wallet className="w-4 h-4" />,

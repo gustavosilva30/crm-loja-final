@@ -13,6 +13,7 @@ interface Entrega {
     transportadora_id: string | null
     codigo_rastreio: string | null
     status: string
+    status_pagamento: 'Pago' | 'A Receber' | string
     data_envio: string | null
     data_entrega: string | null
     created_at: string
@@ -32,7 +33,10 @@ export function Entregas() {
         try {
             const { data, error } = await supabase
                 .from('entregas')
-                .select(`*, vendas ( id, clientes ( nome ) )`)
+                .select(`
+                    *, 
+                    vendas ( id, clientes ( nome ) )
+                `)
                 .order('created_at', { ascending: false })
 
             if (error) {
@@ -58,6 +62,15 @@ export function Entregas() {
             status: nextStatus,
             data_envio: nextStatus === 'Em Trânsito' ? new Date().toISOString() : undefined,
             data_entrega: nextStatus === 'Entregue' ? new Date().toISOString() : undefined
+        }).eq('id', id)
+
+        if (!error) fetchEntregas()
+    }
+
+    const togglePaymentStatus = async (id: string, currentStatus: string) => {
+        const nextStatus = currentStatus === 'Pago' ? 'A Receber' : 'Pago'
+        const { error } = await supabase.from('entregas').update({
+            status_pagamento: nextStatus
         }).eq('id', id)
 
         if (!error) fetchEntregas()
@@ -157,6 +170,7 @@ export function Entregas() {
                                     <TableHead>Pedido</TableHead>
                                     <TableHead>Cliente</TableHead>
                                     <TableHead>Rastreio</TableHead>
+                                    <TableHead>Pagamento</TableHead>
                                     <TableHead>Saída</TableHead>
                                     <TableHead>Previsão</TableHead>
                                     <TableHead>Status</TableHead>
@@ -184,6 +198,15 @@ export function Entregas() {
                                                 {entrega.codigo_rastreio && <Button variant="ghost" size="icon" className="h-6 w-6"><PackageCheck className="w-3 h-3" /></Button>}
                                             </div>
                                         </TableCell>
+                                        <TableCell>
+                                            <Badge
+                                                variant={entrega.status_pagamento === 'Pago' ? 'default' : 'outline'}
+                                                className={`text-[10px] cursor-pointer hover:opacity-80 transition-opacity ${entrega.status_pagamento === 'Pago' ? 'bg-emerald-500 hover:bg-emerald-600' : ''}`}
+                                                onClick={() => togglePaymentStatus(entrega.id, entrega.status_pagamento)}
+                                            >
+                                                {entrega.status_pagamento || 'A Receber'}
+                                            </Badge>
+                                        </TableCell>
                                         <TableCell className="text-xs">
                                             {entrega.data_envio ? new Date(entrega.data_envio).toLocaleDateString("pt-BR") : "-"}
                                         </TableCell>
@@ -203,7 +226,7 @@ export function Entregas() {
                                         </TableCell>
                                         <TableCell className="text-right">
                                             <div className="flex justify-end gap-1">
-                                                <Button variant="ghost" size="icon" onClick={() => updateStatus(entrega.id, entrega.status)} title="Alterar Status">
+                                                <Button variant="ghost" size="icon" onClick={() => updateStatus(entrega.id, entrega.status)} title="Próximo Status">
                                                     <PackageCheck className="w-4 h-4 text-emerald-500" />
                                                 </Button>
                                                 <Button variant="ghost" size="icon" onClick={() => handleDelete(entrega.id)} className="text-destructive">
