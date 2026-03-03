@@ -23,8 +23,9 @@ interface Venda {
     forma_pagamento?: string
     atendente_id?: string
     clientes?: { id: string, nome: string, documento?: string, email?: string, telefone?: string, endereco?: string }
-    atendentes?: { nome: string }
-    vendas_itens?: { produtos: { nome: string } }[]
+    atendentes?: { id: string, nome: string }
+    vendedor?: { id: string, nome: string }
+    vendas_itens?: { produtos: { id?: string, nome: string, sku?: string } }[]
 }
 
 export function Vendas() {
@@ -43,6 +44,36 @@ export function Vendas() {
     const [searchParams] = useSearchParams()
     const { atendente } = useAuthStore()
     const [printAfterSave, setPrintAfterSave] = useState(false)
+    const [selectedIds, setSelectedIds] = useState<string[]>([])
+
+    const toggleSelect = (id: string) => {
+        setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id])
+    }
+    const toggleSelectAll = () => {
+        if (selectedIds.length === filteredVendas.length && filteredVendas.length > 0) {
+            setSelectedIds([])
+        } else {
+            setSelectedIds(filteredVendas.map(v => v.id))
+        }
+    }
+
+    const handleBulkCancel = async () => {
+        if (!confirm(`Tem certeza que deseja cancelar ${selectedIds.length} pedidos?`)) return
+        setSubmitting(true)
+        try {
+            for (const id of selectedIds) {
+                // Aqui podemos reaproveitar a lógica do Cancelar mas de forma simplificada no loop
+                await supabase.from('vendas').update({ status: 'Cancelado' }).eq('id', id)
+            }
+            alert('Pedidos cancelados com sucesso.')
+            setSelectedIds([])
+            fetchVendas()
+        } catch (err: any) {
+            alert('Erro ao cancelar pedidos: ' + err.message)
+        } finally {
+            setSubmitting(false)
+        }
+    }
 
     useEffect(() => {
         const editId = searchParams.get('edit')
@@ -141,18 +172,35 @@ export function Vendas() {
     const fetchVendas = async () => {
         setLoading(true)
         try {
+            // Tenta buscar com atendentes. Se falhar (ex: ambiguidade), usa o fallback
             const { data, error } = await supabase
                 .from('vendas')
                 .select(`
                     *,
                     clientes ( id, nome, documento, email, telefone, endereco ),
-                    atendentes ( id, nome ),
+                    atendentes:atendente_id ( id, nome ),
+                    vendedor:vendedor_id ( id, nome ),
                     vendas_itens ( produtos ( id, nome, sku ) )
                 `)
                 .order('data_venda', { ascending: false })
 
-            if (error) throw error
-            setVendas(data || [])
+            if (error) {
+                console.error('Initial fetch error, trying fallback:', error)
+                // Fallback sem atendentes se a relação nomeada falhar
+                const { data: fallbackData, error: fallbackError } = await supabase
+                    .from('vendas')
+                    .select(`
+                        *,
+                        clientes ( id, nome, documento, email, telefone, endereco ),
+                        vendas_itens ( produtos ( id, nome, sku ) )
+                    `)
+                    .order('data_venda', { ascending: false })
+
+                if (fallbackError) throw fallbackError
+                setVendas(fallbackData || [])
+            } else {
+                setVendas(data || [])
+            }
         } catch (err) {
             console.error('Error fetching vendas:', err)
         } finally {
@@ -361,6 +409,7 @@ export function Vendas() {
                 const { error: uvErr } = await supabase.from('vendas').update({
                     cliente_id: vendaForm.cliente_id || null,
                     atendente_id: vendaForm.atendente_id || atendente?.id || null,
+                    vendedor_id: vendaForm.atendente_id || atendente?.id || null,
                     total,
                     status: statusToSave,
                     forma_pagamento: vendaForm.forma_pagamento,
@@ -374,6 +423,7 @@ export function Vendas() {
                 const { data: venda, error: vErr } = await supabase.from('vendas').insert({
                     cliente_id: vendaForm.cliente_id || null,
                     atendente_id: vendaForm.atendente_id || atendente?.id || null,
+                    vendedor_id: vendaForm.atendente_id || atendente?.id || null,
                     total,
                     status: statusToSave,
                     forma_pagamento: vendaForm.forma_pagamento,
@@ -543,7 +593,7 @@ export function Vendas() {
     const handleOpenReceipt = async (vendaId: string) => {
         setLoading(true)
         try {
-            const { data: venda } = await supabase.from('vendas').select(`*, clientes(*), atendentes(nome)`).eq('id', vendaId).single()
+            const { data: venda } = await supabase.from('vendas').select(`*, clientes(*), atendentes:atendente_id(nome), vendedor:vendedor_id(nome)`).eq('id', vendaId).single()
             const { data: itens } = await supabase.from('vendas_itens').select(`*, produtos(nome, sku)`).eq('venda_id', vendaId)
             const { data: entrega } = await supabase.from('entregas').select('*').eq('venda_id', vendaId).maybeSingle()
             setSelectedVendaForReceipt({ ...venda, itens: itens || [], entrega })
@@ -560,6 +610,7 @@ export function Vendas() {
         const matchesSearch = !searchTerm ||
             (v.clientes?.nome?.toLowerCase() || '').includes(termLower) ||
             (v.atendentes?.nome?.toLowerCase() || '').includes(termLower) ||
+            (v.vendedor?.nome?.toLowerCase() || '').includes(termLower) ||
             String(v.numero_pedido).includes(termLower) ||
             v.vendas_itens?.some(i => (i.produtos?.nome || '').toLowerCase().includes(termLower));
 
@@ -591,6 +642,14 @@ export function Vendas() {
                             <Input placeholder="Buscar venda..." className="pl-9" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
                         </div>
                         <div className="flex items-center gap-2">
+                            {selectedIds.length > 0 && (
+                                <div className="flex items-center gap-2 mr-4 bg-muted p-1 px-2 rounded-md border text-sm font-medium animate-in fade-in slide-in-from-left-2">
+                                    <span className="text-xs text-muted-foreground">{selectedIds.length} selecionados</span>
+                                    <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-destructive hover:bg-destructive/10" onClick={handleBulkCancel}>
+                                        <Trash2 className="w-3 h-3 mr-1" /> Cancelar
+                                    </Button>
+                                </div>
+                            )}
                             <Button variant="outline" className="gap-2" onClick={() => setIsFilterOpen(!isFilterOpen)}>
                                 <Filter className="w-4 h-4" /> Filtros
                             </Button>
@@ -601,6 +660,14 @@ export function Vendas() {
                     <Table>
                         <TableHeader>
                             <TableRow>
+                                <TableHead className="w-12">
+                                    <input
+                                        type="checkbox"
+                                        className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
+                                        checked={filteredVendas.length > 0 && selectedIds.length === filteredVendas.length}
+                                        onChange={toggleSelectAll}
+                                    />
+                                </TableHead>
                                 <TableHead>Pedido</TableHead>
                                 <TableHead>Cliente</TableHead>
                                 <TableHead>Vendedor</TableHead>
@@ -612,14 +679,24 @@ export function Vendas() {
                         </TableHeader>
                         <TableBody>
                             {loading ? (
-                                <TableRow><TableCell colSpan={6} className="text-center">Carregando...</TableCell></TableRow>
+                                <TableRow><TableCell colSpan={8} className="text-center">Carregando...</TableCell></TableRow>
                             ) : filteredVendas.length === 0 ? (
-                                <TableRow><TableCell colSpan={6} className="text-center">Nenhuma venda pendente.</TableCell></TableRow>
+                                <TableRow><TableCell colSpan={8} className="text-center">Nenhuma venda pendente.</TableCell></TableRow>
                             ) : filteredVendas.map((venda) => (
-                                <TableRow key={venda.id}>
+                                <TableRow key={venda.id} className={selectedIds.includes(venda.id) ? 'bg-muted/50' : ''}>
+                                    <TableCell>
+                                        <input
+                                            type="checkbox"
+                                            className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
+                                            checked={selectedIds.includes(venda.id)}
+                                            onChange={() => toggleSelect(venda.id)}
+                                        />
+                                    </TableCell>
                                     <TableCell className="font-mono">#{formatNumPedido(venda.numero_pedido)}</TableCell>
                                     <TableCell>{venda.clientes?.nome || 'Consumidor Final'}</TableCell>
-                                    <TableCell className="text-xs">{venda.atendentes?.nome || '-'}</TableCell>
+                                    <TableCell className="text-xs">
+                                        {venda.atendentes?.nome || venda.vendedor?.nome || '-'}
+                                    </TableCell>
                                     <TableCell className="max-w-[200px] truncate text-[13px] font-medium" title={venda.vendas_itens?.map((i: any) => i.produtos?.nome).join(', ')}>
                                         {venda.vendas_itens?.map((i: any) => i.produtos?.nome).join(', ') || '-'}
                                     </TableCell>
