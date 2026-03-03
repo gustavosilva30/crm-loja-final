@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react"
+import { useNavigate } from "react-router-dom"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
@@ -34,6 +35,7 @@ export function VendasConcluidas() {
     const [searchTerm, setSearchTerm] = useState("")
     const [vendas, setVendas] = useState<Venda[]>([])
     const [loading, setLoading] = useState(true)
+    const navigate = useNavigate()
 
     const [filterStatus, setFilterStatus] = useState<string>("todos")
     const [filterOrigem, setFilterOrigem] = useState<string>("todos")
@@ -263,8 +265,9 @@ export function VendasConcluidas() {
                                     <TableCell className="font-bold">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(venda.total)}</TableCell>
                                     <TableCell><Badge variant={venda.status === 'Cancelado' ? 'destructive' : 'default'}>{venda.status}</Badge></TableCell>
                                     <TableCell className="text-right space-x-1">
-                                        <Button variant="ghost" size="icon" onClick={() => handleOpenReceipt(venda.id)}><Printer className="w-4 h-4" /></Button>
-                                        <Button variant="ghost" size="icon" className="text-destructive" onClick={() => handleCancelVenda(venda.id)}><Trash2 className="w-4 h-4" /></Button>
+                                        <Button variant="ghost" size="icon" onClick={() => handleOpenReceipt(venda.id)} title="Imprimir"><Printer className="w-4 h-4" /></Button>
+                                        <Button variant="ghost" size="icon" onClick={() => navigate(`/vendas?edit=${venda.id}`)} title="Editar"><Search className="w-4 h-4" /></Button>
+                                        <Button variant="ghost" size="icon" className="text-destructive" onClick={() => handleCancelVenda(venda.id)} title="Excluir"><Trash2 className="w-4 h-4" /></Button>
                                     </TableCell>
                                 </TableRow>
                             ))}
@@ -279,22 +282,69 @@ export function VendasConcluidas() {
                         <div className="flex justify-end gap-2">
                             <Button onClick={handlePrint}><Printer className="w-4 h-4 mr-2" /> Imprimir</Button>
                         </div>
-                        <div id="printable-receipt" className="p-8 bg-white text-black border">
-                            <h2 className="text-xl font-bold">Resumo do Pedido #{formatNumPedido(selectedVendaForReceipt.numero_pedido)}</h2>
-                            <p>Data: {new Date(selectedVendaForReceipt.data_venda).toLocaleString('pt-BR')}</p>
-                            <p>Cliente: {selectedVendaForReceipt.clientes?.nome || '---'}</p>
-                            <p>Forma de Pagamento: <strong>{selectedVendaForReceipt.forma_pagamento || '---'}</strong></p>
-                            <div className="mt-4 border-t pt-4">
-                                <table className="w-full">
-                                    <thead><tr className="border-b text-left"><th>Item</th><th>Qtd</th><th>Subtotal</th></tr></thead>
-                                    <tbody>
-                                        {selectedVendaForReceipt.itens.map((i: any, idx: number) => (
-                                            <tr key={idx}><td>{i.produtos?.nome}</td><td>{i.quantidade}</td><td>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(i.subtotal)}</td></tr>
-                                        ))}
-                                    </tbody>
-                                </table>
+                        <div id="printable-receipt" className="p-8 bg-white text-black border shadow-sm">
+                            <div className="flex justify-between items-start border-b-2 border-slate-200 pb-4 mb-6">
+                                <div className="space-y-1">
+                                    <h1 className="text-2xl font-black text-slate-900 uppercase tracking-tighter">{company?.nome_fantasia || 'AUTO PEÇAS'}</h1>
+                                    <p className="text-[10px] text-slate-500 font-mono leading-none">
+                                        {company?.razao_social}<br />
+                                        CNPJ: {company?.cnpj || '00.000.000/0000-00'}<br />
+                                        {company?.logradouro}, {company?.numero} - {company?.bairro}<br />
+                                        {company?.cidade}/{company?.estado}
+                                    </p>
+                                </div>
+                                <div className="text-right">
+                                    <span className="bg-slate-900 text-white px-3 py-1 font-black text-lg">RECIBO #{formatNumPedido(selectedVendaForReceipt.numero_pedido)}</span>
+                                    <p className="text-[10px] mt-1 font-bold">{new Date(selectedVendaForReceipt.data_venda).toLocaleString('pt-BR')}</p>
+                                </div>
                             </div>
-                            <div className="mt-4 text-right font-bold text-lg">Total: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(selectedVendaForReceipt.total)}</div>
+
+                            <div className="grid grid-cols-2 gap-6 bg-slate-50 p-4 border border-slate-200 mb-6">
+                                <div className="space-y-1">
+                                    <Label className="text-[9px] uppercase font-black text-slate-400">Cliente</Label>
+                                    <p className="text-sm font-bold">{selectedVendaForReceipt.clientes?.nome || 'CONSUMIDOR FINAL'}</p>
+                                    <p className="text-[10px] text-slate-500">TEL: {selectedVendaForReceipt.clientes?.telefone || '---'}</p>
+                                </div>
+                                <div className="space-y-1 border-l border-slate-200 pl-4">
+                                    <Label className="text-[9px] uppercase font-black text-slate-400">Venda</Label>
+                                    <p className="text-sm font-bold">Pagamento: {selectedVendaForReceipt.forma_pagamento || '---'}</p>
+                                    <p className="text-sm font-bold uppercase text-[10px]"><span className="text-slate-500">Status:</span> {selectedVendaForReceipt.status}</p>
+                                </div>
+                            </div>
+
+                            <table className="w-full mb-6">
+                                <thead>
+                                    <tr className="text-left text-[11px] uppercase font-black text-slate-400 border-b-2 border-slate-100">
+                                        <th className="pb-2">Produto</th>
+                                        <th className="pb-2 text-center">Qtd</th>
+                                        <th className="pb-2 text-right">Unitário</th>
+                                        <th className="pb-2 text-right">Subtotal</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100">
+                                    {selectedVendaForReceipt.itens.map((i: any, idx: number) => (
+                                        <tr key={idx} className="text-sm">
+                                            <td className="py-2">
+                                                <span className="font-bold">{i.produtos?.nome}</span>
+                                            </td>
+                                            <td className="py-2 text-center font-bold">{i.quantidade}</td>
+                                            <td className="py-2 text-right">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(i.preco_unitario || (i.subtotal / i.quantidade))}</td>
+                                            <td className="py-2 text-right font-black">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(i.subtotal)}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+
+                            <div className="flex flex-col items-end gap-2 border-t-2 border-slate-200 pt-4">
+                                <div className="flex gap-10 items-center">
+                                    <span className="text-sm font-bold uppercase text-slate-400">Total</span>
+                                    <span className="text-3xl font-black text-slate-900">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(selectedVendaForReceipt.total)}</span>
+                                </div>
+                            </div>
+
+                            <div className="mt-16 text-center">
+                                <p className="text-[10px] text-slate-400 uppercase font-black italic tracking-widest">{company?.mensagem_rodape || 'Obrigado pela preferência!'}</p>
+                            </div>
                         </div>
                     </div>
                 )}

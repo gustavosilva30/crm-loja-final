@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react"
+import { useSearchParams } from "react-router-dom"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
@@ -6,7 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Modal } from "@/components/ui/modal"
-import { Search, Filter, Trash2, Printer, Plus, X, UserPlus, PackagePlus, DollarSign, ShoppingCart } from "lucide-react"
+import { Search, Filter, Trash2, Printer, Plus, X, UserPlus, PackagePlus, DollarSign, ShoppingCart, Truck } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 
 interface Venda {
@@ -37,6 +38,15 @@ export function Vendas() {
     const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false)
     const [selectedVendaForReceipt, setSelectedVendaForReceipt] = useState<any>(null)
     const [company, setCompany] = useState<any>(null)
+    const [searchParams] = useSearchParams()
+
+    useEffect(() => {
+        const editId = searchParams.get('edit')
+        if (editId && vendas.length > 0) {
+            const venda = vendas.find((v: any) => v.id === editId)
+            if (venda) startEditVenda(venda)
+        }
+    }, [searchParams, vendas])
 
     // resources for new sale
     const [clientes, setClientes] = useState<any[]>([])
@@ -57,15 +67,19 @@ export function Vendas() {
     const [vendaForm, setVendaForm] = useState({
         cliente_id: '',
         atendente_id: '',
-        status: 'Pendente' as const,
+        status: 'Pendente' as 'Pendente' | 'Pago' | 'Enviado' | 'Entregue' | 'Cancelado',
         forma_pagamento: 'Dinheiro'
     })
+
+    const [editingVendaId, setEditingVendaId] = useState<string | null>(null)
 
     const [isFinalizarModalOpen, setIsFinalizarModalOpen] = useState(false)
     const [vendaParaFinalizar, setVendaParaFinalizar] = useState<any>(null)
     const [finalizarForm, setFinalizarForm] = useState({
         forma_pagamento: 'Dinheiro',
-        status: 'Pago' as const
+        status: 'Pago' as const,
+        criar_entrega: false,
+        entrega: { rua: '', numero: '', bairro: '', contato: '' }
     })
 
     const fetchVendas = async () => {
@@ -129,6 +143,26 @@ export function Vendas() {
         setVendaItems([...vendaItems, { produto_id: '', quantidade: 1, preco_unitario: 0, subtotal: 0, _search: '' }])
     }
 
+    const startEditVenda = async (venda: Venda) => {
+        setEditingVendaId(venda.id)
+        setVendaForm({
+            cliente_id: venda.cliente_id || '',
+            atendente_id: (venda as any).atendente_id || '',
+            status: venda.status,
+            forma_pagamento: venda.forma_pagamento || 'Dinheiro'
+        })
+
+        // Fetch items
+        const { data: itens } = await supabase.from('vendas_itens').select('*').eq('venda_id', venda.id)
+        if (itens) {
+            setVendaItems(itens.map(i => ({
+                ...i,
+                _search: ''
+            })))
+        }
+        setIsNovoPedidoModalOpen(true)
+    }
+
     const handleRemoveItem = (index: number) => {
         setVendaItems(vendaItems.filter((_, i) => i !== index))
     }
@@ -157,19 +191,37 @@ export function Vendas() {
         setSubmitting(true)
         try {
             const total = calculateTotal()
-            const { data: venda, error: vErr } = await supabase.from('vendas').insert({
-                cliente_id: vendaForm.cliente_id || null,
-                atendente_id: vendaForm.atendente_id || null,
-                total,
-                status: vendaForm.status,
-                forma_pagamento: vendaForm.forma_pagamento,
-                data_venda: new Date().toISOString()
-            }).select().single()
+            let vendaId = editingVendaId
 
-            if (vErr) throw vErr
+            if (editingVendaId) {
+                const { error: uvErr } = await supabase.from('vendas').update({
+                    cliente_id: vendaForm.cliente_id || null,
+                    atendente_id: vendaForm.atendente_id || null,
+                    total,
+                    status: vendaForm.status,
+                    forma_pagamento: vendaForm.forma_pagamento,
+                }).eq('id', editingVendaId)
+                if (uvErr) throw uvErr
+
+                // Delete old items
+                const { error: diErr } = await supabase.from('vendas_itens').delete().eq('venda_id', editingVendaId)
+                if (diErr) throw diErr
+            } else {
+                const { data: venda, error: vErr } = await supabase.from('vendas').insert({
+                    cliente_id: vendaForm.cliente_id || null,
+                    atendente_id: vendaForm.atendente_id || null,
+                    total,
+                    status: vendaForm.status,
+                    forma_pagamento: vendaForm.forma_pagamento,
+                    data_venda: new Date().toISOString()
+                }).select().single()
+
+                if (vErr) throw vErr
+                vendaId = venda.id
+            }
 
             const itensToInsert = vendaItems.map(item => ({
-                venda_id: venda.id,
+                venda_id: vendaId,
                 produto_id: item.produto_id,
                 quantidade: item.quantidade,
                 preco_unitario: item.preco_unitario,
@@ -179,8 +231,9 @@ export function Vendas() {
             const { error: iErr } = await supabase.from('vendas_itens').insert(itensToInsert)
             if (iErr) throw iErr
 
-            alert('Venda realizada com sucesso!')
+            alert(editingVendaId ? 'Venda atualizada com sucesso!' : 'Venda realizada com sucesso!')
             setIsNovoPedidoModalOpen(false)
+            setEditingVendaId(null)
             setVendaItems([{ produto_id: '', quantidade: 1, preco_unitario: 0, subtotal: 0, _search: '' }])
             fetchVendas()
         } catch (err: any) {
@@ -235,7 +288,7 @@ export function Vendas() {
             if (error) throw error
 
             // Se estiver sendo fechada para Pago ou entregue, garantir que lance no financeiro se for venda direta
-            if (finalizarForm.status === 'Pago') {
+            if (finalizarForm.status === 'Pago' || finalizarForm.status === 'Entregue') {
                 await supabase.from('financeiro_lancamentos').insert([{
                     tipo: 'Receita',
                     valor: vendaParaFinalizar.total,
@@ -245,6 +298,20 @@ export function Vendas() {
                     forma_pagamento: finalizarForm.forma_pagamento,
                     venda_id: vendaParaFinalizar.id,
                     descricao: `Venda #${formatNumPedido(vendaParaFinalizar.numero_pedido)}`
+                }])
+            }
+
+            // Se selecionou entrega, cria a entrega
+            if (finalizarForm.criar_entrega) {
+                await supabase.from('entregas').insert([{
+                    venda_id: vendaParaFinalizar.id,
+                    cliente_nome: vendaParaFinalizar.clientes?.nome || 'Cliente',
+                    cliente_contato: finalizarForm.entrega.contato,
+                    rua: finalizarForm.entrega.rua,
+                    bairro: finalizarForm.entrega.bairro,
+                    numero: finalizarForm.entrega.numero,
+                    status: 'Preparando',
+                    status_pagamento: 'Pago'
                 }])
             }
 
@@ -337,6 +404,7 @@ export function Vendas() {
                                     <TableCell><Badge variant="outline">{venda.status}</Badge></TableCell>
                                     <TableCell className="text-right space-x-1">
                                         <Button variant="ghost" size="icon" onClick={() => handleOpenReceipt(venda.id)} title="Imprimir"><Printer className="w-4 h-4" /></Button>
+                                        <Button variant="ghost" size="icon" onClick={() => startEditVenda(venda)} title="Editar"><Search className="w-4 h-4" /></Button>
                                         <Button variant="outline" size="sm" className="h-8 gap-1 bg-emerald-500/10 text-emerald-500 border-emerald-500/20 hover:bg-emerald-500/20" onClick={() => { setVendaParaFinalizar(venda); setFinalizarForm({ ...finalizarForm, forma_pagamento: venda.forma_pagamento || 'Dinheiro' }); setIsFinalizarModalOpen(true); }}><DollarSign className="w-3 h-3" /> Fechar</Button>
                                         <Button variant="ghost" size="icon" className="text-destructive" onClick={() => handleCancelVenda(venda.id)} title="Excluir"><Trash2 className="w-4 h-4" /></Button>
                                     </TableCell>
@@ -554,21 +622,89 @@ export function Vendas() {
                 {selectedVendaForReceipt && (
                     <div className="space-y-4">
                         <div className="flex justify-end"><Button onClick={() => window.print()}><Printer className="w-4 h-4 mr-2" /> Imprimir</Button></div>
-                        <div id="printable-receipt" className="p-8 border bg-white text-black">
-                            <h2 className="text-xl font-bold">Pedido #{formatNumPedido(selectedVendaForReceipt.numero_pedido)}</h2>
-                            <p>Cliente: {selectedVendaForReceipt.clientes?.nome || '---'}</p>
-                            <p>Forma: {selectedVendaForReceipt.forma_pagamento}</p>
-                            <div className="my-4 border-t pt-4">
-                                <table className="w-full text-sm">
-                                    <thead><tr className="border-b text-left"><th>Produto</th><th>Qtd</th><th>Preço</th><th>Subtotal</th></tr></thead>
-                                    <tbody>
+                        <div className="space-y-6">
+                            {/* INFORMAÇÕES DA EMPRESA */}
+                            <div className="flex justify-between items-start border-b-2 border-primary/20 pb-4">
+                                <div className="space-y-1">
+                                    <h1 className="text-2xl font-black text-primary uppercase tracking-tighter">{company?.nome_fantasia || 'Dourados Auto Peças'}</h1>
+                                    <p className="text-[10px] text-muted-foreground font-mono leading-none">
+                                        {company?.razao_social}<br />
+                                        CNPJ: {company?.cnpj || '00.000.000/0000-00'}<br />
+                                        {company?.logradouro}, {company?.numero} - {company?.bairro}<br />
+                                        {company?.cidade}/{company?.estado} - CEP: {company?.cep}
+                                    </p>
+                                </div>
+                                <div className="text-right">
+                                    <span className="bg-primary text-white px-3 py-1 rounded-bl-lg font-black text-lg">RECIBO #{formatNumPedido(selectedVendaForReceipt.numero_pedido)}</span>
+                                    <p className="text-[10px] mt-1 font-bold">{new Date().toLocaleString('pt-BR')}</p>
+                                </div>
+                            </div>
+
+                            {/* INFO CLIENTE E VENDA */}
+                            <div className="grid grid-cols-2 gap-6 bg-muted/30 p-4 rounded-xl border border-primary/10">
+                                <div className="space-y-1">
+                                    <Label className="text-[9px] uppercase font-black text-primary/60">Informações do Cliente</Label>
+                                    <p className="text-sm font-bold">{selectedVendaForReceipt.clientes?.nome || 'CONSUMIDOR FINAL'}</p>
+                                    <p className="text-[10px] text-muted-foreground">DOC: {selectedVendaForReceipt.clientes?.documento || '---'}</p>
+                                    <p className="text-[10px] text-muted-foreground">TEL: {selectedVendaForReceipt.clientes?.telefone || '---'}</p>
+                                </div>
+                                <div className="space-y-1 border-l pl-4">
+                                    <Label className="text-[9px] uppercase font-black text-primary/60">Detalhes do Pedido</Label>
+                                    <p className="text-sm font-bold">Pagamento: {selectedVendaForReceipt.forma_pagamento || 'A DEFINIR'}</p>
+                                    <p className="text-sm font-bold">Vendedor: {selectedVendaForReceipt.atendentes?.nome || 'LOJA'}</p>
+                                    <p className="text-[10px] text-muted-foreground">Status: <span className="uppercase font-black text-primary">{selectedVendaForReceipt.status}</span></p>
+                                </div>
+                            </div>
+
+                            {/* TABELA DE ITENS */}
+                            <div className="border-y-2 border-primary/10 py-4">
+                                <table className="w-full">
+                                    <thead>
+                                        <tr className="text-left text-[11px] uppercase font-black text-primary/60 border-b">
+                                            <th className="pb-2">Produto / Descrição</th>
+                                            <th className="pb-2 text-center">Qtd</th>
+                                            <th className="pb-2 text-right">Unitário</th>
+                                            <th className="pb-2 text-right">Subtotal</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-primary/5">
                                         {selectedVendaForReceipt.itens?.map((i: any, idx: number) => (
-                                            <tr key={idx}><td>{i.produtos?.nome}</td><td>{i.quantidade}</td><td>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(i.preco_unitario)}</td><td>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(i.subtotal)}</td></tr>
+                                            <tr key={idx} className="text-sm">
+                                                <td className="py-2">
+                                                    <span className="font-bold">{i.produtos?.nome}</span>
+                                                    <br />
+                                                    <span className="text-[9px] font-mono text-muted-foreground uppercase">SKU: {i.produtos?.sku || '---'}</span>
+                                                </td>
+                                                <td className="py-2 text-center font-bold">{i.quantidade}</td>
+                                                <td className="py-2 text-right">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(i.preco_unitario)}</td>
+                                                <td className="py-2 text-right font-black">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(i.subtotal)}</td>
+                                            </tr>
                                         ))}
                                     </tbody>
                                 </table>
                             </div>
-                            <h3 className="text-right text-lg font-bold">TOTAL: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(selectedVendaForReceipt.total)}</h3>
+
+                            {/* SEÇÃO DE ENTREGA (SE HOUVER) */}
+                            {selectedVendaForReceipt.status === 'Entregue' && (
+                                <div className="bg-emerald-50 border border-emerald-100 p-4 rounded-xl flex items-center gap-4">
+                                    <Truck className="w-8 h-8 text-emerald-500 opacity-50" />
+                                    <div className="space-y-1">
+                                        <Label className="text-[9px] uppercase font-black text-emerald-600">Informações de Entrega</Label>
+                                        <p className="text-xs font-medium">Endereço: {selectedVendaForReceipt.clientes?.endereco || 'Verificar cadastro do cliente'}</p>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* TOTAIS E RODAPÉ */}
+                            <div className="flex flex-col items-end gap-2 pr-2">
+                                <div className="flex gap-10 items-center">
+                                    <span className="text-sm font-bold uppercase text-muted-foreground">Valor Total do Pedido</span>
+                                    <span className="text-3xl font-black text-primary">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(selectedVendaForReceipt.total)}</span>
+                                </div>
+                                <div className="w-full mt-10 border-t border-dashed pt-4 text-center">
+                                    <p className="text-[10px] text-muted-foreground uppercase font-black italic tracking-widest">{company?.mensagem_rodape || 'OBRIGADO PELA PREFERÊNCIA!'}</p>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 )}
@@ -642,6 +778,60 @@ export function Vendas() {
                     </div>
 
                     <div className="space-y-4">
+                        <div className="flex items-center gap-2 p-3 bg-primary/5 border rounded-lg">
+                            <input
+                                type="checkbox"
+                                id="criar_entrega"
+                                checked={finalizarForm.criar_entrega}
+                                onChange={e => setFinalizarForm({ ...finalizarForm, criar_entrega: e.target.checked })}
+                                className="w-4 h-4 accent-primary"
+                            />
+                            <Label htmlFor="criar_entrega" className="font-bold cursor-pointer">Venda para Entrega?</Label>
+                        </div>
+
+                        {finalizarForm.criar_entrega && (
+                            <div className="grid grid-cols-2 gap-3 p-3 border rounded-lg bg-muted/30 animate-in slide-in-from-top-2 duration-300">
+                                <div className="col-span-2 space-y-1">
+                                    <Label className="text-[10px] uppercase font-black">Telefone/Contato</Label>
+                                    <Input
+                                        placeholder="(00) 00000-0000"
+                                        value={finalizarForm.entrega.contato}
+                                        onChange={e => setFinalizarForm({ ...finalizarForm, entrega: { ...finalizarForm.entrega, contato: e.target.value } })}
+                                    />
+                                </div>
+                                <div className="space-y-1">
+                                    <Label className="text-[10px] uppercase font-black">Rua/Logradouro</Label>
+                                    <Input
+                                        placeholder="Ex: Av. Brasil"
+                                        value={finalizarForm.entrega.rua}
+                                        onChange={e => setFinalizarForm({ ...finalizarForm, entrega: { ...finalizarForm.entrega, rua: e.target.value } })}
+                                    />
+                                </div>
+                                <div className="space-y-1">
+                                    <Label className="text-[10px] uppercase font-black">Bairro</Label>
+                                    <Input
+                                        placeholder="Ex: Centro"
+                                        value={finalizarForm.entrega.bairro}
+                                        onChange={e => setFinalizarForm({ ...finalizarForm, entrega: { ...finalizarForm.entrega, bairro: e.target.value } })}
+                                    />
+                                </div>
+                                <div className="space-y-1">
+                                    <Label className="text-[10px] uppercase font-black">Número</Label>
+                                    <Input
+                                        placeholder="123"
+                                        value={finalizarForm.entrega.numero}
+                                        onChange={e => setFinalizarForm({ ...finalizarForm, entrega: { ...finalizarForm.entrega, numero: e.target.value } })}
+                                    />
+                                </div>
+                                <div className="space-y-1">
+                                    <Label className="text-[10px] uppercase font-black text-primary font-black">Status de Entrega</Label>
+                                    <div className="flex items-center gap-2 text-xs font-bold text-primary">
+                                        <Truck className="w-4 h-4" /> Preparando
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
                         <div className="space-y-2">
                             <Label>Como o cliente pagou?</Label>
                             <select

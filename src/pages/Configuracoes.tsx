@@ -6,8 +6,9 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Plus, Truck, Warehouse, Tags, Wallet, Save, Trash2, Users, Search } from "lucide-react"
+import { Plus, Truck, Warehouse, Tags, Wallet, Save, Trash2, Users, Search, Database } from "lucide-react"
 import { supabase } from "@/lib/supabase"
+import { ImportadorInteligente } from "@/components/ImportadorInteligente"
 
 export function Configuracoes() {
     const [activeTab, setActiveTab] = useState("shipping")
@@ -217,6 +218,7 @@ export function Configuracoes() {
                     <TabsTrigger value="finance" className="gap-2"><Wallet className="w-4 h-4" /> Categorias de Contas</TabsTrigger>
                     <TabsTrigger value="staff" className="gap-2"><Users className="w-4 h-4" /> Atendentes</TabsTrigger>
                     <TabsTrigger value="company" className="gap-2"><Save className="w-4 h-4" /> Dados da Empresa</TabsTrigger>
+                    <TabsTrigger value="import" className="gap-2"><Database className="w-4 h-4" /> Importador Inteligente</TabsTrigger>
                 </TabsList>
 
                 {/* TRANSPORTADORAS */}
@@ -710,6 +712,10 @@ export function Configuracoes() {
                             </Button>
                         </CardContent>
                     </Card>
+                </TabsContent>
+                {/* IMPORTADOR */}
+                <TabsContent value="import">
+                    <ImportadorInteligente />
                 </TabsContent>
             </Tabs>
 
