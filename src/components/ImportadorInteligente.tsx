@@ -213,10 +213,10 @@ export function ImportadorInteligente() {
                 }
             })
 
-            // Garantir campos obrigatórios mínimos e evitar duplicidade de SKU no lote
+            // Garantir campos obrigatórios mínimos
             if (selectedTable === 'produtos') {
                 if (!obj.sku) {
-                    obj.sku = `IMP-${Math.random().toString(36).substr(2, 6).toUpperCase()}`
+                    obj.sku = `AUTO-${Date.now()}` // Backend ou usuário cuidará depois se for manual
                 }
             }
 

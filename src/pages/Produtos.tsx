@@ -552,11 +552,15 @@ export function Produtos() {
         </div>
         <Button className="gap-2" onClick={() => {
           setEditingProduto(null)
-          let nextSkuNum = 1;
+
+          // Buscar maior SKU numérico para sugestão (Fallback se o banco não for chamado via RPC)
           const numericSkus = produtos.map(p => parseInt(p.sku, 10)).filter(n => !isNaN(n));
+          let nextSkuNum = 25010;
           if (numericSkus.length > 0) {
-            nextSkuNum = Math.max(...numericSkus) + 1;
+            const maxSku = Math.max(...numericSkus);
+            nextSkuNum = maxSku >= 25010 ? maxSku + 1 : 25010;
           }
+
           setNewProduto({
             sku: nextSkuNum.toString(),
             nome: '',
