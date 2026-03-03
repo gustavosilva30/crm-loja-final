@@ -953,11 +953,22 @@ export function Vendas() {
                                         {selectedVendaForReceipt.entrega && <div className="text-right">Entrega: {new Date().toLocaleDateString()}</div>}
                                     </div>
 
-                                    <div className="space-y-0.5 mb-2">
+                                    <div className="space-y-0.5 mb-2 text-black">
                                         <p><span className="font-bold">Cliente:</span> {selectedVendaForReceipt.clientes?.nome || 'CONSUMIDOR'}</p>
-                                        <p><span className="font-bold">Endereço:</span> {selectedVendaForReceipt.entrega?.rua || selectedVendaForReceipt.clientes?.endereco || '---'}</p>
-                                        <p><span className="font-bold">Cidade:</span> {selectedVendaForReceipt.entrega?.cidade || '---'}</p>
                                         <p><span className="font-bold">Telefone:</span> {selectedVendaForReceipt.clientes?.telefone || '---'}</p>
+
+                                        {selectedVendaForReceipt.entrega && (
+                                            <div className="mt-2 border border-black p-1 bg-gray-50">
+                                                <p className="font-bold text-center underline mb-1">DADOS PARA ENTREGA</p>
+                                                <p><span className="font-bold">Endereço:</span> {selectedVendaForReceipt.entrega.rua}, {selectedVendaForReceipt.entrega.numero}</p>
+                                                <p><span className="font-bold">Bairro:</span> {selectedVendaForReceipt.entrega.bairro}</p>
+                                                <p><span className="font-bold">Cidade:</span> {selectedVendaForReceipt.entrega.cidade}/{selectedVendaForReceipt.entrega.estado}</p>
+                                                <p><span className="font-bold">Status:</span> {selectedVendaForReceipt.status === 'Pago' || selectedVendaForReceipt.status === 'Entregue' ? '✅ JÁ ESTÁ PAGO' : '💰 A RECEBER'}</p>
+                                            </div>
+                                        )}
+                                        {!selectedVendaForReceipt.entrega && (
+                                            <p><span className="font-bold">Endereço:</span> {selectedVendaForReceipt.clientes?.endereco || '---'}</p>
+                                        )}
                                     </div>
 
                                     <div className="ticket-line" />
@@ -1032,7 +1043,7 @@ export function Vendas() {
                                         Emissão {new Date(selectedVendaForReceipt.data_venda).toLocaleDateString('pt-BR')}
                                     </div>
 
-                                    <div className="border border-black p-3 space-y-1">
+                                    <div className="border border-black p-3 space-y-1 text-black">
                                         <p className="text-sm">
                                             <span className="font-bold">Cliente:</span> {selectedVendaForReceipt.clientes?.documento || '000.000.000-00'} - {selectedVendaForReceipt.clientes?.nome || 'CONSUMIDOR FINAL'}
                                         </p>
@@ -1043,6 +1054,24 @@ export function Vendas() {
                                             <p><span className="font-bold">Telefone:</span> {selectedVendaForReceipt.clientes?.telefone || '---'}</p>
                                             <p><span className="font-bold">E-mail:</span> {selectedVendaForReceipt.clientes?.email || '---'}</p>
                                         </div>
+
+                                        {selectedVendaForReceipt.entrega && (
+                                            <div className="mt-2 border-2 border-black p-2 bg-gray-50">
+                                                <div className="flex justify-between items-center mb-1">
+                                                    <p className="font-black text-xs underline">DADOS COMPLETOS PARA ENTREGA</p>
+                                                    <p className={`font-black px-2 py-0.5 border-2 border-black ${selectedVendaForReceipt.status === 'Pago' || selectedVendaForReceipt.status === 'Entregue' ? 'bg-white' : 'bg-black text-white'}`}>
+                                                        {selectedVendaForReceipt.status === 'Pago' || selectedVendaForReceipt.status === 'Entregue' ? 'CONFERIDO / PAGO' : 'COBRAR NO ATO'}
+                                                    </p>
+                                                </div>
+                                                <div className="grid grid-cols-2 text-[11px] gap-x-4">
+                                                    <p><span className="font-bold">Rua:</span> {selectedVendaForReceipt.entrega.rua}, {selectedVendaForReceipt.entrega.numero}</p>
+                                                    <p><span className="font-bold">Bairro:</span> {selectedVendaForReceipt.entrega.bairro}</p>
+                                                    <p><span className="font-bold">Cidade:</span> {selectedVendaForReceipt.entrega.cidade}/{selectedVendaForReceipt.entrega.estado}</p>
+                                                    <p><span className="font-bold">CEP:</span> {selectedVendaForReceipt.entrega.cep}</p>
+                                                    <p className="col-span-2 mt-1"><span className="font-bold">Contato Adicional:</span> {selectedVendaForReceipt.entrega.contato || 'N/A'}</p>
+                                                </div>
+                                            </div>
+                                        )}
                                         <div className="grid grid-cols-2 text-[11px] pt-2 border-t mt-2">
                                             <p><span className="font-bold">Natureza da operação:</span> 5101 - Venda de mercadoria</p>
                                             <p className="text-right"><span className="font-bold">Vendedor:</span> {selectedVendaForReceipt.atendentes?.nome || 'N/A'}</p>
@@ -1082,16 +1111,10 @@ export function Vendas() {
                                                 <p className="text-[10px]">Status: {selectedVendaForReceipt.status}</p>
                                             </div>
                                             <div className="formal-section">
-                                                <p className="formal-label">Transporte / Entrega</p>
-                                                {selectedVendaForReceipt.entrega ? (
-                                                    <div className="text-[11px] space-y-0.5">
-                                                        <p><span className="font-bold">Destino:</span> {selectedVendaForReceipt.entrega.rua}, {selectedVendaForReceipt.entrega.numero}</p>
-                                                        <p>{selectedVendaForReceipt.entrega.bairro} - {selectedVendaForReceipt.entrega.cidade}/{selectedVendaForReceipt.entrega.estado}</p>
-                                                        <p>CEP: {selectedVendaForReceipt.entrega.cep}</p>
-                                                    </div>
-                                                ) : (
-                                                    <p className="text-[11px] italic">Retirada em loja</p>
-                                                )}
+                                                <p className="formal-label">Status Financeiro</p>
+                                                <p className={`text-sm font-black mt-1 p-1 border border-black text-center ${selectedVendaForReceipt.status === 'Pago' || selectedVendaForReceipt.status === 'Entregue' ? 'bg-white' : 'bg-black text-white'}`}>
+                                                    {selectedVendaForReceipt.status === 'Pago' || selectedVendaForReceipt.status === 'Entregue' ? '✅ PEDIDO PAGO' : '⚠️ AGUARDANDO PAGAMENTO'}
+                                                </p>
                                             </div>
                                         </div>
                                         <div className="space-y-1">
