@@ -889,13 +889,14 @@ export function Vendas() {
                             <style>{`
                                 @import url('https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap');
 
-                                .print-preview-container { font-family: 'Inter', sans-serif; }
-                                .print-preview-container.cupom, .print-preview-container.cupom58 { font-family: 'Courier Prime', monospace; }
-
-                                .print-preview-container.a4 { width: 210mm; min-height: 297mm; padding: 15mm; }
-                                .print-preview-container.a5 { width: 148mm; min-height: 210mm; padding: 10mm; }
-                                .print-preview-container.cupom { width: 80mm; font-size: 12px; padding: 4mm; }
-                                .print-preview-container.cupom58 { width: 58mm; font-size: 10px; padding: 2mm; }
+                                .print-preview-container { 
+                                    background-color: #fff !important; 
+                                    color: #000 !important;
+                                    margin-left: auto;
+                                    margin-right: auto;
+                                    box-shadow: 0 0 10px rgba(0,0,0,0.1);
+                                    overflow: visible;
+                                }
 
                                 @media print {
                                     @page { margin: 0; size: auto; }
@@ -907,8 +908,8 @@ export function Vendas() {
                                         position: static !important;
                                         margin: 0 !important;
                                         border: none !important;
+                                        box-shadow: none !important;
                                         background: white !important;
-                                        overflow: hidden !important;
                                     }
                                     .a4 { width: 210mm !important; }
                                     .a5 { width: 148mm !important; }
@@ -916,6 +917,11 @@ export function Vendas() {
                                     .cupom58 { width: 58mm !important; }
                                     .no-print { display: none !important; }
                                 }
+
+                                .a4 { width: 210mm; min-height: 297mm; padding: 15mm; font-family: 'Inter', sans-serif; }
+                                .a5 { width: 148mm; min-height: 210mm; padding: 10mm; font-family: 'Inter', sans-serif; }
+                                .cupom { width: 80mm; font-size: 12px; padding: 4mm; font-family: 'Courier Prime', monospace; }
+                                .cupom58 { width: 58mm; font-size: 10px; padding: 2mm; font-family: 'Courier Prime', monospace; }
 
                                 /* Estilos Imagem 1 (A4/A5) */
                                 .formal-header { border: 1px solid #000; padding: 10px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; }
@@ -930,6 +936,8 @@ export function Vendas() {
                                 .ticket-double-line { border-top: 3px double #000; margin: 5px 0; }
                                 .ticket-header { text-align: center; margin-bottom: 10px; color: #000; }
                                 .ticket-title { font-weight: bold; text-align: center; text-transform: uppercase; margin: 10px 0; color: #000; }
+                                .ticket-content { color: #000 !important; }
+                                .ticket-content p, .ticket-content span, .ticket-content div { color: #000 !important; }
                             `}</style>
 
                             {printFormat.includes('cupom') ? (
