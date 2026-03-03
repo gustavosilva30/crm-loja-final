@@ -199,16 +199,21 @@ export function VendasConcluidas() {
                 padding: 0;
                 color: #000;
                 background: #fff;
+                font-size: ${printFormat === 'a4' ? '11pt' : printFormat === 'a5' ? '9pt' : '10pt'};
             }
             .receipt-container { 
                 width: ${printFormat === 'cupom' ? '80mm' : printFormat === 'a5' ? '148mm' : '210mm'};
-                padding: ${printFormat === 'cupom' ? '6mm' : '15mm'};
+                padding: ${printFormat === 'cupom' ? '4mm' : printFormat === 'a5' ? '8mm' : '15mm'};
                 margin: 0 auto;
                 background: white;
+                box-sizing: border-box;
             }
-            table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-            th { text-align: left; border-bottom: 2px solid #000; padding: 5px; font-size: 11px; text-transform: uppercase; }
-            td { padding: 5px; border-bottom: 1px dotted #ccc; font-size: 12px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 10px; table-layout: fixed; }
+            th { 
+                text-align: left; border-bottom: 2px solid #000; padding: 5px 2px; 
+                font-size: 0.85em; text-transform: uppercase; 
+            }
+            td { padding: 6px 2px; border-bottom: 1px dotted #ccc; font-size: 1em; }
             .flex { display: flex; }
             .justify-between { justify-content: space-between; }
             .text-right { text-align: right; }
@@ -217,10 +222,10 @@ export function VendasConcluidas() {
             .font-bold { font-weight: 700; }
             .uppercase { text-transform: uppercase; }
             .border-b-2 { border-bottom: 2px solid #000; }
-            .mb-6 { margin-bottom: 24px; }
-            .text-2xl { font-size: 24px; }
-            .text-lg { font-size: 18px; }
-            .ticket-double-line { border-top: 3px double #000; margin: 5px 0; }
+            .mb-6 { margin-bottom: 20px; }
+            .text-2xl { font-size: 1.8em; }
+            .text-lg { font-size: 1.2em; }
+            .ticket-double-line { border-top: 3px double #000; margin: 6px 0; }
             @media print {
                 body { background: none; }
                 .receipt-container { box-shadow: none; }
@@ -435,6 +440,12 @@ export function VendasConcluidas() {
                             </div>
 
                             <table className="w-full mb-6">
+                                <colgroup>
+                                    <col style={{ width: '55%' }} />
+                                    <col style={{ width: '10%' }} />
+                                    <col style={{ width: '15%' }} />
+                                    <col style={{ width: '20%' }} />
+                                </colgroup>
                                 <thead>
                                     <tr className="text-left text-[11px] uppercase font-black text-slate-400 border-b-2 border-slate-100">
                                         <th className="pb-2">Produto</th>

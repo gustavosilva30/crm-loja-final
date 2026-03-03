@@ -21,7 +21,7 @@ interface Venda {
     ml_order_id: string | null
     data_venda: string
     forma_pagamento?: string
-    created_at: string
+    atendente_id?: string
     clientes?: { id: string, nome: string, documento?: string, email?: string, telefone?: string, endereco?: string }
     atendentes?: { nome: string }
     vendas_itens?: { produtos: { nome: string } }[]
@@ -46,11 +46,32 @@ export function Vendas() {
 
     useEffect(() => {
         const editId = searchParams.get('edit')
-        if (editId && vendas.length > 0) {
-            const venda = vendas.find((v: any) => v.id === editId)
-            if (venda) startEditVenda(venda)
+        if (editId) {
+            // Primeiro tenta achar na lista que já temos
+            const existingVenda = vendas.find((v: any) => v.id === editId)
+            if (existingVenda) {
+                startEditVenda(existingVenda)
+                // Limpa a URL para não reabrir
+                const newParams = new URLSearchParams(searchParams)
+                newParams.delete('edit')
+                window.history.replaceState({}, '', `/vendas?${newParams.toString()}`)
+            } else if (!loading) {
+                // Se não achou na lista e já carregou, tenta buscar direto no banco
+                supabase.from('vendas')
+                    .select('*, clientes(*), atendentes(nome)')
+                    .eq('id', editId)
+                    .single()
+                    .then(({ data }) => {
+                        if (data) {
+                            startEditVenda(data)
+                            const newParams = new URLSearchParams(searchParams)
+                            newParams.delete('edit')
+                            window.history.replaceState({}, '', `/vendas?${newParams.toString()}`)
+                        }
+                    })
+            }
         }
-    }, [searchParams, vendas])
+    }, [searchParams, vendas, loading])
 
     // resources for new sale
     const [clientes, setClientes] = useState<any[]>([])
@@ -121,7 +142,7 @@ export function Vendas() {
     const fetchResources = async () => {
         const { data: c } = await supabase.from('clientes').select('*').order('nome')
         const { data: a } = await supabase.from('atendentes').select('*').order('nome')
-        const { data: p } = await supabase.from('produtos').select('*').gt('estoque_atual', 0).order('nome')
+        const { data: p } = await supabase.from('produtos').select('*').order('nome')
         if (c) setClientes(c)
         if (a) setAtendentes(a)
         if (p) setProdutos(p)
@@ -313,12 +334,14 @@ export function Vendas() {
             const total = calculateTotal()
             let vendaId = editingVendaId
 
+            const statusToSave = printAfterSave ? 'Pendente' : vendaForm.status
+
             if (editingVendaId) {
                 const { error: uvErr } = await supabase.from('vendas').update({
                     cliente_id: vendaForm.cliente_id || null,
                     atendente_id: vendaForm.atendente_id || atendente?.id || null,
                     total,
-                    status: vendaForm.status,
+                    status: statusToSave,
                     forma_pagamento: vendaForm.forma_pagamento,
                 }).eq('id', editingVendaId)
                 if (uvErr) throw uvErr
@@ -331,7 +354,7 @@ export function Vendas() {
                     cliente_id: vendaForm.cliente_id || null,
                     atendente_id: vendaForm.atendente_id || atendente?.id || null,
                     total,
-                    status: vendaForm.status,
+                    status: statusToSave,
                     forma_pagamento: vendaForm.forma_pagamento,
                     data_venda: new Date().toISOString()
                 }).select().single()
@@ -363,7 +386,7 @@ export function Vendas() {
                     estado: vendaDelivery.estado,
                     cep: vendaDelivery.cep,
                     status: 'Preparando',
-                    status_pagamento: vendaForm.status === 'Pago' ? 'Pago' : 'Pendente'
+                    status_pagamento: statusToSave === 'Pago' ? 'Pago' : 'Pendente'
                 }
                 await supabase.from('entregas').upsert(deliveryObj, { onConflict: 'venda_id' })
             } else if (editingVendaId) {
@@ -927,17 +950,13 @@ export function Vendas() {
                                      min-height: 100px;
                                  }
  
+                                 /* Reset Geral para Impressão */
                                  @media print {
                                      @page { margin: 0; size: auto; }
                                      * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
-                                     
-                                     /* Esconder absolutamente tudo na página */
                                      body * { visibility: hidden !important; }
-                                     
-                                     /* Mostrar apenas o que está dentro do container de impressão */
                                      .print-preview-container, .print-preview-container * { visibility: visible !important; }
                                      
-                                     /* Forçar o container a ocupar a tela cheia para a impressora */
                                      .print-preview-container { 
                                          position: fixed !important;
                                          left: 0 !important;
@@ -953,36 +972,79 @@ export function Vendas() {
                                          align-items: center !important;
                                          visibility: visible !important;
                                      }
-
-                                     /* Garantir que as dimensões sejam respeitadas milimetricamente */
-                                     .a4 { width: 210mm !important; height: 297mm !important; margin: 0 !important; box-shadow: none !important; border: none !important; }
-                                     .a5 { width: 148mm !important; height: 210mm !important; margin: 0 !important; box-shadow: none !important; border: none !important; }
-                                     .cupom { width: 80mm !important; margin: 0 !important; border: none !important; }
-                                     .cupom58 { width: 58mm !important; margin: 0 !important; border: none !important; }
                                      
                                      .no-print { display: none !important; }
                                  }
- 
-                                 .a4 { width: 210mm; min-height: 297mm; padding: 15mm; font-family: 'Inter', sans-serif; background: white; margin: 0 auto; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
-                                 .a5 { width: 148mm; min-height: 210mm; padding: 10mm; font-family: 'Inter', sans-serif; background: white; margin: 0 auto; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
-                                 .cupom { width: 80mm; font-size: 12px; padding: 6mm; font-family: 'Courier Prime', monospace; background: white; margin: 0 auto; }
-                                 .cupom58 { width: 58mm; font-size: 10px; padding: 4mm; font-family: 'Courier Prime', monospace; background: white; margin: 0 auto; }
- 
-                                 /* Estilos Imagem 1 (A4/A5) */
-                                 .formal-header { border: 1px solid #000; padding: 10px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; }
-                                 .formal-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-                                 .formal-table th { text-align: left; font-size: 10px; border-bottom: 1px solid #000; padding: 5px; text-transform: uppercase; color: #000; }
-                                 .formal-table td { padding: 5px; font-size: 11px; border-bottom: 1px dotted #ccc; color: #000; }
+
+                                 /* Contêineres de Formato com Escalonamento Fluido */
+                                 .a4 { 
+                                     width: 210mm; 
+                                     min-height: 297mm; 
+                                     padding: 15mm; 
+                                     font-size: 11pt;
+                                     --base-font: 11pt;
+                                 }
+                                 .a5 { 
+                                     width: 148mm; 
+                                     min-height: 210mm; 
+                                     padding: 8mm; 
+                                     font-size: 9pt;
+                                     --base-font: 9pt;
+                                 }
+                                 .cupom { 
+                                     width: 80mm; 
+                                     padding: 4mm; 
+                                     font-size: 10pt;
+                                     --base-font: 10pt;
+                                     font-family: 'Courier Prime', monospace;
+                                 }
+                                 .cupom58 { 
+                                     width: 58mm; 
+                                     padding: 2mm; 
+                                     font-size: 8pt;
+                                     --base-font: 8pt;
+                                     font-family: 'Courier Prime', monospace;
+                                 }
+
+                                 .a4, .a5, .cupom, .cupom58 {
+                                     font-family: 'Inter', sans-serif;
+                                     background: white;
+                                     margin: 0 auto;
+                                     color: #000;
+                                     box-sizing: border-box;
+                                 }
+
+                                 /* Estilos Responsivos Compartilhados */
+                                 .formal-header { 
+                                     border: 1px solid #000; 
+                                     padding: 10px; 
+                                     display: flex; 
+                                     align-items: center; 
+                                     justify-content: space-between; 
+                                     margin-bottom: 15px; 
+                                 }
+                                 .formal-table { width: 100%; border-collapse: collapse; margin-top: 10px; table-layout: fixed; }
+                                 .formal-table th { 
+                                     text-align: left; 
+                                     font-size: calc(var(--base-font) * 0.85); 
+                                     border-bottom: 2px solid #000; 
+                                     padding: 5px 2px;
+                                     text-transform: uppercase; 
+                                 }
+                                 .formal-table td { 
+                                     padding: 6px 2px; 
+                                     font-size: var(--base-font); 
+                                     border-bottom: 1px dotted #ccc; 
+                                 }
                                  .formal-section { border-top: 2px solid #000; margin-top: 15px; padding-top: 5px; }
-                                 .formal-label { font-size: 9px; font-weight: bold; text-transform: uppercase; color: #000; }
+                                 .formal-label { font-size: calc(var(--base-font) * 0.75); font-weight: bold; text-transform: uppercase; }
                                  
-                                 /* Estilos Imagem 2 (Cupom) */
-                                 .ticket-line { border-top: 1px dashed #000; margin: 5px 0; }
-                                 .ticket-double-line { border-top: 3px double #000; margin: 5px 0; }
-                                 .ticket-header { text-align: center; margin-bottom: 10px; color: #000; }
-                                 .ticket-title { font-weight: bold; text-align: center; text-transform: uppercase; margin: 10px 0; color: #000; }
-                                 .ticket-content { color: #000 !important; }
-                                 .ticket-content p, .ticket-content span, .ticket-content div, .ticket-content td, .ticket-content th { color: #000 !important; }
+                                 /* Estilos específicos para Cupom */
+                                 .ticket-line { border-top: 1px dashed #000; margin: 4px 0; }
+                                 .ticket-double-line { border-top: 3px double #000; margin: 6px 0; }
+                                 .ticket-header { text-align: center; margin-bottom: 10px; }
+                                 .ticket-title { font-weight: 800; text-align: center; text-transform: uppercase; margin: 8px 0; font-size: 1.2em; }
+                                 .ticket-content { width: 100%; }
                              `}</style>
 
                             <div className={`print-preview-container ${printFormat}`}>
@@ -1135,6 +1197,14 @@ export function Vendas() {
                                         </div>
 
                                         <table className="formal-table">
+                                            <colgroup>
+                                                <col style={{ width: '5%' }} />
+                                                <col style={{ width: '45%' }} />
+                                                <col style={{ width: '15%' }} />
+                                                <col style={{ width: '10%' }} />
+                                                <col style={{ width: '10%' }} />
+                                                <col style={{ width: '15%' }} />
+                                            </colgroup>
                                             <thead>
                                                 <tr>
                                                     <th>#</th>
