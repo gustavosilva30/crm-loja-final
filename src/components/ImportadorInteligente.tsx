@@ -14,7 +14,7 @@ interface ColumnMapping {
 }
 
 const DB_TABLES = [
-    { value: 'produtos', label: 'Produtos', columns: ['nome', 'sku', 'preco', 'custo', 'estoque_atual', 'descricao'] },
+    { value: 'produtos', label: 'Produtos', columns: ['nome', 'sku', 'part_number', 'marca', 'modelo', 'ano', 'preco', 'custo', 'estoque_atual', 'localizacao', 'ncm', 'cfop', 'cst', 'unidade_medida', 'descricao'] },
     { value: 'clientes', label: 'Clientes', columns: ['nome', 'documento', 'telefone', 'email', 'endereco'] },
     { value: 'fornecedores', label: 'Fornecedores', columns: ['nome', 'documento', 'razao_social', 'email', 'telefone'] },
 ]

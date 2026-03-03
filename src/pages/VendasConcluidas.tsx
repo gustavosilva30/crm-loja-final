@@ -166,7 +166,10 @@ export function VendasConcluidas() {
     const filteredVendas = vendas.filter(v => {
         const termLower = searchTerm.toLowerCase().trim();
         const numPedidoStr = v.numero_pedido ? String(v.numero_pedido).padStart(6, '0') : '';
-        const matchesSearch = !termLower || numPedidoStr.includes(termLower) || (v.clientes?.nome?.toLowerCase() || '').includes(termLower);
+        const matchesSearch = !termLower ||
+            numPedidoStr.includes(termLower) ||
+            (v.clientes?.nome?.toLowerCase() || '').includes(termLower) ||
+            v.vendas_itens?.some(i => (i.produtos?.nome || '').toLowerCase().includes(termLower));
         const matchesStatus = filterStatus === "todos" ? String(v.status).toLowerCase() !== 'pendente' : v.status === filterStatus;
         const matchesOrigem = filterOrigem === "todos" ? true : filterOrigem === "ml" ? v.origem_ml : !v.origem_ml;
 

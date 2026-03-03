@@ -340,8 +340,11 @@ export function Vendas() {
     }
 
     const filteredVendas = vendas.filter(v => {
-        const termLower = searchTerm.toLowerCase();
-        const matchesSearch = !searchTerm || (v.clientes?.nome?.toLowerCase() || '').includes(termLower) || String(v.numero_pedido).includes(termLower);
+        const termLower = searchTerm.toLowerCase().trim();
+        const matchesSearch = !searchTerm ||
+            (v.clientes?.nome?.toLowerCase() || '').includes(termLower) ||
+            String(v.numero_pedido).includes(termLower) ||
+            v.vendas_itens?.some(i => (i.produtos?.nome || '').toLowerCase().includes(termLower));
         const matchesStatus = String(v.status).toLowerCase() === 'pendente';
         return matchesSearch && matchesStatus;
     })

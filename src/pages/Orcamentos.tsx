@@ -13,6 +13,7 @@ import { supabase } from "@/lib/supabase"
 
 interface Orcamento {
   id: string
+  numero_pedido?: number
   cliente_id: string | null
   vendedor_id: string | null
   total: number
@@ -22,6 +23,7 @@ interface Orcamento {
   status: string
   clientes?: { nome: string }
   atendentes?: { nome: string }
+  orcamentos_itens?: { produtos: { nome: string } }[]
 }
 
 interface ItemOrcamento {
@@ -33,6 +35,7 @@ interface ItemOrcamento {
 export function Orcamentos() {
   const [searchTerm, setSearchTerm] = useState("")
   const [orcamentos, setOrcamentos] = useState<Orcamento[]>([])
+  const formatNumPedido = (num?: number) => num ? String(num).padStart(6, '0') : '------'
   const [loading, setLoading] = useState(true)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [createdOrcamentoId, setCreatedOrcamentoId] = useState<string | null>(null)
@@ -74,21 +77,10 @@ export function Orcamentos() {
     try {
       const { data, error } = await supabase
         .from('orcamentos')
-        .select('*, clientes ( nome ), atendentes ( nome )')
-        .gt('validade', new Date().toISOString()) // Only future/today
+        .select('*, clientes ( nome ), atendentes ( nome ), orcamentos_itens ( produtos ( nome ) )')
         .order('created_at', { ascending: false })
 
-      if (error) {
-        // Fallback if atendentes join fails (migration not applied yet)
-        const { data: fallbackData } = await supabase
-          .from('orcamentos')
-          .select('*, clientes ( nome )')
-          .gt('validade', new Date().toISOString())
-          .order('created_at', { ascending: false })
-        setOrcamentos(fallbackData || [])
-      } else {
-        setOrcamentos(data || [])
-      }
+      setOrcamentos(data || [])
     } catch (err) {
       console.error('Error:', err)
     } finally {
@@ -364,8 +356,10 @@ export function Orcamentos() {
   }
 
   const filteredOrcamentos = orcamentos.filter(o =>
+    String(o.numero_pedido || '').includes(searchTerm) ||
     o.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    o.clientes?.nome.toLowerCase().includes(searchTerm.toLowerCase())
+    o.clientes?.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    o.orcamentos_itens?.some(i => i.produtos?.nome.toLowerCase().includes(searchTerm.toLowerCase()))
   )
 
   return (
@@ -430,7 +424,8 @@ export function Orcamentos() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>ID</TableHead>
+                  <TableHead>Pedido</TableHead>
+                  <TableHead>Produtos</TableHead>
                   <TableHead>Cliente</TableHead>
                   <TableHead>Vendedor</TableHead>
                   <TableHead>Condição</TableHead>
@@ -449,7 +444,20 @@ export function Orcamentos() {
                   </TableRow>
                 ) : filteredOrcamentos.map((orcamento) => (
                   <TableRow key={orcamento.id}>
-                    <TableCell className="font-mono text-xs italic">#{orcamento.id.slice(0, 8)}</TableCell>
+                    <TableCell className="font-extrabold text-indigo-700 text-sm">
+                      #{formatNumPedido(orcamento.numero_pedido)}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-col gap-1 max-w-[320px]">
+                        {orcamento.orcamentos_itens?.map((item: any, idx: number) => (
+                          <div key={idx} className="text-[13px] font-bold text-slate-700 flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0" />
+                            {item.produtos?.nome}
+                          </div>
+                        ))}
+                        {(!orcamento.orcamentos_itens || orcamento.orcamentos_itens.length === 0) && <span className="text-[10px] text-muted-foreground italic">Sem itens</span>}
+                      </div>
+                    </TableCell>
                     <TableCell className="font-medium text-sm">
                       <div className="flex items-center gap-2">
                         <User className="w-3 h-3 text-muted-foreground" />

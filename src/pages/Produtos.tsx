@@ -7,7 +7,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select } from "@/components/ui/select"
 import { Modal } from "@/components/ui/modal"
-import { Plus, Search, Filter, LayoutGrid, List, Package, Trash2, Pencil, ShoppingCart, FileText, Camera, Upload, X } from "lucide-react"
+import { Plus, Search, Filter, LayoutGrid, List, Package, Trash2, Pencil, ShoppingCart, FileText, Camera, Upload, X, Shield, Activity, Box, Tag, Ruler, Truck, Info, Settings } from "lucide-react"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { supabase } from "@/lib/supabase"
 
 interface Produto {
@@ -26,6 +27,41 @@ interface Produto {
   status?: string
   quantidade_orcamento?: number
   compatibilidade?: string | null
+  // New Fields
+  ativo: boolean
+  imobilizado: boolean
+  item_seguranca: boolean
+  rastreavel: boolean
+  codigo_etiqueta: string | null
+  part_number: string | null
+  localizacao: string | null
+  marca: string | null
+  modelo: string | null
+  ano: number | null
+  versao: string | null
+  cst: string | null
+  cfop: string | null
+  adicional_venda_percentual: number
+  unidade_medida: string
+  ncm: string | null
+  cest: string | null
+  outros_custos: number
+  qualidade: string | null
+  origem: string | null
+  codigo_barras: string | null
+  peso_g: number
+  altura_cm: number
+  largura_cm: number
+  comprimento_cm: number
+  informacoes_adicionais: string | null
+}
+
+interface Compatibilidade {
+  id?: string
+  marca: string
+  modelo: string
+  ano: string
+  versao: string
 }
 
 export function Produtos() {
@@ -45,7 +81,7 @@ export function Produtos() {
   const [categorias, setCategorias] = useState<{ id: string, nome: string }[]>([])
 
   // Form State
-  const [newProduto, setNewProduto] = useState({
+  const [newProduto, setNewProduto] = useState<any>({
     sku: '',
     nome: '',
     descricao: '',
@@ -56,8 +92,37 @@ export function Produtos() {
     preco_prazo: 0,
     categoria_id: '',
     imagem_url: '',
-    compatibilidade: ''
+    compatibilidade: '',
+    ativo: true,
+    imobilizado: false,
+    item_seguranca: false,
+    rastreavel: false,
+    codigo_etiqueta: '',
+    part_number: '',
+    localizacao: '',
+    marca: '',
+    modelo: '',
+    ano: new Date().getFullYear(),
+    versao: '',
+    cst: '',
+    cfop: '',
+    adicional_venda_percentual: 0,
+    unidade_medida: 'UN',
+    ncm: '',
+    cest: '',
+    outros_custos: 0,
+    qualidade: 'A',
+    origem: '',
+    codigo_barras: '',
+    peso_g: 0,
+    altura_cm: 0,
+    largura_cm: 0,
+    comprimento_cm: 0,
+    informacoes_adicionais: ''
   })
+
+  const [compatList, setCompatList] = useState<Compatibilidade[]>([])
+  const [newCompat, setNewCompat] = useState<Compatibilidade>({ marca: '', modelo: '', ano: '', versao: '' })
 
   const fetchProdutos = async () => {
     try {
@@ -110,25 +175,29 @@ export function Produtos() {
         finalImageUrl = publicUrl
       }
 
-      if (editingProduto) {
-        const { error } = await supabase
-          .from('produtos')
-          .update({
-            ...newProduto,
-            imagem_url: finalImageUrl,
-            categoria_id: newProduto.categoria_id || null
-          })
-          .eq('id', editingProduto.id)
-        if (error) throw error
-      } else {
-        const { error } = await supabase
-          .from('produtos')
-          .insert([{
-            ...newProduto,
-            imagem_url: finalImageUrl,
-            categoria_id: newProduto.categoria_id || null
-          }])
-        if (error) throw error
+      const { data: savedProd, error: prodError } = editingProduto
+        ? await supabase.from('produtos').update({ ...newProduto, imagem_url: finalImageUrl, categoria_id: newProduto.categoria_id || null }).eq('id', editingProduto.id).select().single()
+        : await supabase.from('produtos').insert([{ ...newProduto, imagem_url: finalImageUrl, categoria_id: newProduto.categoria_id || null }]).select().single()
+
+      if (prodError) throw prodError
+
+      // Salvar compatibilidades
+      if (savedProd) {
+        // Remove antigas se estiver editando
+        if (editingProduto) {
+          await supabase.from('produtos_compatibilidade').delete().eq('produto_id', savedProd.id)
+        }
+
+        if (compatList.length > 0) {
+          const compatToSave = compatList.map(c => ({
+            produto_id: savedProd.id,
+            marca: c.marca,
+            modelo: c.modelo,
+            ano: c.ano,
+            versao: c.versao
+          }))
+          await supabase.from('produtos_compatibilidade').insert(compatToSave)
+        }
       }
 
       setNewProduto({
@@ -142,7 +211,33 @@ export function Produtos() {
         preco_prazo: 0,
         categoria_id: '',
         imagem_url: '',
-        compatibilidade: ''
+        compatibilidade: '',
+        ativo: true,
+        imobilizado: false,
+        item_seguranca: false,
+        rastreavel: false,
+        codigo_etiqueta: '',
+        part_number: '',
+        localizacao: '',
+        marca: '',
+        modelo: '',
+        ano: new Date().getFullYear(),
+        versao: '',
+        cst: '',
+        cfop: '',
+        adicional_venda_percentual: 0,
+        unidade_medida: 'UN',
+        ncm: '',
+        cest: '',
+        outros_custos: 0,
+        qualidade: 'A',
+        origem: '',
+        codigo_barras: '',
+        peso_g: 0,
+        altura_cm: 0,
+        largura_cm: 0,
+        comprimento_cm: 0,
+        informacoes_adicionais: ''
       })
       setSelectedFile(null)
       setImagePreview(null)
@@ -163,21 +258,20 @@ export function Produtos() {
     else fetchProdutos()
   }
 
-  const startEdit = (produto: Produto) => {
+  const startEdit = async (produto: Produto) => {
     setEditingProduto(produto)
     setNewProduto({
-      sku: produto.sku,
-      nome: produto.nome,
-      descricao: produto.descricao || '',
-      estoque_atual: produto.estoque_atual,
-      estoque_minimo: produto.estoque_minimo,
-      custo: produto.custo,
-      preco: produto.preco,
-      preco_prazo: produto.preco_prazo || 0,
+      ...produto,
       categoria_id: produto.categoria_id || '',
       imagem_url: produto.imagem_url || '',
       compatibilidade: produto.compatibilidade || ''
     })
+
+    // Fetch compatibilidades
+    const { data } = await supabase.from('produtos_compatibilidade').select('*').eq('produto_id', produto.id)
+    if (data) setCompatList(data)
+    else setCompatList([])
+
     setImagePreview(produto.imagem_url || null)
     setSelectedFile(null)
     setIsModalOpen(true)
@@ -235,8 +329,35 @@ export function Produtos() {
             preco_prazo: 0,
             categoria_id: '',
             imagem_url: '',
-            compatibilidade: ''
+            compatibilidade: '',
+            ativo: true,
+            imobilizado: false,
+            item_seguranca: false,
+            rastreavel: false,
+            codigo_etiqueta: '',
+            part_number: '',
+            localizacao: '',
+            marca: '',
+            modelo: '',
+            ano: new Date().getFullYear(),
+            versao: '',
+            cst: '',
+            cfop: '',
+            adicional_venda_percentual: 0,
+            unidade_medida: 'UN',
+            ncm: '',
+            cest: '',
+            outros_custos: 0,
+            qualidade: 'A',
+            origem: '',
+            codigo_barras: '',
+            peso_g: 0,
+            altura_cm: 0,
+            largura_cm: 0,
+            comprimento_cm: 0,
+            informacoes_adicionais: ''
           })
+          setCompatList([])
           setImagePreview(null)
           setSelectedFile(null)
           setIsModalOpen(true)
@@ -380,98 +501,205 @@ export function Produtos() {
 
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingProduto ? "Editar Produto" : "Cadastrar Novo Produto"} className="max-w-2xl">
         <form onSubmit={handleAddProduto} className="space-y-6">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>SKU / Código do Produto</Label>
-              <Input required placeholder="Ex: PROD-123" value={newProduto.sku} onChange={e => setNewProduto({ ...newProduto, sku: e.target.value })} />
-            </div>
-            <div className="space-y-2">
-              <Label>Categoria</Label>
-              <Select value={newProduto.categoria_id} onChange={e => setNewProduto({ ...newProduto, categoria_id: e.target.value })}>
-                <option value="">Selecione categoria...</option>
-                {categorias.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
-              </Select>
-            </div>
-          </div>
-          <div className="space-y-2">
-            <Label>Nome do Produto</Label>
-            <Input required placeholder="Ex: Teclado Mecânico RGB..." value={newProduto.nome} onChange={e => setNewProduto({ ...newProduto, nome: e.target.value })} />
-          </div>
-          <div className="space-y-2">
-            <Label>Descrição</Label>
-            <Input placeholder="Detalhes do produto..." value={newProduto.descricao} onChange={e => setNewProduto({ ...newProduto, descricao: e.target.value })} />
-          </div>
-          <div className="space-y-4">
-            <Label>Foto do Produto (PC ou Celular)</Label>
-            <div className="flex items-center gap-4">
-              <div className="relative w-32 h-32 rounded-lg border-2 border-dashed border-muted-foreground/20 bg-muted/30 flex items-center justify-center overflow-hidden group">
-                {imagePreview ? (
-                  <>
-                    <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setImagePreview(null)
-                        setSelectedFile(null)
-                        setNewProduto(prev => ({ ...prev, imagem_url: '' }))
-                      }}
-                      className="absolute top-1 right-1 bg-destructive text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  </>
-                ) : (
-                  <Camera className="w-8 h-8 text-muted-foreground/40" />
-                )}
+          <Tabs defaultValue="geral" className="w-full">
+            <TabsList className="grid w-full grid-cols-4 mb-4">
+              <TabsTrigger value="geral" className="gap-2"><Settings className="w-4 h-4" /> Geral</TabsTrigger>
+              <TabsTrigger value="fiscal" className="gap-2"><FileText className="w-4 h-4" /> Fiscal</TabsTrigger>
+              <TabsTrigger value="logistica" className="gap-2"><Truck className="w-4 h-4" /> Logística</TabsTrigger>
+              <TabsTrigger value="compat" className="gap-2"><Activity className="w-4 h-4" /> Compatibilidade</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="geral" className="space-y-4">
+              <div className="flex flex-wrap gap-4 p-3 bg-muted/30 rounded-lg border border-border/50">
+                <div className="flex items-center gap-2">
+                  <input type="checkbox" id="ativo" checked={newProduto.ativo} onChange={e => setNewProduto({ ...newProduto, ativo: e.target.checked })} />
+                  <Label htmlFor="ativo" className="text-xs cursor-pointer">Produto Ativo</Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input type="checkbox" id="imobilizado" checked={newProduto.imobilizado} onChange={e => setNewProduto({ ...newProduto, imobilizado: e.target.checked })} />
+                  <Label htmlFor="imobilizado" className="text-xs cursor-pointer">Produto Imobilizado</Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input type="checkbox" id="seguranca" checked={newProduto.item_seguranca} onChange={e => setNewProduto({ ...newProduto, item_seguranca: e.target.checked })} />
+                  <Label htmlFor="seguranca" className="text-xs cursor-pointer">Item de Segurança</Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input type="checkbox" id="rastreavel" checked={newProduto.rastreavel} onChange={e => setNewProduto({ ...newProduto, rastreavel: e.target.checked })} />
+                  <Label htmlFor="rastreavel" className="text-xs cursor-pointer">Item Rastreável</Label>
+                </div>
               </div>
 
-              <div className="flex flex-col gap-2 flex-1">
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="gap-2 w-full justify-start"
-                  onClick={() => document.getElementById('product-image-upload')?.click()}
-                >
-                  <Upload className="w-4 h-4" />
-                  {imagePreview ? "Trocar Foto" : "Selecionar Foto / Abrir Câmera"}
-                </Button>
-                <input
-                  id="product-image-upload"
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={(e) => {
+              <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="space-y-2 lg:col-span-1">
+                  <Label>SKU / Código</Label>
+                  <Input required placeholder="Ex: 17700" value={newProduto.sku} onChange={e => setNewProduto({ ...newProduto, sku: e.target.value })} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Part Number</Label>
+                  <Input placeholder="Código do fabricante" value={newProduto.part_number} onChange={e => setNewProduto({ ...newProduto, part_number: e.target.value })} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Título / Nome</Label>
+                  <Input required placeholder="Ex: CABO PUXADOR CAPO UNO" value={newProduto.nome} onChange={e => setNewProduto({ ...newProduto, nome: e.target.value })} />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Categoria</Label>
+                  <Select value={newProduto.categoria_id} onChange={e => setNewProduto({ ...newProduto, categoria_id: e.target.value })}>
+                    <option value="">Selecione categoria...</option>
+                    {categorias.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Localização (Prateleira/Gaveta)</Label>
+                  <Input placeholder="Ex: A1-G3" value={newProduto.localizacao} onChange={e => setNewProduto({ ...newProduto, localizacao: e.target.value })} />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="space-y-2"><Label>Marca</Label><Input value={newProduto.marca} onChange={e => setNewProduto({ ...newProduto, marca: e.target.value })} /></div>
+                <div className="space-y-2"><Label>Modelo</Label><Input value={newProduto.modelo} onChange={e => setNewProduto({ ...newProduto, modelo: e.target.value })} /></div>
+                <div className="space-y-2"><Label>Ano</Label><Input type="number" value={newProduto.ano} onChange={e => setNewProduto({ ...newProduto, ano: parseInt(e.target.value) })} /></div>
+                <div className="space-y-2"><Label>Versão</Label><Input value={newProduto.versao} onChange={e => setNewProduto({ ...newProduto, versao: e.target.value })} /></div>
+              </div>
+
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="space-y-2"><Label>Custo Compra (R$)</Label><Input type="number" step="0.01" value={newProduto.custo} onChange={e => setNewProduto({ ...newProduto, custo: parseFloat(e.target.value) || 0 })} /></div>
+                <div className="space-y-2"><Label>Valor Venda (R$)</Label><Input type="number" step="0.01" value={newProduto.preco} onChange={e => setNewProduto({ ...newProduto, preco: parseFloat(e.target.value) || 0 })} /></div>
+                <div className="space-y-2"><Label>Adicional Venda (%)</Label><Input type="number" step="0.01" value={newProduto.adicional_venda_percentual} onChange={e => setNewProduto({ ...newProduto, adicional_venda_percentual: parseFloat(e.target.value) || 0 })} /></div>
+                <div className="space-y-2"><Label>Estoque Total</Label><Input type="number" value={newProduto.estoque_atual} onChange={e => setNewProduto({ ...newProduto, estoque_atual: parseInt(e.target.value) })} /></div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Informações Adicionais / Descrição</Label>
+                <textarea
+                  className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  value={newProduto.descricao}
+                  onChange={e => setNewProduto({ ...newProduto, descricao: e.target.value })}
+                />
+              </div>
+
+              <div className="p-4 border border-dashed rounded-lg bg-muted/10">
+                <Label className="mb-2 block">Imagens do Produto</Label>
+                <div className="flex items-center gap-4">
+                  <div className="relative w-24 h-24 rounded border flex items-center justify-center bg-background overflow-hidden group">
+                    {imagePreview ? (
+                      <img src={imagePreview} className="w-full h-full object-cover" />
+                    ) : (
+                      <Camera className="w-8 h-8 text-muted-foreground/30" />
+                    )}
+                  </div>
+                  <Button type="button" variant="outline" size="sm" onClick={() => document.getElementById('img-up')?.click()}><Upload className="w-4 h-4 mr-2" /> Carregar Imagem</Button>
+                  <input id="img-up" type="file" className="hidden" accept="image/*" onChange={(e) => {
                     const file = e.target.files?.[0]
                     if (file) {
                       setSelectedFile(file)
-                      const reader = new FileReader()
-                      reader.onloadend = () => {
-                        setImagePreview(reader.result as string)
-                      }
+                      const reader = new FileReader();
+                      reader.onloadend = () => setImagePreview(reader.result as string)
                       reader.readAsDataURL(file)
                     }
-                  }}
-                />
-                <p className="text-[10px] text-muted-foreground">Suporta JPG, PNG. O arquivo será enviado para o servidor ao salvar.</p>
+                  }} />
+                </div>
               </div>
-            </div>
-          </div>
-          <div className="space-y-2">
-            <Label>Compatibilidade (Mercado Livre)</Label>
-            <Input placeholder="Ex: Honda Civic 2012-2016, Corolla 2014..." value={newProduto.compatibilidade} onChange={e => setNewProduto({ ...newProduto, compatibilidade: e.target.value })} />
-          </div>
-          <div className="grid grid-cols-3 gap-4">
-            <div className="space-y-2"><Label>Preço à Vista (R$)</Label><Input required type="number" step="0.01" value={newProduto.preco} onChange={e => setNewProduto({ ...newProduto, preco: parseFloat(e.target.value) || 0 })} onFocus={e => e.target.select()} /></div>
-            <div className="space-y-2"><Label>Preço a Prazo (R$)</Label><Input required type="number" step="0.01" value={newProduto.preco_prazo} onChange={e => setNewProduto({ ...newProduto, preco_prazo: parseFloat(e.target.value) || 0 })} onFocus={e => e.target.select()} /></div>
-            <div className="space-y-2"><Label>Custo Unitário (R$)</Label><Input required type="number" step="0.01" value={newProduto.custo} onChange={e => setNewProduto({ ...newProduto, custo: parseFloat(e.target.value) || 0 })} onFocus={e => e.target.select()} /></div>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2"><Label>Estoque Inicial</Label><Input type="number" value={newProduto.estoque_atual} onChange={e => setNewProduto({ ...newProduto, estoque_atual: parseInt(e.target.value) })} onFocus={e => e.target.select()} /></div>
-            <div className="space-y-2"><Label>Estoque Mínimo (Alerta)</Label><Input type="number" value={newProduto.estoque_minimo} onChange={e => setNewProduto({ ...newProduto, estoque_minimo: parseInt(e.target.value) })} onFocus={e => e.target.select()} /></div>
-          </div>
-          <div className="flex justify-end gap-3 pt-4 border-t border-border">
+            </TabsContent>
+
+            <TabsContent value="fiscal" className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2"><Label>CST (Situação Tributária)</Label><Input placeholder="Ex: 500" value={newProduto.cst} onChange={e => setNewProduto({ ...newProduto, cst: e.target.value })} /></div>
+                <div className="space-y-2"><Label>CFOP</Label><Input placeholder="Ex: 5405" value={newProduto.cfop} onChange={e => setNewProduto({ ...newProduto, cfop: e.target.value })} /></div>
+              </div>
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="space-y-2">
+                  <Label>Unid. Medida</Label>
+                  <Select value={newProduto.unidade_medida} onChange={e => setNewProduto({ ...newProduto, unidade_medida: e.target.value })}>
+                    <option value="UN">UN - Unidade</option>
+                    <option value="PC">PC - Peça</option>
+                    <option value="JG">JG - Jogo</option>
+                    <option value="LT">LT - Litro</option>
+                    <option value="KG">KG - Quilo</option>
+                  </Select>
+                </div>
+                <div className="space-y-2"><Label>NCM</Label><Input placeholder="00000000" value={newProduto.ncm} onChange={e => setNewProduto({ ...newProduto, ncm: e.target.value })} /></div>
+                <div className="space-y-2"><Label>CEST</Label><Input placeholder="0000000" value={newProduto.cest} onChange={e => setNewProduto({ ...newProduto, cest: e.target.value })} /></div>
+                <div className="space-y-2"><Label>Outros Custos (R$)</Label><Input type="number" step="0.01" value={newProduto.outros_custos} onChange={e => setNewProduto({ ...newProduto, outros_custos: parseFloat(e.target.value) || 0 })} /></div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Qualidade da Peça</Label>
+                  <Select value={newProduto.qualidade} onChange={e => setNewProduto({ ...newProduto, qualidade: e.target.value })}>
+                    <option value="A">Qualidade A (Original/Premium)</option>
+                    <option value="B">Qualidade B (Standard)</option>
+                    <option value="C">Qualidade C (Econômica)</option>
+                  </Select>
+                </div>
+                <div className="space-y-2"><Label>Origem do Produto</Label><Input value={newProduto.origem} onChange={e => setNewProduto({ ...newProduto, origem: e.target.value })} /></div>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="logistica" className="space-y-4">
+              <div className="space-y-2">
+                <Label>Código de Barras (GTIN)</Label>
+                <Input placeholder="SEM GTIN" value={newProduto.codigo_barras} onChange={e => setNewProduto({ ...newProduto, codigo_barras: e.target.value })} />
+              </div>
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="space-y-2"><Label>Peso (g)</Label><Input type="number" value={newProduto.peso_g} onChange={e => setNewProduto({ ...newProduto, peso_g: parseFloat(e.target.value) || 0 })} /></div>
+                <div className="space-y-2"><Label>Altura (cm)</Label><Input type="number" step="0.1" value={newProduto.altura_cm} onChange={e => setNewProduto({ ...newProduto, altura_cm: parseFloat(e.target.value) || 0 })} /></div>
+                <div className="space-y-2"><Label>Largura (cm)</Label><Input type="number" step="0.1" value={newProduto.largura_cm} onChange={e => setNewProduto({ ...newProduto, largura_cm: parseFloat(e.target.value) || 0 })} /></div>
+                <div className="space-y-2"><Label>Comprimento (cm)</Label><Input type="number" step="0.1" value={newProduto.comprimento_cm} onChange={e => setNewProduto({ ...newProduto, comprimento_cm: parseFloat(e.target.value) || 0 })} /></div>
+              </div>
+              <div className="space-y-2">
+                <Label>Informações Adicionais para Venda</Label>
+                <textarea
+                  className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background"
+                  value={newProduto.informacoes_adicionais}
+                  onChange={e => setNewProduto({ ...newProduto, informacoes_adicionais: e.target.value })}
+                />
+              </div>
+            </TabsContent>
+
+            <TabsContent value="compat" className="space-y-4">
+              <div className="p-4 bg-muted/20 rounded-xl border border-border/50 space-y-4">
+                <h3 className="font-bold text-sm flex items-center gap-2"><Activity className="w-4 h-4 text-primary" /> Adicionar Modelo Compatível</h3>
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                  <div className="space-y-1"><Label className="text-[10px] uppercase">Marca</Label><Input bs-size="sm" value={newCompat.marca} onChange={e => setNewCompat({ ...newCompat, marca: e.target.value })} /></div>
+                  <div className="space-y-1"><Label className="text-[10px] uppercase">Modelo</Label><Input bs-size="sm" value={newCompat.modelo} onChange={e => setNewCompat({ ...newCompat, modelo: e.target.value })} /></div>
+                  <div className="space-y-1"><Label className="text-[10px] uppercase">Ano</Label><Input bs-size="sm" value={newCompat.ano} onChange={e => setNewCompat({ ...newCompat, ano: e.target.value })} /></div>
+                  <div className="space-y-1"><Label className="text-[10px] uppercase">Versão</Label><Input bs-size="sm" value={newCompat.versao} onChange={e => setNewCompat({ ...newCompat, versao: e.target.value })} /></div>
+                </div>
+                <Button type="button" className="w-full bg-primary/20 text-primary hover:bg-primary hover:text-white" onClick={() => {
+                  if (!newCompat.marca || !newCompat.modelo) return alert("Preencha Marca e Modelo")
+                  setCompatList([...compatList, newCompat])
+                  setNewCompat({ marca: '', modelo: '', ano: '', versao: '' })
+                }}><Plus className="w-4 h-4 mr-2" /> Vincular Modelo</Button>
+              </div>
+
+              <div className="space-y-2 max-h-[200px] overflow-y-auto pr-2">
+                {compatList.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground text-xs italic">Nenhuma compatibilidade vinculada.</div>
+                ) : (
+                  compatList.map((c, i) => (
+                    <div key={i} className="flex items-center justify-between p-2 bg-background border rounded-lg text-xs">
+                      <div className="flex gap-4">
+                        <span className="font-bold text-primary">{c.marca} {c.modelo}</span>
+                        <span className="text-muted-foreground">Ano: {c.ano} | Ver: {c.versao}</span>
+                      </div>
+                      <Button type="button" variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => setCompatList(compatList.filter((_, idx) => idx !== i))}>
+                        <X className="w-3 h-3" />
+                      </Button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </TabsContent>
+          </Tabs>
+
+          <div className="flex justify-end gap-3 pt-4 border-t border-border bg-background sticky bottom-0 z-10">
             <Button variant="outline" type="button" onClick={() => setIsModalOpen(false)}>Cancelar</Button>
-            <Button type="submit" disabled={submitting}>{submitting ? "Salvando..." : (editingProduto ? "Salvar Alterações" : "Cadastrar Produto")}</Button>
+            <Button type="submit" disabled={submitting} className="bg-destructive hover:bg-destructive/90 text-white font-bold px-8">
+              {submitting ? "Salvando..." : "Salvar Alterações"}
+            </Button>
           </div>
         </form>
       </Modal>
