@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select } from "@/components/ui/select"
 import { Modal } from "@/components/ui/modal"
-import { Search, Filter, MoreHorizontal, ShoppingCart, TrendingUp, Trash2, Printer, Truck } from "lucide-react"
+import { Search, Filter, MoreHorizontal, ShoppingCart, TrendingUp, Trash2, Printer, Truck, Pencil } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 
 interface Venda {
@@ -190,51 +190,40 @@ export function VendasConcluidas() {
 
         const styles = `
             @page { 
-                margin: ${printFormat === 'cupom' ? '0' : '10mm'};
-                size: ${printFormat === 'a4' ? 'A4' : printFormat === 'a5' ? 'A5' : '80mm 200mm'};
+                margin: 0;
+                size: ${printFormat === 'a4' ? 'A4' : printFormat === 'a5' ? 'A5' : '80mm auto'};
             }
             body { 
                 font-family: 'Inter', system-ui, sans-serif; 
                 margin: 0; 
-                padding: ${printFormat === 'cupom' ? '2mm' : '0'};
+                padding: 0;
                 color: #000;
                 background: #fff;
             }
             .receipt-container { 
-                width: ${printFormat === 'cupom' ? '76mm' : '100%'};
-                max-width: 100%;
+                width: ${printFormat === 'cupom' ? '80mm' : printFormat === 'a5' ? '148mm' : '210mm'};
+                padding: ${printFormat === 'cupom' ? '6mm' : '15mm'};
                 margin: 0 auto;
+                background: white;
             }
             table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-            th { text-align: left; border-bottom: 2px solid #eee; padding: 5px; font-size: ${printFormat === 'cupom' ? '10px' : '12px'}; }
-            td { padding: 5px; border-bottom: 1px solid #f5f5f5; font-size: ${printFormat === 'cupom' ? '10px' : '13px'}; }
+            th { text-align: left; border-bottom: 2px solid #000; padding: 5px; font-size: 11px; text-transform: uppercase; }
+            td { padding: 5px; border-bottom: 1px dotted #ccc; font-size: 12px; }
             .flex { display: flex; }
             .justify-between { justify-content: space-between; }
-            .flex-col { flex-direction: column; }
-            .items-end { align-items: flex-end; }
-            .font-black { font-weight: 900; }
-            .font-bold { font-weight: 700; }
-            .text-sm { font-size: ${printFormat === 'cupom' ? '10px' : '14px'}; }
-            .text-lg { font-size: ${printFormat === 'cupom' ? '12px' : '18px'}; }
-            .text-2xl { font-size: ${printFormat === 'cupom' ? '14px' : '24px'}; }
-            .text-3xl { font-size: ${printFormat === 'cupom' ? '18px' : '30px'}; }
-            .uppercase { text-transform: uppercase; }
-            .bg-slate-900 { background: #000; color: #fff; padding: 2px 5px; }
-            .bg-slate-50 { background: #f8fafc; border: 1px solid #e2e8f0; padding: 10px; border-radius: 4px; }
-            .mt-16 { margin-top: 40px; }
-            .mb-6 { margin-bottom: 24px; }
-            .pb-4 { padding-bottom: 16px; }
-            .border-b-2 { border-bottom: 2px solid #eee; }
             .text-right { text-align: right; }
             .text-center { text-align: center; }
-            .text-slate-500 { color: #64748b; }
-            .text-slate-400 { color: #94a3b8; }
-            .gap-6 { gap: 24px; }
-            .grid { display: grid; }
-            .grid-cols-2 { grid-template-columns: 1fr 1fr; }
+            .font-black { font-weight: 900; }
+            .font-bold { font-weight: 700; }
+            .uppercase { text-transform: uppercase; }
+            .border-b-2 { border-bottom: 2px solid #000; }
+            .mb-6 { margin-bottom: 24px; }
+            .text-2xl { font-size: 24px; }
+            .text-lg { font-size: 18px; }
+            .ticket-double-line { border-top: 3px double #000; margin: 5px 0; }
             @media print {
-                .bg-slate-50 { background: #fff !important; border: 1px solid #eee; }
-                .bg-slate-900 { background: #000 !important; color: #fff !important; -webkit-print-color-adjust: exact; }
+                body { background: none; }
+                .receipt-container { box-shadow: none; }
             }
         `;
 
@@ -371,7 +360,7 @@ export function VendasConcluidas() {
                                     <TableCell><Badge variant={venda.status === 'Cancelado' ? 'destructive' : 'default'}>{venda.status}</Badge></TableCell>
                                     <TableCell className="text-right space-x-1">
                                         <Button variant="ghost" size="icon" onClick={() => handleOpenReceipt(venda.id)} title="Imprimir"><Printer className="w-4 h-4" /></Button>
-                                        <Button variant="ghost" size="icon" onClick={() => navigate(`/vendas?edit=${venda.id}`)} title="Editar"><Search className="w-4 h-4" /></Button>
+                                        <Button variant="ghost" size="icon" className="text-blue-500" onClick={() => navigate(`/vendas?edit=${venda.id}`)} title="Editar"><Pencil className="w-4 h-4" /></Button>
                                         {venda.status !== 'Cancelado' && (
                                             <Button variant="ghost" size="icon" className="text-destructive" onClick={() => handleCancelVenda(venda.id)} title="Cancelar"><TrendingUp className="w-4 h-4 rotate-180" /></Button>
                                         )}

@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Modal } from "@/components/ui/modal"
-import { Search, Filter, Trash2, Printer, Plus, X, UserPlus, PackagePlus, DollarSign, ShoppingCart, Truck, Import, Package } from "lucide-react"
+import { Search, Filter, Trash2, Printer, Plus, X, UserPlus, PackagePlus, DollarSign, ShoppingCart, Truck, Import, Package, Pencil } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { useAuthStore } from "@/store/authStore"
 
@@ -42,6 +42,7 @@ export function Vendas() {
     const [company, setCompany] = useState<any>(null)
     const [searchParams] = useSearchParams()
     const { atendente } = useAuthStore()
+    const [printAfterSave, setPrintAfterSave] = useState(false)
 
     useEffect(() => {
         const editId = searchParams.get('edit')
@@ -100,21 +101,16 @@ export function Vendas() {
         try {
             const { data, error } = await supabase
                 .from('vendas')
-                .select(`*, clientes ( id, nome, documento, email, telefone, endereco ), atendentes ( nome ), vendas_itens ( produtos ( nome ) )`)
+                .select(`
+                    *,
+                    clientes ( id, nome, documento, email, telefone, endereco ),
+                    atendentes ( id, nome ),
+                    vendas_itens ( produtos ( id, nome, sku ) )
+                `)
                 .order('data_venda', { ascending: false })
 
-            if (error) {
-                // Fallback if atendentes join fails
-                const { data: fallbackData, error: fallbackError } = await supabase
-                    .from('vendas')
-                    .select(`*, clientes ( id, nome, documento, email, telefone, endereco ), vendas_itens ( produtos ( nome ) )`)
-                    .order('data_venda', { ascending: false })
-
-                if (fallbackError) throw fallbackError
-                setVendas(fallbackData || [])
-            } else {
-                setVendas(data || [])
-            }
+            if (error) throw error
+            setVendas(data || [])
         } catch (err) {
             console.error('Error fetching vendas:', err)
         } finally {
@@ -225,6 +221,29 @@ export function Vendas() {
         setIsNovoPedidoModalOpen(true)
     }
 
+    const startFinalizarVenda = async (venda: Venda) => {
+        setVendaParaFinalizar(venda)
+
+        // Buscar se já tem entrega iniciada
+        const { data: entregaExt } = await supabase.from('entregas').select('*').eq('venda_id', venda.id).maybeSingle()
+
+        setFinalizarForm({
+            forma_pagamento: venda.forma_pagamento || 'Dinheiro',
+            status: 'Pago',
+            criar_entrega: !!entregaExt,
+            entrega: {
+                contato: entregaExt?.cliente_contato || venda.clientes?.telefone || '',
+                rua: entregaExt?.rua || venda.clientes?.endereco?.split(',')[0] || '',
+                numero: entregaExt?.numero || '',
+                bairro: entregaExt?.bairro || '',
+                cidade: entregaExt?.cidade || '',
+                estado: entregaExt?.estado || '',
+                cep: entregaExt?.cep || ''
+            }
+        })
+        setIsFinalizarModalOpen(true)
+    }
+
     const handleRemoveItem = (index: number) => {
         setVendaItems(vendaItems.filter((_, i) => i !== index))
     }
@@ -333,7 +352,6 @@ export function Vendas() {
 
             // 3. Salvar Entrega se solicitado
             if (showDeliveryForm) {
-                // Upsert entrega
                 const deliveryObj = {
                     venda_id: vendaId,
                     cliente_nome: clientes.find(c => c.id === vendaForm.cliente_id)?.nome || 'Consumidor Final',
@@ -347,19 +365,8 @@ export function Vendas() {
                     status: 'Preparando',
                     status_pagamento: vendaForm.status === 'Pago' ? 'Pago' : 'Pendente'
                 }
-
-                if (editingVendaId) {
-                    const { data: exEntrega } = await supabase.from('entregas').select('id').eq('venda_id', editingVendaId).maybeSingle()
-                    if (exEntrega) {
-                        await supabase.from('entregas').update(deliveryObj).eq('id', exEntrega.id)
-                    } else {
-                        await supabase.from('entregas').insert([deliveryObj])
-                    }
-                } else {
-                    await supabase.from('entregas').insert([deliveryObj])
-                }
+                await supabase.from('entregas').upsert(deliveryObj, { onConflict: 'venda_id' })
             } else if (editingVendaId) {
-                // Se desmarcou a entrega ao editar, removemos
                 await supabase.from('entregas').delete().eq('venda_id', editingVendaId)
             }
 
@@ -370,8 +377,14 @@ export function Vendas() {
             setVendaDelivery({ contato: '', rua: '', numero: '', bairro: '', cidade: '', estado: '', cep: '' })
             setVendaItems([{ produto_id: '', quantidade: 1, preco_unitario: 0, subtotal: 0, _search: '' }])
             fetchVendas()
+
+            if (printAfterSave) {
+                handleOpenReceipt(vendaId)
+                setPrintAfterSave(false)
+            }
         } catch (err: any) {
             alert('Erro ao criar venda: ' + err.message)
+            setPrintAfterSave(false)
         } finally {
             setSubmitting(false)
         }
@@ -449,7 +462,7 @@ export function Vendas() {
 
             // Se selecionou entrega, cria a entrega
             if (finalizarForm.criar_entrega) {
-                await supabase.from('entregas').insert([{
+                await supabase.from('entregas').upsert({
                     venda_id: vendaParaFinalizar.id,
                     cliente_nome: vendaParaFinalizar.clientes?.nome || 'Cliente',
                     cliente_contato: finalizarForm.entrega.contato,
@@ -460,15 +473,24 @@ export function Vendas() {
                     estado: finalizarForm.entrega.estado,
                     cep: finalizarForm.entrega.cep,
                     status: 'Preparando',
-                    status_pagamento: 'Pago'
-                }])
+                    status_pagamento: finalizarForm.status === 'Pago' || finalizarForm.status === 'Entregue' ? 'Pago' : 'Pendente'
+                }, { onConflict: 'venda_id' })
+            } else {
+                // Se desmarcou a entrega ao finalizar, removemos se existir
+                await supabase.from('entregas').delete().eq('venda_id', vendaParaFinalizar.id)
             }
 
             alert('Venda finalizada com sucesso!')
             setIsFinalizarModalOpen(false)
             fetchVendas()
+
+            if (printAfterSave) {
+                handleOpenReceipt(vendaParaFinalizar.id)
+                setPrintAfterSave(false)
+            }
         } catch (err: any) {
             alert('Erro ao finalizar venda: ' + err.message)
+            setPrintAfterSave(false)
         } finally {
             setSubmitting(false)
         }
@@ -557,8 +579,8 @@ export function Vendas() {
                                     <TableCell><Badge variant="outline">{venda.status}</Badge></TableCell>
                                     <TableCell className="text-right space-x-1">
                                         <Button variant="ghost" size="icon" onClick={() => handleOpenReceipt(venda.id)} title="Imprimir"><Printer className="w-4 h-4" /></Button>
-                                        <Button variant="ghost" size="icon" onClick={() => startEditVenda(venda)} title="Editar"><Search className="w-4 h-4" /></Button>
-                                        <Button variant="outline" size="sm" className="h-8 gap-1 bg-emerald-500/10 text-emerald-500 border-emerald-500/20 hover:bg-emerald-500/20" onClick={() => { setVendaParaFinalizar(venda); setFinalizarForm({ ...finalizarForm, forma_pagamento: venda.forma_pagamento || 'Dinheiro' }); setIsFinalizarModalOpen(true); }}><DollarSign className="w-3 h-3" /> Fechar</Button>
+                                        <Button variant="ghost" size="icon" className="text-blue-500" onClick={() => startEditVenda(venda)} title="Editar"><Pencil className="w-4 h-4" /></Button>
+                                        <Button variant="outline" size="sm" className="h-8 gap-1 bg-emerald-500/10 text-emerald-500 border-emerald-500/20 hover:bg-emerald-500/20" onClick={() => startFinalizarVenda(venda)}><DollarSign className="w-3 h-3" /> Fechar</Button>
                                         <Button variant="ghost" size="icon" className="text-destructive" onClick={() => handleCancelVenda(venda.id)} title="Cancelar"><X className="w-4 h-4" /></Button>
                                     </TableCell>
                                 </TableRow>
@@ -761,17 +783,20 @@ export function Vendas() {
                     </div>
 
                     <div className="space-y-4 pt-4 border-t">
-                        <div className="flex items-center gap-2 p-3 bg-indigo-500/5 border border-indigo-500/20 rounded-xl cursor-pointer hover:bg-indigo-500/10 transition-colors" onClick={() => setShowDeliveryForm(!showDeliveryForm)}>
+                        <div className="flex items-center gap-2 p-3 bg-indigo-500/5 border border-indigo-500/20 rounded-xl hover:bg-indigo-500/10 transition-colors">
                             <Truck className={`w-5 h-5 ${showDeliveryForm ? 'text-indigo-600' : 'text-muted-foreground'}`} />
-                            <div className="flex-1">
+                            <div
+                                className="flex-1 cursor-pointer"
+                                onClick={() => setShowDeliveryForm(!showDeliveryForm)}
+                            >
                                 <Label className="font-black cursor-pointer">Enviar para Entrega?</Label>
-                                <p className="text-[10px] text-muted-foreground">Clique para preencher o endereço do cliente</p>
+                                <p className="text-[10px] text-muted-foreground">Marque para preencher o endereço do cliente</p>
                             </div>
                             <input
                                 type="checkbox"
                                 checked={showDeliveryForm}
                                 onChange={e => setShowDeliveryForm(e.target.checked)}
-                                className="w-5 h-5 accent-indigo-600"
+                                className="w-5 h-5 accent-indigo-600 cursor-pointer"
                             />
                         </div>
 
@@ -835,6 +860,9 @@ export function Vendas() {
                         <div className="text-2xl font-black">TOTAL: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(calculateTotal())}</div>
                         <div className="flex gap-3">
                             <Button type="button" variant="outline" onClick={() => setIsNovoPedidoModalOpen(false)}>Cancelar</Button>
+                            <Button type="submit" variant="outline" onClick={() => setPrintAfterSave(true)} className="gap-2 border-primary text-primary hover:bg-primary hover:text-white">
+                                <Printer className="w-4 h-4" /> Salvar e Imprimir
+                            </Button>
                             <Button type="submit" disabled={submitting}>{submitting ? 'Salvando...' : 'Finalizar Pedido'}</Button>
                         </div>
                     </div>
@@ -901,28 +929,44 @@ export function Vendas() {
  
                                  @media print {
                                      @page { margin: 0; size: auto; }
-                                     html, body { margin: 0 !important; padding: 0 !important; height: auto !important; overflow: visible !important; }
-                                     body > * { display: none !important; }
-                                     #root, #__next { display: block !important; }
+                                     * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
+                                     
+                                     /* Esconder absolutamente tudo na página */
+                                     body * { visibility: hidden !important; }
+                                     
+                                     /* Mostrar apenas o que está dentro do container de impressão */
+                                     .print-preview-container, .print-preview-container * { visibility: visible !important; }
+                                     
+                                     /* Forçar o container a ocupar a tela cheia para a impressora */
                                      .print-preview-container { 
-                                         display: block !important; 
-                                         position: static !important;
+                                         position: fixed !important;
+                                         left: 0 !important;
+                                         top: 0 !important;
+                                         width: 100% !important;
+                                         height: 100% !important;
                                          margin: 0 !important;
-                                         border: none !important;
-                                         box-shadow: none !important;
+                                         padding: 0 !important;
                                          background: white !important;
+                                         z-index: 99999 !important;
+                                         display: flex !important;
+                                         flex-direction: column !important;
+                                         align-items: center !important;
+                                         visibility: visible !important;
                                      }
-                                     .a4 { width: 210mm !important; }
-                                     .a5 { width: 148mm !important; }
-                                     .cupom { width: 80mm !important; }
-                                     .cupom58 { width: 58mm !important; }
+
+                                     /* Garantir que as dimensões sejam respeitadas milimetricamente */
+                                     .a4 { width: 210mm !important; height: 297mm !important; margin: 0 !important; box-shadow: none !important; border: none !important; }
+                                     .a5 { width: 148mm !important; height: 210mm !important; margin: 0 !important; box-shadow: none !important; border: none !important; }
+                                     .cupom { width: 80mm !important; margin: 0 !important; border: none !important; }
+                                     .cupom58 { width: 58mm !important; margin: 0 !important; border: none !important; }
+                                     
                                      .no-print { display: none !important; }
                                  }
  
-                                 .a4 { width: 210mm; min-height: 297mm; padding: 15mm; font-family: 'Inter', sans-serif; }
-                                 .a5 { width: 148mm; min-height: 210mm; padding: 10mm; font-family: 'Inter', sans-serif; }
-                                 .cupom { width: 80mm; font-size: 12px; padding: 6mm; font-family: 'Courier Prime', monospace; }
-                                 .cupom58 { width: 58mm; font-size: 10px; padding: 4mm; font-family: 'Courier Prime', monospace; }
+                                 .a4 { width: 210mm; min-height: 297mm; padding: 15mm; font-family: 'Inter', sans-serif; background: white; margin: 0 auto; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+                                 .a5 { width: 148mm; min-height: 210mm; padding: 10mm; font-family: 'Inter', sans-serif; background: white; margin: 0 auto; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+                                 .cupom { width: 80mm; font-size: 12px; padding: 6mm; font-family: 'Courier Prime', monospace; background: white; margin: 0 auto; }
+                                 .cupom58 { width: 58mm; font-size: 10px; padding: 4mm; font-family: 'Courier Prime', monospace; background: white; margin: 0 auto; }
  
                                  /* Estilos Imagem 1 (A4/A5) */
                                  .formal-header { border: 1px solid #000; padding: 10px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; }
@@ -1352,6 +1396,9 @@ export function Vendas() {
 
                     <div className="flex justify-end gap-3 pt-4 border-t">
                         <Button type="button" variant="outline" onClick={() => setIsFinalizarModalOpen(false)}>Cancelar</Button>
+                        <Button type="submit" onClick={() => setPrintAfterSave(true)} variant="outline" className="gap-2 border-primary text-primary hover:bg-primary hover:text-white">
+                            <Printer className="w-4 h-4" /> Confirmar e Imprimir
+                        </Button>
                         <Button type="submit" disabled={submitting} className="bg-emerald-600 hover:bg-emerald-700">{submitting ? 'Processando...' : 'Confirmar Pagamento'}</Button>
                     </div>
                 </form>
