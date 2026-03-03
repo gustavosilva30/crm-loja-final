@@ -7,8 +7,9 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Modal } from "@/components/ui/modal"
-import { Search, Filter, Trash2, Printer, Plus, X, UserPlus, PackagePlus, DollarSign, ShoppingCart, Truck } from "lucide-react"
+import { Search, Filter, Trash2, Printer, Plus, X, UserPlus, PackagePlus, DollarSign, ShoppingCart, Truck, Import } from "lucide-react"
 import { supabase } from "@/lib/supabase"
+import { useAuthStore } from "@/store/authStore"
 
 interface Venda {
     id: string
@@ -31,6 +32,7 @@ export function Vendas() {
     const [vendas, setVendas] = useState<Venda[]>([])
     const [loading, setLoading] = useState(true)
     const [isFilterOpen, setIsFilterOpen] = useState(false)
+    const [printFormat, setPrintFormat] = useState<'a4' | 'a5' | 'cupom'>('a4')
     const [submitting, setSubmitting] = useState(false)
 
     // Modals State
@@ -39,6 +41,7 @@ export function Vendas() {
     const [selectedVendaForReceipt, setSelectedVendaForReceipt] = useState<any>(null)
     const [company, setCompany] = useState<any>(null)
     const [searchParams] = useSearchParams()
+    const { atendente } = useAuthStore()
 
     useEffect(() => {
         const editId = searchParams.get('edit')
@@ -79,7 +82,7 @@ export function Vendas() {
         forma_pagamento: 'Dinheiro',
         status: 'Pago' as const,
         criar_entrega: false,
-        entrega: { rua: '', numero: '', bairro: '', contato: '' }
+        entrega: { rua: '', numero: '', bairro: '', contato: '', cidade: '', estado: '', cep: '' }
     })
 
     const fetchVendas = async () => {
@@ -125,15 +128,45 @@ export function Vendas() {
     }, [])
 
     const handleCancelVenda = async (id: string) => {
-        if (!confirm('Deseja realmente EXCLUIR esta venda? Isso devolverá os produtos ao estoque e estornará pagamentos automaticamente.')) return;
+        const venda = vendas.find(v => v.id === id);
+        if (!venda) return;
+
+        if (!confirm('Deseja realmente CANCELAR esta venda? Isso devolverá os produtos ao estoque e ESTORNARÁ pagamentos (Saldo Caixa ou Haver Cliente).')) return;
+
         setSubmitting(true);
         try {
-            const { error } = await supabase.from('vendas').delete().eq('id', id);
+            // 1. Estorno Financeiro
+            if (venda.status === 'Pago' || venda.status === 'Entregue') {
+                if (venda.forma_pagamento === 'Dinheiro') {
+                    const confirmCaixa = confirm('Deseja retirar o valor do Saldo de Caixa?');
+                    if (confirmCaixa) {
+                        await supabase.from('financeiro_lancamentos').insert([{
+                            tipo: 'Despesa',
+                            valor: venda.total,
+                            data_vencimento: new Date().toISOString().split('T')[0],
+                            data_pagamento: new Date().toISOString().split('T')[0],
+                            status: 'Pago',
+                            forma_pagamento: 'Dinheiro',
+                            venda_id: venda.id,
+                            descricao: `ESTORNO: Venda #${formatNumPedido(venda.numero_pedido)} CANCELADA`
+                        }]);
+                    }
+                } else if (venda.forma_pagamento === 'Haver Cliente' && venda.cliente_id) {
+                    const { data: cliente } = await supabase.from('clientes').select('saldo_haver').eq('id', venda.cliente_id).single();
+                    if (cliente) {
+                        await supabase.from('clientes').update({ saldo_haver: (cliente.saldo_haver || 0) + venda.total }).eq('id', venda.cliente_id);
+                    }
+                }
+            }
+
+            // 2. Atualizar Status para Cancelado
+            const { error } = await supabase.from('vendas').update({ status: 'Cancelado' }).eq('id', id);
             if (error) throw error;
+
             fetchVendas();
-            alert('Venda excluída e valores estornados com sucesso.');
+            alert('Venda cancelada e valores estornados com sucesso.');
         } catch (e: any) {
-            alert('Erro ao excluir: ' + e.message);
+            alert('Erro ao cancelar: ' + e.message);
         } finally {
             setSubmitting(false);
         }
@@ -185,6 +218,45 @@ export function Vendas() {
 
     const calculateTotal = () => vendaItems.reduce((acc, item) => acc + item.subtotal, 0)
 
+    const handleImportFromCart = async () => {
+        if (!atendente) return alert("Faça login para importar seu carrinho")
+        setLoading(true)
+        try {
+            const { data: cartItems, error } = await supabase
+                .from('carrinho_itens')
+                .select('*, produtos(nome, preco, sku)')
+                .eq('atendente_id', atendente.id)
+
+            if (error) throw error
+            if (!cartItems || cartItems.length === 0) return alert("Seu carrinho está vazio!")
+
+            const importedItems = cartItems.map(item => ({
+                produto_id: item.produto_id,
+                quantidade: item.quantidade,
+                preco_unitario: item.preco_unitario,
+                subtotal: item.quantidade * item.preco_unitario,
+                _search: (item.produtos as any).nome
+            }))
+
+            setVendaItems(importedItems)
+            setVendaForm({ ...vendaForm, atendente_id: atendente.id })
+
+            // Pergunta se deseja limpar o carrinho do banco após importar
+            if (confirm("Deseja limpar seu carrinho de reserva após importar? (Isso manterá o estoque baixado na venda final)")) {
+                // Ao deletar do carrinho, a trigger DEVOLVERIA o estoque.
+                // Mas na venda vamos salvar os itens. Para não dar erro de estoque duplo, 
+                // o ideal é que a venda finalize e a trigger da venda não baixe de novo se vier do carrinho.
+                // Por simplicidade aqui: vamos deletar o carrinho (estoque volta) e a venda ao salvar baixa de novo.
+                await supabase.from('carrinho_itens').delete().eq('atendente_id', atendente.id)
+            }
+        } catch (err: any) {
+            alert("Erro ao importar: " + err.message)
+        } finally {
+            setLoading(true)
+            fetchVendas()
+        }
+    }
+
     const handleCreateVenda = async (e: React.FormEvent) => {
         e.preventDefault()
         if (!vendaForm.cliente_id && !confirm('Vender sem cliente?')) return
@@ -196,7 +268,7 @@ export function Vendas() {
             if (editingVendaId) {
                 const { error: uvErr } = await supabase.from('vendas').update({
                     cliente_id: vendaForm.cliente_id || null,
-                    atendente_id: vendaForm.atendente_id || null,
+                    atendente_id: vendaForm.atendente_id || atendente?.id || null,
                     total,
                     status: vendaForm.status,
                     forma_pagamento: vendaForm.forma_pagamento,
@@ -209,7 +281,7 @@ export function Vendas() {
             } else {
                 const { data: venda, error: vErr } = await supabase.from('vendas').insert({
                     cliente_id: vendaForm.cliente_id || null,
-                    atendente_id: vendaForm.atendente_id || null,
+                    atendente_id: vendaForm.atendente_id || atendente?.id || null,
                     total,
                     status: vendaForm.status,
                     forma_pagamento: vendaForm.forma_pagamento,
@@ -227,7 +299,6 @@ export function Vendas() {
                 preco_unitario: item.preco_unitario,
                 subtotal: item.subtotal
             }))
-
             const { error: iErr } = await supabase.from('vendas_itens').insert(itensToInsert)
             if (iErr) throw iErr
 
@@ -280,6 +351,16 @@ export function Vendas() {
         if (!vendaParaFinalizar) return
         setSubmitting(true)
         try {
+            // 0. Se for Haver Cliente, valida se o cliente tem limite (opcional, pode ser só informativo)
+            if (finalizarForm.forma_pagamento === 'Haver Cliente' && vendaParaFinalizar.cliente_id) {
+                const { data: cliente } = await supabase.from('clientes').select('saldo_haver, limite_credito').eq('id', vendaParaFinalizar.cliente_id).single();
+                if (cliente && (cliente.saldo_haver || 0) < vendaParaFinalizar.total) {
+                    // Lógica de "Haver": Se o cliente paga com haver, ele "gasta" o saldo. Se for fiado, o saldo fica negativo.
+                    // Aqui vamos descontar do saldo
+                    await supabase.from('clientes').update({ saldo_haver: (cliente.saldo_haver || 0) - vendaParaFinalizar.total }).eq('id', vendaParaFinalizar.cliente_id);
+                }
+            }
+
             const { error } = await supabase.from('vendas').update({
                 status: finalizarForm.status,
                 forma_pagamento: finalizarForm.forma_pagamento
@@ -287,18 +368,20 @@ export function Vendas() {
 
             if (error) throw error
 
-            // Se estiver sendo fechada para Pago ou entregue, garantir que lance no financeiro se for venda direta
+            // Se for Dinheiro, lança no financeiro (opção para sair do caixa)
             if (finalizarForm.status === 'Pago' || finalizarForm.status === 'Entregue') {
-                await supabase.from('financeiro_lancamentos').insert([{
-                    tipo: 'Receita',
-                    valor: vendaParaFinalizar.total,
-                    data_vencimento: new Date().toISOString().split('T')[0],
-                    data_pagamento: new Date().toISOString().split('T')[0],
-                    status: 'Pago',
-                    forma_pagamento: finalizarForm.forma_pagamento,
-                    venda_id: vendaParaFinalizar.id,
-                    descricao: `Venda #${formatNumPedido(vendaParaFinalizar.numero_pedido)}`
-                }])
+                if (finalizarForm.forma_pagamento !== 'Haver Cliente') {
+                    await supabase.from('financeiro_lancamentos').insert([{
+                        tipo: 'Receita',
+                        valor: vendaParaFinalizar.total,
+                        data_vencimento: new Date().toISOString().split('T')[0],
+                        data_pagamento: new Date().toISOString().split('T')[0],
+                        status: 'Pago',
+                        forma_pagamento: finalizarForm.forma_pagamento,
+                        venda_id: vendaParaFinalizar.id,
+                        descricao: `Venda #${formatNumPedido(vendaParaFinalizar.numero_pedido)}`
+                    }])
+                }
             }
 
             // Se selecionou entrega, cria a entrega
@@ -310,6 +393,9 @@ export function Vendas() {
                     rua: finalizarForm.entrega.rua,
                     bairro: finalizarForm.entrega.bairro,
                     numero: finalizarForm.entrega.numero,
+                    cidade: finalizarForm.entrega.cidade,
+                    estado: finalizarForm.entrega.estado,
+                    cep: finalizarForm.entrega.cep,
                     status: 'Preparando',
                     status_pagamento: 'Pago'
                 }])
@@ -330,7 +416,8 @@ export function Vendas() {
         try {
             const { data: venda } = await supabase.from('vendas').select(`*, clientes(*), atendentes(nome)`).eq('id', vendaId).single()
             const { data: itens } = await supabase.from('vendas_itens').select(`*, produtos(nome, sku)`).eq('venda_id', vendaId)
-            setSelectedVendaForReceipt({ ...venda, itens: itens || [] })
+            const { data: entrega } = await supabase.from('entregas').select('*').eq('venda_id', vendaId).maybeSingle()
+            setSelectedVendaForReceipt({ ...venda, itens: itens || [], entrega })
             setIsReceiptModalOpen(true)
         } catch (err) {
             console.error(err)
@@ -349,7 +436,7 @@ export function Vendas() {
         return matchesSearch && matchesStatus;
     })
 
-    const formatNumPedido = (num?: number) => num ? String(num).padStart(6, '0') : '------'
+    const formatNumPedido = (num?: number) => num ? String(num) : '------'
 
     return (
         <div className="space-y-6">
@@ -409,7 +496,7 @@ export function Vendas() {
                                         <Button variant="ghost" size="icon" onClick={() => handleOpenReceipt(venda.id)} title="Imprimir"><Printer className="w-4 h-4" /></Button>
                                         <Button variant="ghost" size="icon" onClick={() => startEditVenda(venda)} title="Editar"><Search className="w-4 h-4" /></Button>
                                         <Button variant="outline" size="sm" className="h-8 gap-1 bg-emerald-500/10 text-emerald-500 border-emerald-500/20 hover:bg-emerald-500/20" onClick={() => { setVendaParaFinalizar(venda); setFinalizarForm({ ...finalizarForm, forma_pagamento: venda.forma_pagamento || 'Dinheiro' }); setIsFinalizarModalOpen(true); }}><DollarSign className="w-3 h-3" /> Fechar</Button>
-                                        <Button variant="ghost" size="icon" className="text-destructive" onClick={() => handleCancelVenda(venda.id)} title="Excluir"><Trash2 className="w-4 h-4" /></Button>
+                                        <Button variant="ghost" size="icon" className="text-destructive" onClick={() => handleCancelVenda(venda.id)} title="Cancelar"><X className="w-4 h-4" /></Button>
                                     </TableCell>
                                 </TableRow>
                             ))}
@@ -621,11 +708,74 @@ export function Vendas() {
             </Modal>
 
             {/* MODAL RECIBO */}
-            <Modal isOpen={isReceiptModalOpen} onClose={() => setIsReceiptModalOpen(false)} title="Pedido" className="max-w-4xl">
+            <Modal isOpen={isReceiptModalOpen} onClose={() => setIsReceiptModalOpen(false)} title="Impressão de Pedido" className="max-w-4xl">
                 {selectedVendaForReceipt && (
                     <div className="space-y-4">
-                        <div className="flex justify-end"><Button onClick={() => window.print()}><Printer className="w-4 h-4 mr-2" /> Imprimir</Button></div>
-                        <div className="space-y-6">
+                        <div className="flex justify-between items-center bg-muted/50 p-2 rounded-lg no-print">
+                            <div className="flex gap-2">
+                                <Button
+                                    variant={printFormat === 'a4' ? 'default' : 'outline'}
+                                    size="sm"
+                                    onClick={() => setPrintFormat('a4')}
+                                    className="h-8"
+                                >
+                                    Papel A4
+                                </Button>
+                                <Button
+                                    variant={printFormat === 'a5' ? 'default' : 'outline'}
+                                    size="sm"
+                                    onClick={() => setPrintFormat('a5')}
+                                    className="h-8"
+                                >
+                                    Papel A5
+                                </Button>
+                                <Button
+                                    variant={printFormat === 'cupom' ? 'default' : 'outline'}
+                                    size="sm"
+                                    onClick={() => setPrintFormat('cupom')}
+                                    className="h-8"
+                                >
+                                    Cupom (80mm)
+                                </Button>
+                            </div>
+                            <Button onClick={() => window.print()} className="bg-primary hover:bg-primary/90">
+                                <Printer className="w-4 h-4 mr-2" /> Imprimir Agora
+                            </Button>
+                        </div>
+
+                        <div className={`print-container ${printFormat} bg-white text-black p-4 shadow-sm border`}>
+                            <style>{`
+                                @media print {
+                                    body * { visibility: hidden; }
+                                    .print-container, .print-container * { visibility: visible; }
+                                    .print-container { 
+                                        position: absolute; 
+                                        left: 0; 
+                                        top: 0; 
+                                        width: 100%; 
+                                        box-shadow: none !important;
+                                        border: none !important;
+                                        padding: 0 !important;
+                                        margin: 0 !important;
+                                    }
+                                    .no-print { display: none !important; }
+                                    
+                                    @page { margin: 1cm; }
+                                    
+                                    .print-container.a4 { width: 210mm; min-height: 297mm; }
+                                    .print-container.a5 { width: 148mm; min-height: 210mm; }
+                                    .print-container.cupom { 
+                                        width: 80mm; 
+                                        padding: 2mm !important;
+                                        font-size: 10px !important;
+                                    }
+                                    .print-container.cupom table { font-size: 9px !important; }
+                                    .print-container.cupom .text-2xl { font-size: 16px !important; }
+                                    .print-container.cupom .text-lg { font-size: 14px !important; }
+                                    .print-container.cupom .p-4 { padding: 8px !important; }
+                                    .print-container.cupom .grid-cols-2 { grid-template-cols: 1fr !important; }
+                                }
+                            `}</style>
                             {/* INFORMAÇÕES DA EMPRESA */}
                             <div className="flex justify-between items-start border-b-2 border-primary/20 pb-4">
                                 <div className="space-y-1">
@@ -688,12 +838,14 @@ export function Vendas() {
                             </div>
 
                             {/* SEÇÃO DE ENTREGA (SE HOUVER) */}
-                            {selectedVendaForReceipt.status === 'Entregue' && (
-                                <div className="bg-emerald-50 border border-emerald-100 p-4 rounded-xl flex items-center gap-4">
-                                    <Truck className="w-8 h-8 text-emerald-500 opacity-50" />
+                            {selectedVendaForReceipt.entrega && (
+                                <div className="bg-indigo-50 border border-indigo-100 p-4 rounded-xl flex items-center gap-4">
+                                    <Truck className="w-8 h-8 text-indigo-500 opacity-50" />
                                     <div className="space-y-1">
-                                        <Label className="text-[9px] uppercase font-black text-emerald-600">Informações de Entrega</Label>
-                                        <p className="text-xs font-medium">Endereço: {selectedVendaForReceipt.clientes?.endereco || 'Verificar cadastro do cliente'}</p>
+                                        <Label className="text-[9px] uppercase font-black text-indigo-600">Dados para Entrega</Label>
+                                        <p className="text-xs font-bold uppercase">{selectedVendaForReceipt.entrega.rua}, {selectedVendaForReceipt.entrega.numero}</p>
+                                        <p className="text-[10px] text-muted-foreground">{selectedVendaForReceipt.entrega.bairro} - {selectedVendaForReceipt.entrega.cidade}/{selectedVendaForReceipt.entrega.estado}</p>
+                                        <p className="text-[10px] font-bold">CONTATO: {selectedVendaForReceipt.entrega.contato}</p>
                                     </div>
                                 </div>
                             )}
@@ -811,14 +963,6 @@ export function Vendas() {
                                     />
                                 </div>
                                 <div className="space-y-1">
-                                    <Label className="text-[10px] uppercase font-black">Bairro</Label>
-                                    <Input
-                                        placeholder="Ex: Centro"
-                                        value={finalizarForm.entrega.bairro}
-                                        onChange={e => setFinalizarForm({ ...finalizarForm, entrega: { ...finalizarForm.entrega, bairro: e.target.value } })}
-                                    />
-                                </div>
-                                <div className="space-y-1">
                                     <Label className="text-[10px] uppercase font-black">Número</Label>
                                     <Input
                                         placeholder="123"
@@ -827,10 +971,38 @@ export function Vendas() {
                                     />
                                 </div>
                                 <div className="space-y-1">
-                                    <Label className="text-[10px] uppercase font-black text-primary font-black">Status de Entrega</Label>
-                                    <div className="flex items-center gap-2 text-xs font-bold text-primary">
-                                        <Truck className="w-4 h-4" /> Preparando
+                                    <Label className="text-[10px] uppercase font-black">Bairro</Label>
+                                    <Input
+                                        placeholder="Ex: Centro"
+                                        value={finalizarForm.entrega.bairro}
+                                        onChange={e => setFinalizarForm({ ...finalizarForm, entrega: { ...finalizarForm.entrega, bairro: e.target.value } })}
+                                    />
+                                </div>
+                                <div className="space-y-1">
+                                    <Label className="text-[10px] uppercase font-black">Cidade/UF</Label>
+                                    <div className="flex gap-1">
+                                        <Input
+                                            placeholder="Cidade"
+                                            className="flex-1"
+                                            value={finalizarForm.entrega.cidade}
+                                            onChange={e => setFinalizarForm({ ...finalizarForm, entrega: { ...finalizarForm.entrega, cidade: e.target.value } })}
+                                        />
+                                        <Input
+                                            placeholder="UF"
+                                            className="w-12 uppercase"
+                                            maxLength={2}
+                                            value={finalizarForm.entrega.estado}
+                                            onChange={e => setFinalizarForm({ ...finalizarForm, entrega: { ...finalizarForm.entrega, estado: e.target.value } })}
+                                        />
                                     </div>
+                                </div>
+                                <div className="space-y-1">
+                                    <Label className="text-[10px] uppercase font-black">CEP</Label>
+                                    <Input
+                                        placeholder="00000-000"
+                                        value={finalizarForm.entrega.cep}
+                                        onChange={e => setFinalizarForm({ ...finalizarForm, entrega: { ...finalizarForm.entrega, cep: e.target.value } })}
+                                    />
                                 </div>
                             </div>
                         )}

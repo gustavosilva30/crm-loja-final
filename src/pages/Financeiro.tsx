@@ -9,6 +9,7 @@ import { Select } from "@/components/ui/select"
 import { Modal } from "@/components/ui/modal"
 import { Plus, Search, Filter, MoreHorizontal, ArrowUpCircle, ArrowDownCircle, AlertTriangle, TrendingUp, BarChart3, List } from "lucide-react"
 import { supabase } from "@/lib/supabase"
+import { useAuthStore } from "@/store/authStore"
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from "recharts"
 
 interface FinanceiroLancamento {
@@ -26,6 +27,7 @@ interface FinanceiroLancamento {
 
 export function Financeiro() {
     const [activeTab, setActiveTab] = useState<"lancamentos" | "fluxo">("lancamentos")
+    const { atendente } = useAuthStore()
     const [searchTerm, setSearchTerm] = useState("")
     const [lancamentos, setLancamentos] = useState<FinanceiroLancamento[]>([])
     const [loading, setLoading] = useState(true)
@@ -74,6 +76,7 @@ export function Financeiro() {
                 .from('financeiro_lancamentos')
                 .insert([{
                     ...newEntry,
+                    atendente_id: atendente?.id,
                     valor: parseFloat(newEntry.valor)
                 }])
 

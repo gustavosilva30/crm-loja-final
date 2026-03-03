@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge"
 import { Search, Send, User, MessageCircle, Package, ShoppingCart, Loader2, FileText } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import axios from "axios"
+import { useAuthStore } from "@/store/authStore"
 
 interface Conversa {
     id: string
@@ -33,6 +34,7 @@ export function Atendimento() {
     const [products, setProducts] = useState<any[]>([])
     const [productSearch, setProductSearch] = useState("")
     const scrollRef = useRef<HTMLDivElement>(null)
+    const { atendente } = useAuthStore()
 
     // 1. Buscar Conversas
     const fetchConversas = async () => {
@@ -104,7 +106,8 @@ export function Atendimento() {
             await axios.post(`${apiUrl}/api/whatsapp/send`, {
                 conversa_id: selectedConversa.id,
                 telefone: selectedConversa.telefone,
-                conteudo: msgContent
+                conteudo: msgContent,
+                atendente_id: atendente?.id
             })
             // A mensagem aparecerá via Realtime
         } catch (err) {

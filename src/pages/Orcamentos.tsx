@@ -35,7 +35,7 @@ interface ItemOrcamento {
 export function Orcamentos() {
   const [searchTerm, setSearchTerm] = useState("")
   const [orcamentos, setOrcamentos] = useState<Orcamento[]>([])
-  const formatNumPedido = (num?: number) => num ? String(num).padStart(6, '0') : '------'
+  const formatNumPedido = (num?: number) => num ? String(num) : '------'
   const [loading, setLoading] = useState(true)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [createdOrcamentoId, setCreatedOrcamentoId] = useState<string | null>(null)

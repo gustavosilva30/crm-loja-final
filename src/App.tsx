@@ -19,21 +19,18 @@ import { Fiscal } from "./pages/Fiscal"
 import { Atendimento } from "./pages/Atendimento"
 import { ThemeProvider } from "./components/ThemeProvider"
 import { supabase } from "./lib/supabase"
+import { useAuthStore } from "./store/authStore"
 
 import { Legal } from "./pages/Legal"
 
 export default function App() {
-  const [session, setSession] = useState<any>(null)
-  const [loading, setLoading] = useState(true)
+  const { user, loading, signIn } = useAuthStore()
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session)
-      setLoading(false)
-    })
+    signIn()
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session)
+      signIn()
     })
 
     return () => subscription.unsubscribe()
@@ -52,8 +49,8 @@ export default function App() {
             <Route path="*" element={<div className="min-h-screen flex items-center justify-center bg-background"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>} />
           ) : (
             <>
-              <Route path="/login" element={!session ? <Login /> : <Navigate to="/" />} />
-              <Route path="/" element={session ? <Layout /> : <Navigate to="/login" />}>
+              <Route path="/login" element={!user ? <Login /> : <Navigate to="/" />} />
+              <Route path="/" element={user ? <Layout /> : <Navigate to="/login" />}>
                 <Route index element={<Dashboard />} />
                 <Route path="produtos" element={<Produtos />} />
                 <Route path="orcamentos" element={<Orcamentos />} />

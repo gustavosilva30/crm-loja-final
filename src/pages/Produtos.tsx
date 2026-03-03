@@ -10,6 +10,7 @@ import { Modal } from "@/components/ui/modal"
 import { Plus, Search, Filter, LayoutGrid, List, Package, Trash2, Pencil, ShoppingCart, FileText, Camera, Upload, X, Shield, Activity, Box, Tag, Ruler, Truck, Info, Settings } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { supabase } from "@/lib/supabase"
+import { useAuthStore } from "@/store/authStore"
 
 interface Produto {
   id: string
@@ -35,6 +36,7 @@ interface Produto {
   codigo_etiqueta: string | null
   part_number: string | null
   localizacao: string | null
+  localizacao_id: string | null
   marca: string | null
   modelo: string | null
   ano: number | null
@@ -76,9 +78,16 @@ export function Produtos() {
   const [selectedCompat, setSelectedCompat] = useState<string | null>(null)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState<string | null>(null)
+  const { atendente } = useAuthStore()
+
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize, setPageSize] = useState(12) // Default for grid
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
 
   // Resources
   const [categorias, setCategorias] = useState<{ id: string, nome: string }[]>([])
+  const [locais, setLocais] = useState<{ id: string, nome: string, sigla?: string, parent_id: string | null }[]>([])
 
   // Form State
   const [newProduto, setNewProduto] = useState<any>({
@@ -118,7 +127,8 @@ export function Produtos() {
     altura_cm: 0,
     largura_cm: 0,
     comprimento_cm: 0,
-    informacoes_adicionais: ''
+    informacoes_adicionais: '',
+    localizacao_id: ''
   })
 
   const [compatList, setCompatList] = useState<Compatibilidade[]>([])
@@ -145,10 +155,24 @@ export function Produtos() {
     if (data) setCategorias(data)
   }
 
+  const fetchLocais = async () => {
+    const { data } = await supabase.from('localizacoes').select('id, nome, sigla, parent_id').order('nome')
+    if (data) setLocais(data)
+  }
+
   useEffect(() => {
     fetchProdutos()
     fetchCategorias()
+    fetchLocais()
   }, [])
+
+  useEffect(() => {
+    // Reset to first page when changing view mode or search
+    setCurrentPage(1)
+    // Only set default pageSize if it was not manually changed or is invalid for the new mode
+    if (viewMode === "grid" && ![12, 30, 90].includes(pageSize)) setPageSize(12)
+    if (viewMode === "list" && ![30, 60].includes(pageSize)) setPageSize(30)
+  }, [viewMode, searchTerm])
 
   const handleAddProduto = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -177,7 +201,7 @@ export function Produtos() {
 
       const { data: savedProd, error: prodError } = editingProduto
         ? await supabase.from('produtos').update({ ...newProduto, imagem_url: finalImageUrl, categoria_id: newProduto.categoria_id || null }).eq('id', editingProduto.id).select().single()
-        : await supabase.from('produtos').insert([{ ...newProduto, imagem_url: finalImageUrl, categoria_id: newProduto.categoria_id || null }]).select().single()
+        : await supabase.from('produtos').insert([{ ...newProduto, imagem_url: finalImageUrl, categoria_id: newProduto.categoria_id || null, atendente_id: atendente?.id }]).select().single()
 
       if (prodError) throw prodError
 
@@ -264,7 +288,8 @@ export function Produtos() {
       ...produto,
       categoria_id: produto.categoria_id || '',
       imagem_url: produto.imagem_url || '',
-      compatibilidade: produto.compatibilidade || ''
+      compatibilidade: produto.compatibilidade || '',
+      localizacao_id: (produto as any).localizacao_id || ''
     })
 
     // Fetch compatibilidades
@@ -282,26 +307,195 @@ export function Produtos() {
     p.sku.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
-  const handleAddToCart = (produto: Produto, tipo: 'venda' | 'orcamento') => {
-    const key = tipo === 'venda' ? 'crm_venda_cart' : 'crm_orcamento_items';
-    const saved = localStorage.getItem(key);
-    const cart = saved ? JSON.parse(saved) : [];
+  const paginatedProdutos = filteredProdutos.slice(0, currentPage * pageSize)
+  const hasMore = paginatedProdutos.length < filteredProdutos.length
 
-    const existingIndex = cart.findIndex((item: any) => item.produto_id === produto.id);
-    if (existingIndex > -1) {
-      cart[existingIndex].quantidade += 1;
-    } else {
-      cart.push({
-        produto_id: produto.id,
-        quantidade: 1,
-        preco_unitario: produto.preco,
-        nome: produto.nome,
-        sku: produto.sku
-      });
+  const handleAddToCart = async (produto: Produto, tipo: 'venda' | 'orcamento') => {
+    if (tipo === 'orcamento') {
+      const saved = localStorage.getItem('crm_orcamento_items');
+      const cart = saved ? JSON.parse(saved) : [];
+      const existingIndex = cart.findIndex((item: any) => item.produto_id === produto.id);
+      if (existingIndex > -1) cart[existingIndex].quantidade += 1;
+      else cart.push({ produto_id: produto.id, quantidade: 1, preco_unitario: produto.preco, nome: produto.nome, sku: produto.sku });
+      localStorage.setItem('crm_orcamento_items', JSON.stringify(cart));
+      alert(`Produto adicionado ao Orçamento!`);
+      return;
     }
 
-    localStorage.setItem(key, JSON.stringify(cart));
-    alert(`Produto adicionado ao ${tipo === 'venda' ? 'Carrinho de Vendas' : 'Orçamento'}!`);
+    // Lógica de Carrinho de Vendas (Banco de Dados + Trigger de Estoque)
+    if (!atendente) return alert("Você precisa estar logado para usar o carrinho.");
+    if (produto.estoque_atual <= 0) return alert("Produto sem estoque disponível!");
+
+    try {
+      const { error } = await supabase.from('carrinho_itens').upsert({
+        atendente_id: atendente.id,
+        produto_id: produto.id,
+        preco_unitario: produto.preco,
+        quantidade: 1 // No banco a trigger cuida de subtrair 1 do estoque
+      }, { onConflict: 'atendente_id,produto_id' })
+
+      if (error) {
+        // Se for erro de PK (já existe), tentamos incrementar a quantidade
+        // Mas como o usuário quer que clique e baixe, vamos fazer insert simples ou incrementar via rpc/update
+        const { data: existing } = await supabase.from('carrinho_itens').select('quantidade').eq('atendente_id', atendente.id).eq('produto_id', produto.id).single();
+        if (existing) {
+          await supabase.from('carrinho_itens').update({ quantidade: existing.quantidade + 1 }).eq('atendente_id', atendente.id).eq('produto_id', produto.id);
+        }
+      }
+
+      fetchProdutos(); // Atualiza estoque na tela
+      alert('Produto adicionado ao carrinho! O estoque foi reservado.');
+    } catch (err) {
+      console.error(err);
+      alert('Erro ao adicionar ao carrinho.');
+    }
+  }
+
+  const handleBulkAddToCart = async (tipo: 'venda' | 'orcamento') => {
+    if (selectedIds.length === 0) return;
+    if (tipo === 'venda' && !atendente) return alert("Faça login para usar o carrinho.");
+
+    setLoading(true);
+    let successCount = 0;
+
+    for (const id of selectedIds) {
+      const produto = produtos.find(p => p.id === id);
+      if (!produto || (tipo === 'venda' && produto.estoque_atual <= 0)) continue;
+
+      if (tipo === 'orcamento') {
+        const saved = localStorage.getItem('crm_orcamento_items');
+        const cart = saved ? JSON.parse(saved) : [];
+        const existingIndex = cart.findIndex((item: any) => item.produto_id === id);
+        if (existingIndex > -1) cart[existingIndex].quantidade += 1;
+        else cart.push({ produto_id: id, quantidade: 1, preco_unitario: produto.preco, nome: produto.nome, sku: produto.sku });
+        localStorage.setItem('crm_orcamento_items', JSON.stringify(cart));
+        successCount++;
+      } else {
+        try {
+          const { data: existing } = await supabase.from('carrinho_itens').select('quantidade').eq('atendente_id', atendente?.id).eq('produto_id', id).single();
+          if (existing) {
+            await supabase.from('carrinho_itens').update({ quantidade: existing.quantidade + 1 }).eq('atendente_id', atendente?.id).eq('produto_id', id);
+          } else {
+            await supabase.from('carrinho_itens').insert({
+              atendente_id: atendente?.id,
+              produto_id: id,
+              preco_unitario: produto.preco,
+              quantidade: 1
+            });
+          }
+          successCount++;
+        } catch (e) { console.error(e); }
+      }
+    }
+
+    setSelectedIds([]);
+    await fetchProdutos();
+    setLoading(false);
+    alert(`${successCount} produtos adicionados ao ${tipo === 'venda' ? 'carrinho' : 'orçamento'}!`);
+  }
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.length === 0 || !confirm(`Deseja realmente excluir ${selectedIds.length} produtos?`)) return;
+    setLoading(true);
+    const { error } = await supabase.from('produtos').delete().in('id', selectedIds);
+    if (error) alert("Erro ao excluir alguns produtos. Verifique se possuem vínculos.");
+    else {
+      setSelectedIds([]);
+      await fetchProdutos();
+    }
+    setLoading(false);
+  }
+
+  const handlePrintLabels = () => {
+    const selectedProducts = produtos.filter(p => selectedIds.includes(p.id));
+    if (selectedProducts.length === 0) return;
+
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+
+    const labelsHtml = selectedProducts.map(p => {
+      const loc = locais.find(l => l.id === p.localizacao_id);
+      let locSigla = 'N/A';
+
+      if (loc) {
+        if (loc.parent_id) {
+          const parent = locais.find(l => l.id === loc.parent_id);
+          locSigla = `${parent?.sigla || ''} > ${loc.sigla || ''}`;
+        } else {
+          locSigla = loc.sigla || loc.nome;
+        }
+      } else if (p.localizacao) {
+        locSigla = p.localizacao;
+      }
+
+      return `
+        <div class="label">
+          <div class="sku">SKU: ${p.sku}</div>
+          <div class="name">${p.nome}</div>
+          <div class="location">LOC: ${locSigla}</div>
+        </div>
+      `;
+    }).join('');
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Impressão de Etiquetas</title>
+          <style>
+            @page {
+              size: 100mm 50mm;
+              margin: 0;
+            }
+            body {
+              margin: 0;
+              padding: 0;
+              font-family: sans-serif;
+            }
+            .label {
+              width: 100mm;
+              height: 50mm;
+              padding: 5mm;
+              box-sizing: border-box;
+              display: flex;
+              flex-direction: column;
+              justify-content: center;
+              border: 1px dashed #ccc;
+              page-break-after: always;
+            }
+            .sku {
+              font-size: 24pt;
+              font-weight: bold;
+              margin-bottom: 2mm;
+            }
+            .name {
+              font-size: 14pt;
+              margin-bottom: 2mm;
+              display: -webkit-box;
+              -webkit-line-clamp: 2;
+              -webkit-box-orient: vertical;
+              overflow: hidden;
+            }
+            .location {
+              font-size: 12pt;
+              color: #444;
+              font-weight: bold;
+              border-top: 1px solid #000;
+              padding-top: 1mm;
+            }
+          </style>
+        </head>
+        <body>
+          ${labelsHtml}
+          <script>
+            window.onload = () => {
+              window.print();
+              window.close();
+            };
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
   }
 
   return (
@@ -380,6 +574,41 @@ export function Produtos() {
               />
             </div>
             <div className="flex items-center gap-2">
+              {selectedIds.length > 0 && (
+                <div className="flex items-center gap-2 bg-primary/10 px-3 py-1.5 rounded-lg border border-primary/20 mr-4 animate-in fade-in slide-in-from-top-2">
+                  <span className="text-xs font-bold text-primary">{selectedIds.length} selecionados</span>
+                  <div className="h-4 w-px bg-primary/20 mx-1" />
+                  <Button variant="ghost" size="sm" className="h-8 text-xs font-bold gap-2 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50" onClick={handlePrintLabels}>
+                    <Tag className="w-3.5 h-3.5" /> Etiquetas
+                  </Button>
+                  <Button variant="ghost" size="sm" className="h-8 text-xs font-bold gap-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50" onClick={() => handleBulkAddToCart('orcamento')}>
+                    <FileText className="w-3.5 h-3.5" /> Orçamento
+                  </Button>
+                  <Button variant="ghost" size="sm" className="h-8 text-xs font-bold gap-2 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50" onClick={() => handleBulkAddToCart('venda')}>
+                    <ShoppingCart className="w-3.5 h-3.5" /> Carrinho
+                  </Button>
+                  <Button variant="ghost" size="sm" className="h-8 text-xs font-bold gap-2 text-destructive hover:bg-destructive/10" onClick={handleBulkDelete}>
+                    <Trash2 className="w-3.5 h-3.5" /> Excluir
+                  </Button>
+                  <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => setSelectedIds([])}>
+                    Cancelar
+                  </Button>
+                </div>
+              )}
+              <Select value={pageSize.toString()} onChange={(e) => setPageSize(parseInt(e.target.value))}>
+                {viewMode === "grid" ? (
+                  <>
+                    <option value="12">12 por vez</option>
+                    <option value="30">30 por vez</option>
+                    <option value="90">90 por vez</option>
+                  </>
+                ) : (
+                  <>
+                    <option value="30">30 por vez</option>
+                    <option value="60">60 por vez</option>
+                  </>
+                )}
+              </Select>
               <div className="flex items-center border border-input rounded-md p-1 bg-background">
                 <Button variant={viewMode === "list" ? "secondary" : "ghost"} size="icon" className="h-7 w-7 rounded-sm" onClick={() => setViewMode("list")}><List className="h-4 w-4" /></Button>
                 <Button variant={viewMode === "grid" ? "secondary" : "ghost"} size="icon" className="h-7 w-7 rounded-sm" onClick={() => setViewMode("grid")}><LayoutGrid className="h-4 w-4" /></Button>
@@ -395,6 +624,16 @@ export function Produtos() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-[40px]">
+                    <input
+                      type="checkbox"
+                      onChange={(e) => {
+                        if (e.target.checked) setSelectedIds(paginatedProdutos.map(p => p.id))
+                        else setSelectedIds([])
+                      }}
+                      checked={selectedIds.length === paginatedProdutos.length && paginatedProdutos.length > 0}
+                    />
+                  </TableHead>
                   <TableHead>SKU</TableHead>
                   <TableHead>Produto</TableHead>
                   <TableHead>Estoque</TableHead>
@@ -405,10 +644,19 @@ export function Produtos() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredProdutos.length === 0 ? (
-                  <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Nenhum produto encontrado.</TableCell></TableRow>
-                ) : filteredProdutos.map((produto) => (
-                  <TableRow key={produto.id}>
+                {paginatedProdutos.length === 0 ? (
+                  <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Nenhum produto encontrado.</TableCell></TableRow>
+                ) : paginatedProdutos.map((produto) => (
+                  <TableRow key={produto.id} className={selectedIds.includes(produto.id) ? "bg-primary/5" : ""}>
+                    <TableCell>
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.includes(produto.id)}
+                        onChange={() => {
+                          setSelectedIds(prev => prev.includes(produto.id) ? prev.filter(id => id !== produto.id) : [...prev, produto.id])
+                        }}
+                      />
+                    </TableCell>
                     <TableCell className="font-mono text-xs">{produto.sku}</TableCell>
                     <TableCell>
                       <div className="flex items-center gap-3">
@@ -418,7 +666,7 @@ export function Produtos() {
                         <div>
                           <div className="font-medium flex items-center gap-2">
                             {produto.nome}
-                            {produto.quantidade_orcamento && produto.quantidade_orcamento > 0 && (
+                            {(produto.quantidade_orcamento !== undefined && produto.quantidade_orcamento > 0) && (
                               <Badge variant="outline" className="text-[9px] h-4 border-blue-500 text-blue-500 bg-blue-500/10 px-1">{produto.quantidade_orcamento} em orç.</Badge>
                             )}
                           </div>
@@ -460,13 +708,23 @@ export function Produtos() {
             </Table>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {filteredProdutos.map((produto) => (
-                <Card key={produto.id} className="overflow-hidden border-border/50 hover:border-primary/50 transition-colors shadow-sm">
+              {paginatedProdutos.map((produto) => (
+                <Card key={produto.id} className={`overflow-hidden border-border/50 hover:border-primary/50 transition-colors shadow-sm relative ${selectedIds.includes(produto.id) ? "ring-2 ring-primary border-primary/50" : ""}`}>
+                  <div className="absolute top-2 left-2 z-10">
+                    <input
+                      type="checkbox"
+                      className="w-4 h-4 rounded"
+                      checked={selectedIds.includes(produto.id)}
+                      onChange={() => {
+                        setSelectedIds(prev => prev.includes(produto.id) ? prev.filter(id => id !== produto.id) : [...prev, produto.id])
+                      }}
+                    />
+                  </div>
                   <div className="h-40 bg-muted/30 flex items-center justify-center border-b border-border/10 relative overflow-hidden">
                     {produto.imagem_url ? <img src={produto.imagem_url} alt={produto.nome} className="w-full h-full object-cover transition-transform hover:scale-105 duration-300" /> : <Package className="w-12 h-12 text-muted-foreground/20" />}
                     <div className="absolute top-2 right-2 flex flex-col gap-1 items-end">
-                      {produto.sku_ml && <Badge variant="ml" className="text-[10px] shadow-sm">ML</Badge>}
-                      {produto.quantidade_orcamento && produto.quantidade_orcamento > 0 && (
+                      {!!produto.sku_ml && <Badge variant="ml" className="text-[10px] shadow-sm">ML</Badge>}
+                      {!!(produto.quantidade_orcamento && produto.quantidade_orcamento > 0) && (
                         <Badge variant="outline" className="text-[10px] shadow-sm border-blue-500 text-blue-500 bg-blue-500/10 backdrop-blur-sm">{produto.quantidade_orcamento} em Orçamento</Badge>
                       )}
                     </div>
@@ -494,6 +752,18 @@ export function Produtos() {
                   </CardContent>
                 </Card>
               ))}
+            </div>
+          )}
+
+          {hasMore && (
+            <div className="flex justify-center mt-8 pb-4">
+              <Button
+                variant="outline"
+                className="gap-2 px-12 h-10 border-primary/20 text-primary hover:bg-primary/5 font-bold"
+                onClick={() => setCurrentPage(prev => prev + 1)}
+              >
+                Ver Mais Produtos
+              </Button>
             </div>
           )}
         </CardContent>
@@ -529,18 +799,18 @@ export function Produtos() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-                <div className="space-y-2 lg:col-span-1">
+              <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
+                <div className="md:col-span-1 space-y-2">
                   <Label>SKU / Código</Label>
                   <Input required placeholder="Ex: 17700" value={newProduto.sku} onChange={e => setNewProduto({ ...newProduto, sku: e.target.value })} />
                 </div>
-                <div className="space-y-2">
+                <div className="md:col-span-1 space-y-2">
                   <Label>Part Number</Label>
                   <Input placeholder="Código do fabricante" value={newProduto.part_number} onChange={e => setNewProduto({ ...newProduto, part_number: e.target.value })} />
                 </div>
-                <div className="space-y-2">
-                  <Label>Título / Nome</Label>
-                  <Input required placeholder="Ex: CABO PUXADOR CAPO UNO" value={newProduto.nome} onChange={e => setNewProduto({ ...newProduto, nome: e.target.value })} />
+                <div className="md:col-span-4 space-y-2">
+                  <Label>Título / Nome (Máx 60 car.)</Label>
+                  <Input required maxLength={60} placeholder="Ex: CABO PUXADOR CAPO UNO" value={newProduto.nome} onChange={e => setNewProduto({ ...newProduto, nome: e.target.value })} />
                 </div>
               </div>
 
@@ -553,8 +823,15 @@ export function Produtos() {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label>Localização (Prateleira/Gaveta)</Label>
-                  <Input placeholder="Ex: A1-G3" value={newProduto.localizacao} onChange={e => setNewProduto({ ...newProduto, localizacao: e.target.value })} />
+                  <Label>Localização Estruturada (WMS)</Label>
+                  <Select value={newProduto.localizacao_id} onChange={e => setNewProduto({ ...newProduto, localizacao_id: e.target.value })}>
+                    <option value="">Selecione localização...</option>
+                    {locais.map(l => (
+                      <option key={l.id} value={l.id}>
+                        {l.parent_id ? `${locais.find(p => p.id === l.parent_id)?.nome} (${locais.find(p => p.id === l.parent_id)?.sigla}) > ${l.nome} (${l.sigla})` : `${l.nome} (${l.sigla})`}
+                      </option>
+                    ))}
+                  </Select>
                 </div>
               </div>
 

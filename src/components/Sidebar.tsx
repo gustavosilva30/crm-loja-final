@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils"
 import { ModeToggle } from "./ModeToggle"
 import { supabase } from "@/lib/supabase"
 import { useState, useEffect } from "react"
+import { useAuthStore } from "@/store/authStore"
 
 const navItems = [
   { icon: LayoutDashboard, label: "Dashboard", href: "/" },
@@ -24,22 +25,10 @@ const navItems = [
 export function Sidebar() {
   const location = useLocation()
   const [counts, setCounts] = useState({ lembretes: 0, entregas: 0 })
-  const [permissions, setPermissions] = useState<any>(null)
-
-  const fetchPermissions = async () => {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (session) {
-      const { data } = await supabase
-        .from('atendentes')
-        .select('*')
-        .eq('auth_user_id', session.user.id)
-        .single()
-      setPermissions(data)
-    }
-  }
+  const { atendente, signOut } = useAuthStore()
 
   const handleLogout = async () => {
-    await supabase.auth.signOut()
+    await signOut()
     window.location.href = "/login"
   }
 
@@ -69,19 +58,17 @@ export function Sidebar() {
 
   useEffect(() => {
     fetchCounts()
-    fetchPermissions()
     const interval = setInterval(fetchCounts, 60000)
     return () => clearInterval(interval)
   }, [])
 
   const filteredNavItems = navItems.filter(item => {
-    if (!permissions) return true // Show all while loading or if not linked
-    if (item.label === "Vendas" && !permissions.perm_vendas) return false
-    if (item.label === "Estoque" && !permissions.perm_produtos) return false
-    if (item.label === "Financeiro" && !permissions.perm_financeiro) return false
-    if (item.label === "Controle de Caixa" && !permissions.perm_caixa) return false
-    if (item.label === "Fiscal" && !permissions.perm_fiscal) return false
-    // Relatórios e Clientes geralmente são livres ou vinculados a Vendas/Financeiro
+    if (!atendente) return true // Se não tiver perfil vinculado (ex: admin supremo sem auth_user_id), mostra tudo
+    if (item.label === "Vendas" && !atendente.perm_vendas) return false
+    if (item.label === "Estoque" && !atendente.perm_produtos) return false
+    if (item.label === "Financeiro" && !atendente.perm_financeiro) return false
+    if (item.label === "Controle de Caixa" && !atendente.perm_caixa) return false
+    if (item.label === "Fiscal" && !atendente.perm_fiscal) return false
     return true
   })
 
@@ -92,7 +79,10 @@ export function Sidebar() {
           <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center shadow-[0_0_15px_rgba(0,255,157,0.4)]">
             <Package className="w-5 h-5 text-primary-foreground" />
           </div>
-          <span className="font-bold text-xl tracking-tight">ERP<span className="text-primary">Moderno</span></span>
+          <div className="flex flex-col">
+            <span className="font-bold text-xl tracking-tight">CRM</span>
+            <span className="text-[10px] text-primary font-black uppercase leading-none tracking-wider">Dourados Auto Peças</span>
+          </div>
         </div>
         <ModeToggle />
       </div>
@@ -131,7 +121,7 @@ export function Sidebar() {
       </nav>
 
       <div className="p-4 border-t border-border space-y-2">
-        {(!permissions || permissions.perm_config) && (
+        {(!atendente || atendente.perm_config) && (
           <Link
             to="/configuracoes"
             className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"

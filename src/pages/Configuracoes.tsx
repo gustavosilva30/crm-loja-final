@@ -6,9 +6,12 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Plus, Truck, Warehouse, Tags, Wallet, Save, Trash2, Users, Search, Database } from "lucide-react"
+import { Plus, Truck, Warehouse, Tags, Wallet, Save, Trash2, Users, Search, Database, MapPin, Layers, ChevronRight, Package } from "lucide-react"
 import { supabase } from "@/lib/supabase"
+import { useAuthStore } from "@/store/authStore"
 import { ImportadorInteligente } from "@/components/ImportadorInteligente"
+import { Select } from "@/components/ui/select"
+import { Modal } from "@/components/ui/modal"
 
 export function Configuracoes() {
     const [activeTab, setActiveTab] = useState("shipping")
@@ -20,6 +23,10 @@ export function Configuracoes() {
     const [categories, setCategories] = useState<any[]>([])
     const [financeCategories, setFinanceCategories] = useState<any[]>([])
     const [atendentes, setAtendentes] = useState<any[]>([])
+    const [locations, setLocations] = useState<any[]>([])
+    const [selectedLocationProducts, setSelectedLocationProducts] = useState<any[]>([])
+    const [isProductListModalOpen, setIsProductListModalOpen] = useState(false)
+    const [viewingLocationName, setViewingLocationName] = useState("")
     const [company, setCompany] = useState<any>({
         nome_fantasia: 'Dourados Auto Peças',
         razao_social: 'Leandro B Leal Auto Peças Eireli ME',
@@ -63,6 +70,7 @@ export function Configuracoes() {
     const [editingAtendente, setEditingAtendente] = useState<{ id: string, nome: string, cargo: string, cor_identificacao: string } | null>(null)
     const [isFinCatModalOpen, setIsFinCatModalOpen] = useState(false)
     const [isAtendenteModalOpen, setIsAtendenteModalOpen] = useState(false)
+    const [newLocation, setNewLocation] = useState({ nome: '', sigla: '', descricao: '', parent_id: null as string | null })
 
     const fetchData = async () => {
         const { data: s } = await supabase.from('transportadoras').select('*').order('nome')
@@ -71,6 +79,7 @@ export function Configuracoes() {
         const { data: fc } = await supabase.from('financeiro_categorias').select('*').order('nome')
         const { data: at } = await supabase.from('atendentes').select('*').order('nome')
         const { data: comp } = await supabase.from('configuracoes_empresa').select('*').single()
+        const { data: loc } = await supabase.from('localizacoes').select('*').order('nome')
 
         if (s) setShipping(s)
         if (sup) setSuppliers(sup)
@@ -78,6 +87,7 @@ export function Configuracoes() {
         if (fc) setFinanceCategories(fc)
         if (at) setAtendentes(at)
         if (comp) setCompany(comp)
+        if (loc) setLocations(loc)
     }
 
     useEffect(() => { fetchData() }, [])
@@ -196,6 +206,28 @@ export function Configuracoes() {
         setLoading(false)
     }
 
+    const handleAddLocation = async () => {
+        if (!newLocation.nome || !newLocation.sigla) return alert("Nome e Sigla são obrigatórios");
+        setLoading(true)
+        const { error } = await supabase.from('localizacoes').insert([newLocation])
+        if (!error) {
+            setNewLocation({ nome: '', sigla: '', descricao: '', parent_id: null })
+            await fetchData()
+        } else alert("Erro ao salvar localização: " + error.message)
+        setLoading(false)
+    }
+
+    const viewProductsInLocation = async (locId: string, locNome: string) => {
+        setLoading(true)
+        setViewingLocationName(locNome)
+        const { data, error } = await supabase.from('produtos').select('sku, nome, estoque_atual').eq('localizacao_id', locId)
+        if (!error) {
+            setSelectedLocationProducts(data || [])
+            setIsProductListModalOpen(true)
+        }
+        setLoading(false)
+    }
+
     const deleteItem = async (table: string, id: string) => {
         if (confirm("Deseja realmente excluir este item?")) {
             await supabase.from(table).delete().eq('id', id)
@@ -211,14 +243,15 @@ export function Configuracoes() {
             </div>
 
             <Tabs defaultValue="shipping" className="space-y-4" onValueChange={setActiveTab}>
-                <TabsList className="bg-muted/50 p-1 border border-border/50">
-                    <TabsTrigger value="shipping" className="gap-2"><Truck className="w-4 h-4" /> Transportadoras</TabsTrigger>
-                    <TabsTrigger value="suppliers" className="gap-2"><Warehouse className="w-4 h-4" /> Fornecedores</TabsTrigger>
-                    <TabsTrigger value="categories" className="gap-2"><Tags className="w-4 h-4" /> Categorias de Produtos</TabsTrigger>
-                    <TabsTrigger value="finance" className="gap-2"><Wallet className="w-4 h-4" /> Categorias de Contas</TabsTrigger>
-                    <TabsTrigger value="staff" className="gap-2"><Users className="w-4 h-4" /> Atendentes</TabsTrigger>
-                    <TabsTrigger value="company" className="gap-2"><Save className="w-4 h-4" /> Dados da Empresa</TabsTrigger>
-                    <TabsTrigger value="import" className="gap-2"><Database className="w-4 h-4" /> Importador Inteligente</TabsTrigger>
+                <TabsList className="flex flex-wrap h-auto bg-muted/50 p-1 border border-border/50 gap-1">
+                    <TabsTrigger value="shipping" className="gap-2 flex-grow sm:flex-grow-0"><Truck className="w-4 h-4" /> Transportadoras</TabsTrigger>
+                    <TabsTrigger value="suppliers" className="gap-2 flex-grow sm:flex-grow-0"><Warehouse className="w-4 h-4" /> Fornecedores</TabsTrigger>
+                    <TabsTrigger value="categories" className="gap-2 flex-grow sm:flex-grow-0"><Tags className="w-4 h-4" /> Categorias de Produtos</TabsTrigger>
+                    <TabsTrigger value="finance" className="gap-2 flex-grow sm:flex-grow-0"><Wallet className="w-4 h-4" /> Categorias de Contas</TabsTrigger>
+                    <TabsTrigger value="staff" className="gap-2 flex-grow sm:flex-grow-0"><Users className="w-4 h-4" /> Atendentes</TabsTrigger>
+                    <TabsTrigger value="company" className="gap-2 flex-grow sm:flex-grow-0"><Save className="w-4 h-4" /> Dados da Empresa</TabsTrigger>
+                    <TabsTrigger value="locations" className="gap-2 flex-grow sm:flex-grow-0"><MapPin className="w-4 h-4" /> Localizações (WMS)</TabsTrigger>
+                    <TabsTrigger value="import" className="gap-2 flex-grow sm:flex-grow-0"><Database className="w-4 h-4" /> Importador Inteligente</TabsTrigger>
                 </TabsList>
 
                 {/* TRANSPORTADORAS */}
@@ -595,6 +628,7 @@ export function Configuracoes() {
                                 <TableHeader>
                                     <TableRow>
                                         <TableHead>Atendente</TableHead>
+                                        <TableHead>Email/Login</TableHead>
                                         <TableHead>Cargo</TableHead>
                                         <TableHead>Cor</TableHead>
                                         <TableHead className="text-right">Ação</TableHead>
@@ -607,6 +641,7 @@ export function Configuracoes() {
                                                 <div className="w-4 h-4 rounded-full" style={{ backgroundColor: item.cor_identificacao }} />
                                                 {item.nome}
                                             </TableCell>
+                                            <TableCell className="text-[9px] text-muted-foreground font-mono">{(item as any).email || "Não vinculado"}</TableCell>
                                             <TableCell className="text-xs uppercase font-medium">{item.cargo || "-"}</TableCell>
                                             <TableCell className="font-mono text-[10px]">{item.cor_identificacao}</TableCell>
                                             <TableCell className="text-right flex justify-end gap-2">
@@ -713,6 +748,99 @@ export function Configuracoes() {
                         </CardContent>
                     </Card>
                 </TabsContent>
+                {/* LOCALIZACOES (WMS) */}
+                <TabsContent value="locations" className="space-y-4">
+                    <Card className="border-orange-500/20 bg-orange-500/5">
+                        <CardHeader>
+                            <CardTitle className="text-orange-600 flex items-center gap-2">
+                                <MapPin className="w-5 h-5" /> Estrutura de Armazenamento (WMS)
+                            </CardTitle>
+                            <CardDescription>Cadastre corredores, prateleiras, gavetas ou caixas de forma hierárquica.</CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-6">
+                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end bg-background/50 p-4 rounded-xl border border-orange-500/10">
+                                <div className="md:col-span-1 space-y-2">
+                                    <Label>Nome da Localização</Label>
+                                    <Input
+                                        placeholder="Ex: Corredor A"
+                                        value={newLocation.nome}
+                                        onChange={e => setNewLocation({ ...newLocation, nome: e.target.value })}
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Sigla</Label>
+                                    <Input
+                                        placeholder="Ex: COR-A"
+                                        value={newLocation.sigla}
+                                        onChange={e => setNewLocation({ ...newLocation, sigla: e.target.value })}
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Dentro de (Opcional)</Label>
+                                    <Select
+                                        value={newLocation.parent_id || ""}
+                                        onChange={e => setNewLocation({ ...newLocation, parent_id: e.target.value || null })}
+                                    >
+                                        <option value="">-- Local Principal --</option>
+                                        {locations.map(l => <option key={l.id} value={l.id}>{l.nome} ({l.sigla})</option>)}
+                                    </Select>
+                                </div>
+                                <div className="md:col-span-2 space-y-2">
+                                    <Label>Descrição / Observações</Label>
+                                    <Input
+                                        placeholder="Detalhes sobre este local..."
+                                        value={newLocation.descricao}
+                                        onChange={e => setNewLocation({ ...newLocation, descricao: e.target.value })}
+                                    />
+                                </div>
+                                <div className="md:col-span-2">
+                                    <Button className="w-full bg-orange-600 hover:bg-orange-700 font-bold" onClick={handleAddLocation}>
+                                        <Plus className="w-4 h-4 mr-2" /> Cadastrar Localização
+                                    </Button>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                {locations.filter(l => !l.parent_id).map(parent => (
+                                    <Card key={parent.id} className="border-border/50 shadow-sm overflow-hidden group">
+                                        <div className="p-4 bg-muted/30 flex items-center justify-between border-b">
+                                            <div className="flex flex-col">
+                                                <div className="flex items-center gap-2 font-bold text-orange-700">
+                                                    <Layers className="w-4 h-4" /> {parent.nome}
+                                                </div>
+                                                <span className="text-[10px] font-black text-orange-500">{parent.sigla}</span>
+                                            </div>
+                                            <div className="flex gap-1">
+                                                <Button variant="ghost" size="icon" className="h-7 w-7 text-indigo-600" onClick={() => viewProductsInLocation(parent.id, parent.nome)}><Search className="w-3.5 h-3.5" /></Button>
+                                                <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => deleteItem('localizacoes', parent.id)}><Trash2 className="w-3.5 h-3.5" /></Button>
+                                            </div>
+                                        </div>
+                                        <div className="p-2 space-y-1 bg-white">
+                                            {locations.filter(child => child.parent_id === parent.id).length === 0 && (
+                                                <p className="text-[10px] text-muted-foreground italic p-2">Nenhuma sub-localização</p>
+                                            )}
+                                            {locations.filter(child => child.parent_id === parent.id).map(child => (
+                                                <div key={child.id} className="flex items-center justify-between p-2 hover:bg-orange-50 rounded-lg group/item transition-colors">
+                                                    <div className="flex flex-col">
+                                                        <div className="flex items-center gap-2 text-xs">
+                                                            <ChevronRight className="w-3 h-3 text-orange-400" />
+                                                            <span className="font-medium">{child.nome}</span>
+                                                        </div>
+                                                        <span className="text-[9px] font-black text-orange-500 ml-5">{child.sigla}</span>
+                                                    </div>
+                                                    <div className="flex gap-1 opacity-0 group-hover/item:opacity-100 transition-opacity">
+                                                        <Button variant="ghost" size="icon" className="h-6 w-6 text-indigo-600" onClick={() => viewProductsInLocation(child.id, child.nome)}><Search className="w-3 h-3" /></Button>
+                                                        <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => deleteItem('localizacoes', child.id)}><Trash2 className="w-3 h-3" /></Button>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </Card>
+                                ))}
+                            </div>
+                        </CardContent>
+                    </Card>
+                </TabsContent>
                 {/* IMPORTADOR */}
                 <TabsContent value="import">
                     <ImportadorInteligente />
@@ -720,117 +848,156 @@ export function Configuracoes() {
             </Tabs>
 
             {/* MODAL EDIT CATEGORIA FINANCEIRA */}
-            {isFinCatModalOpen && (
-                <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                    <Card className="w-full max-w-md shadow-2xl border-purple-500/20">
-                        <CardHeader>
-                            <CardTitle className="text-purple-500">{editingFinCat ? "Editar Categoria" : "Nova Categoria"}</CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                            <div className="space-y-2">
-                                <Label>Nome da Categoria</Label>
-                                <Input
-                                    placeholder="Ex: Marketing, Aluguel..."
-                                    value={newFinCat}
-                                    onChange={e => setNewFinCat(e.target.value)}
-                                />
-                            </div>
-                            <div className="flex justify-end gap-2 pt-2">
-                                <Button variant="outline" onClick={() => setIsFinCatModalOpen(false)}>Cancelar</Button>
-                                <Button className="bg-purple-600 hover:bg-purple-700" onClick={handleSaveFinanceCategory} disabled={loading}>
-                                    {loading ? "Salvando..." : "Salvar"}
-                                </Button>
-                            </div>
-                        </CardContent>
-                    </Card>
-                </div>
-            )}
+            {
+                isFinCatModalOpen && (
+                    <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                        <Card className="w-full max-w-md shadow-2xl border-purple-500/20">
+                            <CardHeader>
+                                <CardTitle className="text-purple-500">{editingFinCat ? "Editar Categoria" : "Nova Categoria"}</CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                <div className="space-y-2">
+                                    <Label>Nome da Categoria</Label>
+                                    <Input
+                                        placeholder="Ex: Marketing, Aluguel..."
+                                        value={newFinCat}
+                                        onChange={e => setNewFinCat(e.target.value)}
+                                    />
+                                </div>
+                                <div className="flex justify-end gap-2 pt-2">
+                                    <Button variant="outline" onClick={() => setIsFinCatModalOpen(false)}>Cancelar</Button>
+                                    <Button className="bg-purple-600 hover:bg-purple-700" onClick={handleSaveFinanceCategory} disabled={loading}>
+                                        {loading ? "Salvando..." : "Salvar"}
+                                    </Button>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    </div>
+                )
+            }
 
             {/* MODAL EDIT ATENDENTE */}
-            {isAtendenteModalOpen && (
-                <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                    <Card className="w-full max-w-md shadow-2xl border-rose-500/20">
-                        <CardHeader>
-                            <CardTitle className="text-rose-600">{editingAtendente ? "Editar Atendente" : "Novo Atendente"}</CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                            <div className="space-y-2">
-                                <Label>Nome Completo</Label>
-                                <Input
-                                    placeholder="Nome do Atendente"
-                                    value={newAtendente.nome}
-                                    onChange={e => setNewAtendente({ ...newAtendente, nome: e.target.value })}
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <Label>Cargo / Função</Label>
-                                <select
-                                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                                    value={newAtendente.cargo}
-                                    onChange={e => setNewAtendente({ ...newAtendente, cargo: e.target.value })}
-                                >
-                                    <option value="Vendedor">Vendedor</option>
-                                    <option value="Cadastrador">Cadastrador</option>
-                                    <option value="Financeiro">Financeiro</option>
-                                    <option value="Administrador">Administrador</option>
-                                </select>
-                            </div>
-                            <div className="space-y-2">
-                                <Label>Cor de Identificação</Label>
-                                <Input
-                                    type="color"
-                                    className="h-10 p-1"
-                                    value={newAtendente.cor_identificacao}
-                                    onChange={e => setNewAtendente({ ...newAtendente, cor_identificacao: e.target.value })}
-                                />
-                            </div>
-
-                            <div className="p-4 border rounded-lg bg-muted/30 space-y-3">
-                                <Label className="text-xs uppercase font-bold text-muted-foreground">Permissões de Acesso</Label>
-                                <div className="grid grid-cols-2 gap-3">
-                                    {[
-                                        { key: 'perm_vendas', label: 'Vendas' },
-                                        { key: 'perm_produtos', label: 'Produtos' },
-                                        { key: 'perm_financeiro', label: 'Financeiro' },
-                                        { key: 'perm_fiscal', label: 'Fiscal' },
-                                        { key: 'perm_caixa', label: 'Caixa' },
-                                        { key: 'perm_config', label: 'Configurações' },
-                                    ].map((perm) => (
-                                        <div key={perm.key} className="flex items-center gap-2">
-                                            <input
-                                                type="checkbox"
-                                                id={perm.key}
-                                                checked={(newAtendente as any)[perm.key] ?? true}
-                                                onChange={(e) => setNewAtendente({ ...newAtendente, [perm.key]: e.target.checked })}
-                                                className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary"
-                                            />
-                                            <Label htmlFor={perm.key} className="text-sm cursor-pointer">{perm.label}</Label>
-                                        </div>
-                                    ))}
+            {
+                isAtendenteModalOpen && (
+                    <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                        <Card className="w-full max-w-md shadow-2xl border-rose-500/20">
+                            <CardHeader>
+                                <CardTitle className="text-rose-600">{editingAtendente ? "Editar Atendente" : "Novo Atendente"}</CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                <div className="space-y-2">
+                                    <Label>Nome Completo</Label>
+                                    <Input
+                                        placeholder="Nome do Atendente"
+                                        value={newAtendente.nome}
+                                        onChange={e => setNewAtendente({ ...newAtendente, nome: e.target.value })}
+                                    />
                                 </div>
-                            </div>
+                                <div className="space-y-2">
+                                    <Label>Cargo / Função</Label>
+                                    <select
+                                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                                        value={newAtendente.cargo}
+                                        onChange={e => setNewAtendente({ ...newAtendente, cargo: e.target.value })}
+                                    >
+                                        <option value="Vendedor">Vendedor</option>
+                                        <option value="Cadastrador">Cadastrador</option>
+                                        <option value="Financeiro">Financeiro</option>
+                                        <option value="Administrador">Administrador</option>
+                                    </select>
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Cor de Identificação</Label>
+                                    <Input
+                                        type="color"
+                                        className="h-10 p-1"
+                                        value={newAtendente.cor_identificacao}
+                                        onChange={e => setNewAtendente({ ...newAtendente, cor_identificacao: e.target.value })}
+                                    />
+                                </div>
 
-                            <div className="space-y-2 pt-2 border-t">
-                                <Label className="text-rose-600 font-bold">Vincular Login (E-mail)</Label>
-                                <Input
-                                    type="email"
-                                    placeholder="email@acesso.com"
-                                    value={(newAtendente as any).email || ""}
-                                    onChange={e => setNewAtendente({ ...newAtendente, email: e.target.value })}
-                                />
-                                <p className="text-[10px] text-muted-foreground">O funcionário usará este e-mail para logar. A senha deve ser definida no Supabase Auth.</p>
-                            </div>
+                                <div className="p-4 border rounded-lg bg-muted/30 space-y-3">
+                                    <Label className="text-xs uppercase font-bold text-muted-foreground">Permissões de Acesso</Label>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        {[
+                                            { key: 'perm_vendas', label: 'Vendas' },
+                                            { key: 'perm_produtos', label: 'Produtos' },
+                                            { key: 'perm_financeiro', label: 'Financeiro' },
+                                            { key: 'perm_fiscal', label: 'Fiscal' },
+                                            { key: 'perm_caixa', label: 'Caixa' },
+                                            { key: 'perm_config', label: 'Configurações' },
+                                        ].map((perm) => (
+                                            <div key={perm.key} className="flex items-center gap-2">
+                                                <input
+                                                    type="checkbox"
+                                                    id={perm.key}
+                                                    checked={(newAtendente as any)[perm.key] ?? true}
+                                                    onChange={(e) => setNewAtendente({ ...newAtendente, [perm.key]: e.target.checked })}
+                                                    className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary"
+                                                />
+                                                <Label htmlFor={perm.key} className="text-sm cursor-pointer">{perm.label}</Label>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
 
-                            <div className="flex justify-end gap-2 pt-2">
-                                <Button variant="outline" onClick={() => setIsAtendenteModalOpen(false)}>Cancelar</Button>
-                                <Button className="bg-rose-600 hover:bg-rose-700" onClick={handleSaveAtendente} disabled={loading}>
-                                    {loading ? "Salvando..." : "Salvar"}
-                                </Button>
-                            </div>
-                        </CardContent>
-                    </Card>
+                                <div className="space-y-2 pt-2 border-t">
+                                    <Label className="text-rose-600 font-bold">Vincular Login (E-mail)</Label>
+                                    <Input
+                                        type="email"
+                                        placeholder="email@acesso.com"
+                                        value={(newAtendente as any).email || ""}
+                                        onChange={e => setNewAtendente({ ...newAtendente, email: e.target.value })}
+                                    />
+                                    <p className="text-[10px] text-muted-foreground">O funcionário usará este e-mail para logar. A senha deve ser definida no Supabase Auth.</p>
+                                </div>
+
+                                <div className="flex justify-end gap-2 pt-2">
+                                    <Button variant="outline" onClick={() => setIsAtendenteModalOpen(false)}>Cancelar</Button>
+                                    <Button className="bg-rose-600 hover:bg-rose-700" onClick={handleSaveAtendente} disabled={loading}>
+                                        {loading ? "Salvando..." : "Salvar"}
+                                    </Button>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    </div>
+                )
+            }
+
+            {/* MODAL PRODUTOS NA LOCALIZACAO */}
+            <Modal isOpen={isProductListModalOpen} onClose={() => setIsProductListModalOpen(false)} title={`Inventário: ${viewingLocationName}`}>
+                <div className="space-y-4">
+                    <div className="border rounded-lg overflow-hidden">
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>SKU</TableHead>
+                                    <TableHead>Produto</TableHead>
+                                    <TableHead className="text-right">Qtd</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {selectedLocationProducts.length === 0 ? (
+                                    <TableRow>
+                                        <TableCell colSpan={3} className="text-center py-8 text-muted-foreground">
+                                            Nenhum produto vinculado a esta localização.
+                                        </TableCell>
+                                    </TableRow>
+                                ) : selectedLocationProducts.map((p, idx) => (
+                                    <TableRow key={idx}>
+                                        <TableCell className="font-mono text-xs">{p.sku}</TableCell>
+                                        <TableCell className="text-xs font-medium">{p.nome}</TableCell>
+                                        <TableCell className="text-right font-bold text-orange-600">{p.estoque_atual}</TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </div>
+                    <div className="flex justify-end">
+                        <Button onClick={() => setIsProductListModalOpen(false)}>Fechar</Button>
+                    </div>
                 </div>
-            )}
-        </div>
+            </Modal>
+        </div >
     )
 }

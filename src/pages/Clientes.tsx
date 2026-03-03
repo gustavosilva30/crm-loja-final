@@ -32,6 +32,10 @@ export function Clientes() {
     const [submitting, setSubmitting] = useState(false)
     const [searchingCNPJ, setSearchingCNPJ] = useState(false)
 
+    // Pagination
+    const [currentPage, setCurrentPage] = useState(1)
+    const [pageSize, setPageSize] = useState(20)
+
     // Form State
     const [newCliente, setNewCliente] = useState({
         nome: '',
@@ -66,6 +70,10 @@ export function Clientes() {
     useEffect(() => {
         fetchClientes()
     }, [])
+
+    useEffect(() => {
+        setCurrentPage(1)
+    }, [searchTerm])
 
     const searchCNPJ = async () => {
         const cnpj = newCliente.documento.replace(/\D/g, '')
@@ -159,6 +167,9 @@ export function Clientes() {
         c.razao_social?.toLowerCase().includes(searchTerm.toLowerCase())
     )
 
+    const paginatedClientes = filteredClientes.slice(0, currentPage * pageSize)
+    const hasMore = paginatedClientes.length < filteredClientes.length
+
     return (
         <div className="space-y-6">
             <div className="flex items-center justify-between">
@@ -188,14 +199,25 @@ export function Clientes() {
             <Card>
                 <CardHeader className="pb-4">
                     <div className="flex items-center justify-between">
-                        <div className="relative w-72">
-                            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                            <Input
-                                placeholder="Buscar por nome, fantasia, CPF/CNPJ..."
-                                className="pl-9"
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                            />
+                        <div className="flex items-center gap-4 flex-1">
+                            <div className="relative w-72">
+                                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                                <Input
+                                    placeholder="Buscar por nome, fantasia, CPF/CNPJ..."
+                                    className="pl-9"
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                />
+                            </div>
+                            <select
+                                className="h-9 w-28 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                                value={pageSize.toString()}
+                                onChange={e => setPageSize(parseInt(e.target.value))}
+                            >
+                                <option value="20">20 por vez</option>
+                                <option value="50">50 por vez</option>
+                                <option value="100">100 por vez</option>
+                            </select>
                         </div>
                         <Button variant="outline" className="gap-2">
                             <Filter className="w-4 h-4" />
@@ -223,13 +245,13 @@ export function Clientes() {
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {filteredClientes.length === 0 ? (
+                                {paginatedClientes.length === 0 ? (
                                     <TableRow>
                                         <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                                             Nenhum cliente encontrado.
                                         </TableCell>
                                     </TableRow>
-                                ) : filteredClientes.map((cliente) => (
+                                ) : paginatedClientes.map((cliente) => (
                                     <TableRow key={cliente.id}>
                                         <TableCell>
                                             <div className="flex items-center gap-3">
@@ -311,6 +333,13 @@ export function Clientes() {
                                 ))}
                             </TableBody>
                         </Table>
+                    )}
+                    {hasMore && (
+                        <div className="flex justify-center mt-6">
+                            <Button variant="outline" className="px-10 h-10 border-indigo-600/20 text-indigo-600 hover:bg-indigo-600/5 font-bold" onClick={() => setCurrentPage(prev => prev + 1)}>
+                                Carregar Mais Clientes
+                            </Button>
+                        </div>
                     )}
                 </CardContent>
             </Card>

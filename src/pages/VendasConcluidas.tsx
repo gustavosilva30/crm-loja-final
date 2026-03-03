@@ -101,15 +101,45 @@ export function VendasConcluidas() {
     }, [])
 
     const handleCancelVenda = async (id: string) => {
-        if (!confirm('Deseja realmente EXCLUIR/CANCELAR esta venda? Isso devolverá os produtos ao estoque e estornará pagamentos automaticamente.')) return;
+        const venda = vendas.find(v => v.id === id);
+        if (!venda) return;
+
+        if (!confirm('Deseja realmente CANCELAR esta venda? Isso devolverá os produtos ao estoque e ESTORNARÁ pagamentos (Saldo Caixa ou Haver Cliente).')) return;
+
         setSubmitting(true);
         try {
-            const { error } = await supabase.from('vendas').delete().eq('id', id);
+            // 1. Estorno Financeiro
+            if (venda.status === 'Pago' || venda.status === 'Entregue') {
+                if (venda.forma_pagamento === 'Dinheiro') {
+                    const confirmCaixa = confirm('Deseja retirar o valor do Saldo de Caixa?');
+                    if (confirmCaixa) {
+                        await supabase.from('financeiro_lancamentos').insert([{
+                            tipo: 'Despesa',
+                            valor: venda.total,
+                            data_vencimento: new Date().toISOString().split('T')[0],
+                            data_pagamento: new Date().toISOString().split('T')[0],
+                            status: 'Pago',
+                            forma_pagamento: 'Dinheiro',
+                            venda_id: venda.id,
+                            descricao: `ESTORNO: Venda #${formatNumPedido(venda.numero_pedido)} CANCELADA`
+                        }]);
+                    }
+                } else if (venda.forma_pagamento === 'Haver Cliente' && venda.cliente_id) {
+                    const { data: cliente } = await supabase.from('clientes').select('saldo_haver').eq('id', venda.cliente_id).single();
+                    if (cliente) {
+                        await supabase.from('clientes').update({ saldo_haver: (cliente.saldo_haver || 0) + venda.total }).eq('id', venda.cliente_id);
+                    }
+                }
+            }
+
+            // 2. Atualizar Status para Cancelado
+            const { error } = await supabase.from('vendas').update({ status: 'Cancelado' }).eq('id', id);
             if (error) throw error;
+
             fetchVendas();
-            alert('Venda excluída e valores estornados com sucesso.');
+            alert('Venda cancelada e valores estornados com sucesso.');
         } catch (e: any) {
-            alert('Erro ao excluir: ' + e.message);
+            alert('Erro ao cancelar: ' + e.message);
         } finally {
             setSubmitting(false);
         }
@@ -154,11 +184,79 @@ export function VendasConcluidas() {
     const handlePrint = () => {
         const printContent = document.getElementById('printable-receipt')
         if (!printContent) return window.print()
+
         const printWindow = window.open('', '_blank', 'width=900,height=700')
         if (!printWindow) return window.print()
-        printWindow.document.write(`<html><head><title>Pedido</title><style>body{font-family:sans-serif;padding:20px;}</style></head><body>${printContent.innerHTML}</body></html>`)
+
+        const styles = `
+            @page { 
+                margin: ${printFormat === 'cupom' ? '0' : '10mm'};
+                size: ${printFormat === 'a4' ? 'A4' : printFormat === 'a5' ? 'A5' : '80mm 200mm'};
+            }
+            body { 
+                font-family: 'Inter', system-ui, sans-serif; 
+                margin: 0; 
+                padding: ${printFormat === 'cupom' ? '2mm' : '0'};
+                color: #000;
+                background: #fff;
+            }
+            .receipt-container { 
+                width: ${printFormat === 'cupom' ? '76mm' : '100%'};
+                max-width: 100%;
+                margin: 0 auto;
+            }
+            table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+            th { text-align: left; border-bottom: 2px solid #eee; padding: 5px; font-size: ${printFormat === 'cupom' ? '10px' : '12px'}; }
+            td { padding: 5px; border-bottom: 1px solid #f5f5f5; font-size: ${printFormat === 'cupom' ? '10px' : '13px'}; }
+            .flex { display: flex; }
+            .justify-between { justify-content: space-between; }
+            .flex-col { flex-direction: column; }
+            .items-end { align-items: flex-end; }
+            .font-black { font-weight: 900; }
+            .font-bold { font-weight: 700; }
+            .text-sm { font-size: ${printFormat === 'cupom' ? '10px' : '14px'}; }
+            .text-lg { font-size: ${printFormat === 'cupom' ? '12px' : '18px'}; }
+            .text-2xl { font-size: ${printFormat === 'cupom' ? '14px' : '24px'}; }
+            .text-3xl { font-size: ${printFormat === 'cupom' ? '18px' : '30px'}; }
+            .uppercase { text-transform: uppercase; }
+            .bg-slate-900 { background: #000; color: #fff; padding: 2px 5px; }
+            .bg-slate-50 { background: #f8fafc; border: 1px solid #e2e8f0; padding: 10px; border-radius: 4px; }
+            .mt-16 { margin-top: 40px; }
+            .mb-6 { margin-bottom: 24px; }
+            .pb-4 { padding-bottom: 16px; }
+            .border-b-2 { border-bottom: 2px solid #eee; }
+            .text-right { text-align: right; }
+            .text-center { text-align: center; }
+            .text-slate-500 { color: #64748b; }
+            .text-slate-400 { color: #94a3b8; }
+            .gap-6 { gap: 24px; }
+            .grid { display: grid; }
+            .grid-cols-2 { grid-template-columns: 1fr 1fr; }
+            @media print {
+                .bg-slate-50 { background: #fff !important; border: 1px solid #eee; }
+                .bg-slate-900 { background: #000 !important; color: #fff !important; -webkit-print-color-adjust: exact; }
+            }
+        `;
+
+        printWindow.document.write(`
+            <html>
+                <head>
+                    <title>Recibo #${formatNumPedido(selectedVendaForReceipt.numero_pedido)}</title>
+                    <style>${styles}</style>
+                </head>
+                <body>
+                    <div class="receipt-container">
+                        ${printContent.innerHTML}
+                    </div>
+                </body>
+            </html>
+        `)
         printWindow.document.close()
-        printWindow.print()
+        // Pequeno delay para garantir que renderizou
+        setTimeout(() => {
+            printWindow.print()
+            printWindow.close()
+        }, 500)
     }
 
     const formatNumPedido = (num?: number) => num ? String(num).padStart(6, '0') : '------'
@@ -231,13 +329,17 @@ export function VendasConcluidas() {
                 <CardContent>
                     {isFilterOpen && (
                         <div className="grid grid-cols-4 gap-4 mb-6 p-4 border rounded-lg bg-muted/20">
-                            <Select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
+                            <select
+                                value={filterStatus}
+                                onChange={e => setFilterStatus(e.target.value)}
+                                className="h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                            >
                                 <option value="todos">Todos (exceto pendentes)</option>
                                 <option value="Pago">Pago</option>
                                 <option value="Enviado">Enviado</option>
                                 <option value="Entregue">Entregue</option>
                                 <option value="Cancelado">Cancelado</option>
-                            </Select>
+                            </select>
                             <Input type="date" value={filterDataInicio} onChange={e => setFilterDataInicio(e.target.value)} />
                             <Input type="date" value={filterDataFim} onChange={e => setFilterDataFim(e.target.value)} />
                             <Button variant="ghost" onClick={() => { setFilterStatus("todos"); setFilterDataInicio(""); setFilterDataFim(""); }}>Limpar</Button>
@@ -270,7 +372,9 @@ export function VendasConcluidas() {
                                     <TableCell className="text-right space-x-1">
                                         <Button variant="ghost" size="icon" onClick={() => handleOpenReceipt(venda.id)} title="Imprimir"><Printer className="w-4 h-4" /></Button>
                                         <Button variant="ghost" size="icon" onClick={() => navigate(`/vendas?edit=${venda.id}`)} title="Editar"><Search className="w-4 h-4" /></Button>
-                                        <Button variant="ghost" size="icon" className="text-destructive" onClick={() => handleCancelVenda(venda.id)} title="Excluir"><Trash2 className="w-4 h-4" /></Button>
+                                        {venda.status !== 'Cancelado' && (
+                                            <Button variant="ghost" size="icon" className="text-destructive" onClick={() => handleCancelVenda(venda.id)} title="Cancelar"><TrendingUp className="w-4 h-4 rotate-180" /></Button>
+                                        )}
                                     </TableCell>
                                 </TableRow>
                             ))}
@@ -279,13 +383,39 @@ export function VendasConcluidas() {
                 </CardContent>
             </Card>
 
-            <Modal isOpen={isReceiptModalOpen} onClose={() => setIsReceiptModalOpen(false)} title="Recibo" className="max-w-4xl">
+            <Modal isOpen={isReceiptModalOpen} onClose={() => setIsReceiptModalOpen(false)} title="Recibo de Venda" className="max-w-4xl">
                 {selectedVendaForReceipt && (
                     <div className="space-y-4">
-                        <div className="flex justify-end gap-2">
-                            <Button onClick={handlePrint}><Printer className="w-4 h-4 mr-2" /> Imprimir</Button>
+                        <div className="flex items-center justify-between bg-slate-100 p-3 rounded-lg">
+                            <div className="flex items-center gap-3">
+                                <Label className="text-xs font-bold uppercase text-slate-500">Formato de Impressão:</Label>
+                                <div className="flex bg-white border rounded-md p-1">
+                                    <button
+                                        className={`px-3 py-1 text-xs font-bold rounded ${printFormat === 'a4' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'}`}
+                                        onClick={() => setPrintFormat('a4')}
+                                    >
+                                        A4 (Normal)
+                                    </button>
+                                    <button
+                                        className={`px-3 py-1 text-xs font-bold rounded ${printFormat === 'a5' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'}`}
+                                        onClick={() => setPrintFormat('a5')}
+                                    >
+                                        A5 (Meia Folha)
+                                    </button>
+                                    <button
+                                        className={`px-3 py-1 text-xs font-bold rounded ${printFormat === 'cupom' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'}`}
+                                        onClick={() => setPrintFormat('cupom')}
+                                    >
+                                        Cupom (Térmica)
+                                    </button>
+                                </div>
+                            </div>
+                            <Button onClick={handlePrint} className="bg-indigo-600 hover:bg-indigo-700">
+                                <Printer className="w-4 h-4 mr-2" /> Imprimir Recibo
+                            </Button>
                         </div>
-                        <div id="printable-receipt" className="p-8 bg-white text-black border shadow-sm">
+
+                        <div id="printable-receipt" className={`bg-white text-black border shadow-sm mx-auto ${printFormat === 'cupom' ? 'w-[300px] p-2' : printFormat === 'a5' ? 'w-[560px] p-6' : 'w-full p-8'}`}>
                             <div className="flex justify-between items-start border-b-2 border-slate-200 pb-4 mb-6">
                                 <div className="space-y-1">
                                     <h1 className="text-2xl font-black text-slate-900 uppercase tracking-tighter">{company?.nome_fantasia || 'AUTO PEÇAS'}</h1>
@@ -337,6 +467,19 @@ export function VendasConcluidas() {
                                     ))}
                                 </tbody>
                             </table>
+
+                            {/* SEÇÃO DE ENTREGA (SE HOUVER) */}
+                            {selectedVendaForReceipt.entrega && (
+                                <div className="bg-slate-50 border border-slate-200 p-4 rounded-lg flex items-center gap-4 mb-6">
+                                    <Truck className="w-8 h-8 text-slate-400 opacity-50" />
+                                    <div className="space-y-1">
+                                        <Label className="text-[9px] uppercase font-black text-slate-500">Dados para Entrega</Label>
+                                        <p className="text-xs font-bold uppercase">{selectedVendaForReceipt.entrega.rua}, {selectedVendaForReceipt.entrega.numero}</p>
+                                        <p className="text-[10px] text-slate-500">{selectedVendaForReceipt.entrega.bairro} - {selectedVendaForReceipt.entrega.cidade}/{selectedVendaForReceipt.entrega.estado}</p>
+                                        <p className="text-[10px] font-bold">CONTATO: {selectedVendaForReceipt.entrega.contato}</p>
+                                    </div>
+                                </div>
+                            )}
 
                             <div className="flex flex-col items-end gap-2 border-t-2 border-slate-200 pt-4">
                                 <div className="flex gap-10 items-center">

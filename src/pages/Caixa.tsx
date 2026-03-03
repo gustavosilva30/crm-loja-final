@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label"
 import { Modal } from "@/components/ui/modal"
 import { Wallet, Plus, Lock, Unlock, History, AlertCircle, ArrowUpRight, ArrowDownRight, DollarSign } from "lucide-react"
 import { supabase } from "@/lib/supabase"
+import { useAuthStore } from "@/store/authStore"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
 
@@ -28,6 +29,7 @@ export function Caixa() {
     const [isFechamentoModalOpen, setIsFechamentoModalOpen] = useState(false)
     const [submitting, setSubmitting] = useState(false)
     const [hoje, setHoje] = useState<CaixaRegistro | null>(null)
+    const { atendente } = useAuthStore()
     const [movimentacoesHoje, setMovimentacoesHoje] = useState({ entradas: 0, saidas: 0 })
 
     // Form states
@@ -99,7 +101,8 @@ export function Caixa() {
                     data_registro: todayStr,
                     valor_abertura: parseFloat(valorAbertura),
                     status: 'Aberto',
-                    observacoes: observacoes
+                    observacoes: observacoes,
+                    atendente_id: atendente?.id
                 }])
 
             if (error) throw error
@@ -160,7 +163,8 @@ export function Caixa() {
                     status: 'Pago',
                     forma_pagamento: 'Dinheiro',
                     descricao: `${tipoMovimento} de Caixa: ${observacoes}`,
-                    categoria_financeira: 'Caixa'
+                    categoria_financeira: 'Caixa',
+                    atendente_id: atendente?.id
                 }])
 
             if (error) throw error
