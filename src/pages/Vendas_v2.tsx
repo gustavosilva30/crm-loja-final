@@ -32,7 +32,7 @@ export function Vendas() {
     const [vendas, setVendas] = useState<Venda[]>([])
     const [loading, setLoading] = useState(true)
     const [isFilterOpen, setIsFilterOpen] = useState(false)
-    const [printFormat, setPrintFormat] = useState<'a4' | 'a5' | 'cupom'>('a4')
+    const [printFormat, setPrintFormat] = useState<'a4' | 'a5' | 'cupom' | 'cupom58'>('a4')
     const [submitting, setSubmitting] = useState(false)
 
     // Modals State
@@ -871,100 +871,129 @@ export function Vendas() {
                                 >
                                     Cupom (80mm)
                                 </Button>
+                                <Button
+                                    variant={printFormat === 'cupom58' ? 'default' : 'outline'}
+                                    size="sm"
+                                    onClick={() => setPrintFormat('cupom58')}
+                                    className="h-8"
+                                >
+                                    Cupom (58mm)
+                                </Button>
                             </div>
                             <Button onClick={() => window.print()} className="bg-primary hover:bg-primary/90">
                                 <Printer className="w-4 h-4 mr-2" /> Imprimir Agora
                             </Button>
                         </div>
 
-                        <div className={`print-container ${printFormat} bg-white text-black p-4 shadow-sm border`}>
+                        <div className={`print-preview-container ${printFormat} bg-white text-black shadow-sm border mx-auto ${printFormat.includes('cupom') ? 'p-2' : 'p-8'}`}>
                             <style>{`
+                                .print-preview-container.a4 { width: 210mm; min-height: 297mm; }
+                                .print-preview-container.a5 { width: 148mm; min-height: 210mm; }
+                                .print-preview-container.cupom { width: 80mm; font-size: 11px; }
+                                .print-preview-container.cupom58 { width: 58mm; font-size: 9px; }
+                                
+                                .print-preview-container.cupom .text-2xl, 
+                                .print-preview-container.cupom58 .text-2xl { font-size: 1.25rem; }
+                                .print-preview-container.cupom .text-sm, 
+                                .print-preview-container.cupom58 .text-sm { font-size: 0.8rem; }
+
                                 @media print {
-                                    body * { visibility: hidden; }
-                                    .print-container, .print-container * { visibility: visible; }
-                                    .print-container { 
-                                        position: absolute; 
-                                        left: 0; 
-                                        top: 0; 
-                                        width: 100%; 
-                                        box-shadow: none !important;
-                                        border: none !important;
-                                        padding: 0 !important;
+                                    @page { margin: 0; size: auto; }
+                                    html, body { 
+                                        margin: 0 !important; 
+                                        padding: 0 !important; 
+                                        height: auto !important;
+                                        overflow: visible !important;
+                                    }
+                                    
+                                    /* Esconde TUDO da interface */
+                                    body > * { display: none !important; }
+                                    
+                                    /* Mostra apenas o que queremos imprimir */
+                                    #root, #__next { display: block !important; }
+                                    .print-preview-container { 
+                                        display: block !important; 
+                                        position: static !important;
+                                        width: 100% !important;
                                         margin: 0 !important;
+                                        padding: 5mm !important;
+                                        border: none !important;
+                                        box-shadow: none !important;
+                                        float: none !important;
                                     }
+
+                                    .a4 { width: 210mm !important; padding: 10mm !important; }
+                                    .a5 { width: 148mm !important; padding: 8mm !important; }
+                                    .cupom { width: 80mm !important; padding: 2mm !important; }
+                                    .cupom58 { width: 58mm !important; padding: 1mm !important; }
+
                                     .no-print { display: none !important; }
-                                    
-                                    @page { margin: 1cm; }
-                                    
-                                    .print-container.a4 { width: 210mm; min-height: 297mm; }
-                                    .print-container.a5 { width: 148mm; min-height: 210mm; }
-                                    .print-container.cupom { 
-                                        width: 80mm; 
-                                        padding: 2mm !important;
-                                        font-size: 10px !important;
-                                    }
-                                    .print-container.cupom table { font-size: 9px !important; }
-                                    .print-container.cupom .text-2xl { font-size: 16px !important; }
-                                    .print-container.cupom .text-lg { font-size: 14px !important; }
-                                    .print-container.cupom .p-4 { padding: 8px !important; }
-                                    .print-container.cupom .grid-cols-2 { grid-template-cols: 1fr !important; }
                                 }
                             `}</style>
+
                             {/* INFORMAÇÕES DA EMPRESA */}
-                            <div className="flex justify-between items-start border-b-2 border-primary/20 pb-4">
+                            <div className="flex justify-between items-start border-b-2 border-primary/20 pb-4 mb-4">
                                 <div className="space-y-1">
-                                    <h1 className="text-2xl font-black text-primary uppercase tracking-tighter">{company?.nome_fantasia || 'Dourados Auto Peças'}</h1>
-                                    <p className="text-[10px] text-muted-foreground font-mono leading-none">
-                                        {company?.razao_social}<br />
-                                        CNPJ: {company?.cnpj || '00.000.000/0000-00'}<br />
-                                        {company?.logradouro}, {company?.numero} - {company?.bairro}<br />
-                                        {company?.cidade}/{company?.estado} - CEP: {company?.cep}
-                                    </p>
+                                    <h1 className="text-2xl font-black text-primary uppercase tracking-tighter leading-tight">
+                                        {company?.nome_fantasia || 'Dourados Auto Peças'}
+                                    </h1>
+                                    <div className="text-[10px] text-muted-foreground font-mono leading-tight">
+                                        {company?.razao_social && <div>{company.razao_social}</div>}
+                                        <div>CNPJ: {company?.cnpj || '00.000.000/0000-00'}</div>
+                                        <div>{company?.logradouro}, {company?.numero} - {company?.bairro}</div>
+                                        <div>{company?.cidade}/{company?.estado}</div>
+                                    </div>
                                 </div>
                                 <div className="text-right">
-                                    <span className="bg-primary text-white px-3 py-1 rounded-bl-lg font-black text-lg">RECIBO #{formatNumPedido(selectedVendaForReceipt.numero_pedido)}</span>
-                                    <p className="text-[10px] mt-1 font-bold">{new Date().toLocaleString('pt-BR')}</p>
+                                    <div className="bg-primary text-white px-3 py-1 rounded-bl-lg font-black text-sm md:text-lg whitespace-nowrap">
+                                        RECIBO #{formatNumPedido(selectedVendaForReceipt.numero_pedido)}
+                                    </div>
+                                    <p className="text-[9px] mt-1 font-bold">{new Date().toLocaleString('pt-BR')}</p>
                                 </div>
                             </div>
 
                             {/* INFO CLIENTE E VENDA */}
-                            <div className="grid grid-cols-2 gap-6 bg-muted/30 p-4 rounded-xl border border-primary/10">
+                            <div className={`grid ${printFormat.includes('cupom') ? 'grid-cols-1 gap-2' : 'grid-cols-2 gap-6'} bg-muted/30 p-4 rounded-xl border border-primary/10 mb-4`}>
                                 <div className="space-y-1">
-                                    <Label className="text-[9px] uppercase font-black text-primary/60">Informações do Cliente</Label>
-                                    <p className="text-sm font-bold">{selectedVendaForReceipt.clientes?.nome || 'CONSUMIDOR FINAL'}</p>
-                                    <p className="text-[10px] text-muted-foreground">DOC: {selectedVendaForReceipt.clientes?.documento || '---'}</p>
-                                    <p className="text-[10px] text-muted-foreground">TEL: {selectedVendaForReceipt.clientes?.telefone || '---'}</p>
+                                    <Label className="text-[8px] uppercase font-black text-primary/60">Cliente</Label>
+                                    <p className="text-sm font-bold leading-tight">{selectedVendaForReceipt.clientes?.nome || 'CONSUMIDOR FINAL'}</p>
+                                    {selectedVendaForReceipt.clientes?.documento && <p className="text-[10px] text-muted-foreground">DOC: {selectedVendaForReceipt.clientes.documento}</p>}
+                                    {selectedVendaForReceipt.clientes?.telefone && <p className="text-[10px] text-muted-foreground">TEL: {selectedVendaForReceipt.clientes.telefone}</p>}
                                 </div>
-                                <div className="space-y-1 border-l pl-4">
-                                    <Label className="text-[9px] uppercase font-black text-primary/60">Detalhes do Pedido</Label>
-                                    <p className="text-sm font-bold">Pagamento: {selectedVendaForReceipt.forma_pagamento || 'A DEFINIR'}</p>
-                                    <p className="text-sm font-bold">Vendedor: {selectedVendaForReceipt.atendentes?.nome || 'LOJA'}</p>
-                                    <p className="text-[10px] text-muted-foreground">Status: <span className="uppercase font-black text-primary">{selectedVendaForReceipt.status}</span></p>
+                                <div className={`space-y-1 ${printFormat.includes('cupom') ? 'border-t pt-2' : 'border-l pl-4'}`}>
+                                    <Label className="text-[8px] uppercase font-black text-primary/60">Venda</Label>
+                                    <p className="text-[11px] font-bold">Pagamento: {selectedVendaForReceipt.forma_pagamento || 'A DEFINIR'}</p>
+                                    <p className="text-[11px] font-bold">Vendedor: {selectedVendaForReceipt.atendentes?.nome || 'LOJA'}</p>
                                 </div>
                             </div>
 
                             {/* TABELA DE ITENS */}
-                            <div className="border-y-2 border-primary/10 py-4">
+                            <div className="border-y-2 border-primary/10 py-4 mb-4">
                                 <table className="w-full">
                                     <thead>
-                                        <tr className="text-left text-[11px] uppercase font-black text-primary/60 border-b">
-                                            <th className="pb-2">Produto / Descrição</th>
-                                            <th className="pb-2 text-center">Qtd</th>
-                                            <th className="pb-2 text-right">Unitário</th>
-                                            <th className="pb-2 text-right">Subtotal</th>
+                                        <tr className="text-left text-[10px] uppercase font-black text-primary/60 border-b">
+                                            <th className="pb-1">Item</th>
+                                            <th className="pb-1 text-center">Qtd</th>
+                                            {!printFormat.includes('cupom58') && <th className="pb-1 text-right">Unit.</th>}
+                                            <th className="pb-1 text-right">Total</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-primary/5">
                                         {selectedVendaForReceipt.itens?.map((i: any, idx: number) => (
-                                            <tr key={idx} className="text-sm">
-                                                <td className="py-2">
-                                                    <span className="font-bold">{i.produtos?.nome}</span>
-                                                    <br />
-                                                    <span className="text-[9px] font-mono text-muted-foreground uppercase">SKU: {i.produtos?.sku || '---'}</span>
+                                            <tr key={idx} className="text-[11px] md:text-sm">
+                                                <td className="py-2 pr-2">
+                                                    <div className="font-bold leading-tight">{i.produtos?.nome}</div>
+                                                    <div className="text-[9px] font-mono text-muted-foreground uppercase">SKU: {i.produtos?.sku || '---'}</div>
                                                 </td>
                                                 <td className="py-2 text-center font-bold">{i.quantidade}</td>
-                                                <td className="py-2 text-right">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(i.preco_unitario)}</td>
-                                                <td className="py-2 text-right font-black">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(i.subtotal)}</td>
+                                                {!printFormat.includes('cupom58') && (
+                                                    <td className="py-2 text-right">
+                                                        {new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2 }).format(i.preco_unitario)}
+                                                    </td>
+                                                )}
+                                                <td className="py-2 text-right font-black">
+                                                    {new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2 }).format(i.subtotal)}
+                                                </td>
                                             </tr>
                                         ))}
                                     </tbody>
@@ -973,25 +1002,32 @@ export function Vendas() {
 
                             {/* SEÇÃO DE ENTREGA (SE HOUVER) */}
                             {selectedVendaForReceipt.entrega && (
-                                <div className="bg-indigo-50 border border-indigo-100 p-4 rounded-xl flex items-center gap-4">
-                                    <Truck className="w-8 h-8 text-indigo-500 opacity-50" />
-                                    <div className="space-y-1">
-                                        <Label className="text-[9px] uppercase font-black text-indigo-600">Dados para Entrega</Label>
-                                        <p className="text-xs font-bold uppercase">{selectedVendaForReceipt.entrega.rua}, {selectedVendaForReceipt.entrega.numero}</p>
-                                        <p className="text-[10px] text-muted-foreground">{selectedVendaForReceipt.entrega.bairro} - {selectedVendaForReceipt.entrega.cidade}/{selectedVendaForReceipt.entrega.estado}</p>
-                                        <p className="text-[10px] font-bold">CONTATO: {selectedVendaForReceipt.entrega.contato}</p>
+                                <div className="bg-indigo-50 border border-indigo-100 p-3 rounded-xl flex items-center gap-3 mb-4">
+                                    <Truck className="w-6 h-6 text-indigo-500 opacity-50 shrink-0" />
+                                    <div className="space-y-0.5">
+                                        <Label className="text-[8px] uppercase font-black text-indigo-600">Entrega</Label>
+                                        <p className="text-[11px] font-bold uppercase leading-tight">
+                                            {selectedVendaForReceipt.entrega.rua}, {selectedVendaForReceipt.entrega.numero}
+                                        </p>
+                                        <p className="text-[9px] text-muted-foreground">
+                                            {selectedVendaForReceipt.entrega.bairro} - {selectedVendaForReceipt.entrega.cidade}/{selectedVendaForReceipt.entrega.estado}
+                                        </p>
                                     </div>
                                 </div>
                             )}
 
                             {/* TOTAIS E RODAPÉ */}
-                            <div className="flex flex-col items-end gap-2 pr-2">
-                                <div className="flex gap-10 items-center">
-                                    <span className="text-sm font-bold uppercase text-muted-foreground">Valor Total do Pedido</span>
-                                    <span className="text-3xl font-black text-primary">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(selectedVendaForReceipt.total)}</span>
+                            <div className="flex flex-col items-end gap-1">
+                                <div className="flex justify-between w-full items-center border-t border-primary/20 pt-2">
+                                    <span className="text-[10px] font-bold uppercase text-muted-foreground">Valor Total</span>
+                                    <span className={`${printFormat.includes('cupom') ? 'text-xl' : 'text-3xl'} font-black text-primary`}>
+                                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(selectedVendaForReceipt.total)}
+                                    </span>
                                 </div>
-                                <div className="w-full mt-10 border-t border-dashed pt-4 text-center">
-                                    <p className="text-[10px] text-muted-foreground uppercase font-black italic tracking-widest">{company?.mensagem_rodape || 'OBRIGADO PELA PREFERÊNCIA!'}</p>
+                                <div className="w-full mt-6 border-t border-dashed pt-4 text-center">
+                                    <p className="text-[9px] text-muted-foreground uppercase font-black italic tracking-widest leading-tight">
+                                        {company?.mensagem_rodape || 'OBRIGADO PELA PREFERÊNCIA!'}
+                                    </p>
                                 </div>
                             </div>
                         </div>
