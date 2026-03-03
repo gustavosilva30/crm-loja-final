@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Plus, Truck, Warehouse, Tags, Wallet, Save, Trash2, Users, Search, Database, MapPin, Layers, ChevronRight, Package } from "lucide-react"
+import { Plus, Truck, Warehouse, Tags, Wallet, Save, Trash2, Users, Search, Database, MapPin, Layers, ChevronRight, Package, Pencil } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { useAuthStore } from "@/store/authStore"
 import { ImportadorInteligente } from "@/components/ImportadorInteligente"
@@ -67,6 +67,7 @@ export function Configuracoes() {
         perm_config: false
     })
     const [editingFinCat, setEditingFinCat] = useState<{ id: string, nome: string } | null>(null)
+    const [editingCatId, setEditingCatId] = useState<string | null>(null)
     const [editingAtendente, setEditingAtendente] = useState<{ id: string, nome: string, cargo: string, cor_identificacao: string } | null>(null)
     const [isFinCatModalOpen, setIsFinCatModalOpen] = useState(false)
     const [isAtendenteModalOpen, setIsAtendenteModalOpen] = useState(false)
@@ -133,9 +134,19 @@ export function Configuracoes() {
     const handleAddCategory = async () => {
         if (!newCat.nome) return
         setLoading(true)
-        const { error } = await supabase.from('categorias').insert([newCat])
+
+        let error;
+        if (editingCatId) {
+            const { error: err } = await supabase.from('categorias').update(newCat).eq('id', editingCatId)
+            error = err
+        } else {
+            const { error: err } = await supabase.from('categorias').insert([newCat])
+            error = err
+        }
+
         if (!error) {
             setNewCat({ nome: '', largura_padrao: 0, altura_padrao: 0, comprimento_padrao: 0, peso_padrao: 0 });
+            setEditingCatId(null)
             await fetchData();
         } else alert("Erro ao salvar categoria: " + error.message)
         setLoading(false)
@@ -499,11 +510,21 @@ export function Configuracoes() {
                                     <Label className="text-[10px] uppercase font-bold text-amber-600">Peso Padrão (kg)</Label>
                                     <Input type="number" step="0.001" value={newCat.peso_padrao} onChange={e => setNewCat({ ...newCat, peso_padrao: parseFloat(e.target.value) })} />
                                 </div>
-                                <div className="col-span-2 flex items-end">
+                                <div className="col-span-1 flex items-end">
                                     <Button className="w-full bg-amber-600 hover:bg-amber-700 font-bold" onClick={handleAddCategory}>
-                                        <Plus className="w-4 h-4 mr-2" /> Cadastrar Categoria Logística
+                                        <Plus className="w-4 h-4 mr-2" /> {editingCatId ? "Atualizar" : "Cadastrar"}
                                     </Button>
                                 </div>
+                                {editingCatId && (
+                                    <div className="col-span-1 flex items-end">
+                                        <Button variant="outline" className="w-full" onClick={() => {
+                                            setEditingCatId(null)
+                                            setNewCat({ nome: '', largura_padrao: 0, altura_padrao: 0, comprimento_padrao: 0, peso_padrao: 0 })
+                                        }}>
+                                            Cancelar
+                                        </Button>
+                                    </div>
+                                )}
                             </div>
 
                             <Table>
@@ -512,7 +533,7 @@ export function Configuracoes() {
                                         <TableHead>Categoria</TableHead>
                                         <TableHead>Medidas (LxAxC)</TableHead>
                                         <TableHead>Peso</TableHead>
-                                        <TableHead className="text-right">Excluir</TableHead>
+                                        <TableHead className="text-right">Ações</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
@@ -523,7 +544,19 @@ export function Configuracoes() {
                                                 {item.largura_padrao} x {item.altura_padrao} x {item.comprimento_padrao} cm
                                             </TableCell>
                                             <TableCell className="text-xs font-bold">{item.peso_padrao} kg</TableCell>
-                                            <TableCell className="text-right">
+                                            <TableCell className="text-right flex justify-end gap-2">
+                                                <Button variant="ghost" size="icon" onClick={() => {
+                                                    setEditingCatId(item.id)
+                                                    setNewCat({
+                                                        nome: item.nome,
+                                                        largura_padrao: item.largura_padrao,
+                                                        altura_padrao: item.altura_padrao,
+                                                        comprimento_padrao: item.comprimento_padrao,
+                                                        peso_padrao: item.peso_padrao
+                                                    })
+                                                }} className="text-primary h-8 w-8">
+                                                    <Pencil className="w-4 h-4" />
+                                                </Button>
                                                 <Button variant="ghost" size="icon" onClick={() => deleteItem('categorias', item.id)} className="text-destructive h-8 w-8">
                                                     <Trash2 className="w-4 h-4" />
                                                 </Button>

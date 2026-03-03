@@ -75,6 +75,16 @@ export function Vendas() {
     })
 
     const [editingVendaId, setEditingVendaId] = useState<string | null>(null)
+    const [showDeliveryForm, setShowDeliveryForm] = useState(false)
+    const [vendaDelivery, setVendaDelivery] = useState({
+        contato: '',
+        rua: '',
+        numero: '',
+        bairro: '',
+        cidade: '',
+        estado: '',
+        cep: ''
+    })
 
     const [isFinalizarModalOpen, setIsFinalizarModalOpen] = useState(false)
     const [vendaParaFinalizar, setVendaParaFinalizar] = useState<any>(null)
@@ -193,6 +203,25 @@ export function Vendas() {
                 _search: ''
             })))
         }
+
+        // Fetch delivery if exists
+        const { data: entrega } = await supabase.from('entregas').select('*').eq('venda_id', venda.id).maybeSingle()
+        if (entrega) {
+            setShowDeliveryForm(true)
+            setVendaDelivery({
+                contato: entrega.cliente_contato || '',
+                rua: entrega.rua || '',
+                numero: entrega.numero || '',
+                bairro: entrega.bairro || '',
+                cidade: entrega.cidade || '',
+                estado: entrega.estado || '',
+                cep: entrega.cep || ''
+            })
+        } else {
+            setShowDeliveryForm(false)
+            setVendaDelivery({ contato: '', rua: '', numero: '', bairro: '', cidade: '', estado: '', cep: '' })
+        }
+
         setIsNovoPedidoModalOpen(true)
     }
 
@@ -302,9 +331,43 @@ export function Vendas() {
             const { error: iErr } = await supabase.from('vendas_itens').insert(itensToInsert)
             if (iErr) throw iErr
 
+            // 3. Salvar Entrega se solicitado
+            if (showDeliveryForm) {
+                // Upsert entrega
+                const deliveryObj = {
+                    venda_id: vendaId,
+                    cliente_nome: clientes.find(c => c.id === vendaForm.cliente_id)?.nome || 'Consumidor Final',
+                    cliente_contato: vendaDelivery.contato,
+                    rua: vendaDelivery.rua,
+                    numero: vendaDelivery.numero,
+                    bairro: vendaDelivery.bairro,
+                    cidade: vendaDelivery.cidade,
+                    estado: vendaDelivery.estado,
+                    cep: vendaDelivery.cep,
+                    status: 'Preparando',
+                    status_pagamento: vendaForm.status === 'Pago' ? 'Pago' : 'Pendente'
+                }
+
+                if (editingVendaId) {
+                    const { data: exEntrega } = await supabase.from('entregas').select('id').eq('venda_id', editingVendaId).maybeSingle()
+                    if (exEntrega) {
+                        await supabase.from('entregas').update(deliveryObj).eq('id', exEntrega.id)
+                    } else {
+                        await supabase.from('entregas').insert([deliveryObj])
+                    }
+                } else {
+                    await supabase.from('entregas').insert([deliveryObj])
+                }
+            } else if (editingVendaId) {
+                // Se desmarcou a entrega ao editar, removemos
+                await supabase.from('entregas').delete().eq('venda_id', editingVendaId)
+            }
+
             alert(editingVendaId ? 'Venda atualizada com sucesso!' : 'Venda realizada com sucesso!')
             setIsNovoPedidoModalOpen(false)
             setEditingVendaId(null)
+            setShowDeliveryForm(false)
+            setVendaDelivery({ contato: '', rua: '', numero: '', bairro: '', cidade: '', estado: '', cep: '' })
             setVendaItems([{ produto_id: '', quantidade: 1, preco_unitario: 0, subtotal: 0, _search: '' }])
             fetchVendas()
         } catch (err: any) {
@@ -695,6 +758,77 @@ export function Vendas() {
                                 </div>
                             </div>
                         ))}
+                    </div>
+
+                    <div className="space-y-4 pt-4 border-t">
+                        <div className="flex items-center gap-2 p-3 bg-indigo-500/5 border border-indigo-500/20 rounded-xl cursor-pointer hover:bg-indigo-500/10 transition-colors" onClick={() => setShowDeliveryForm(!showDeliveryForm)}>
+                            <Truck className={`w-5 h-5 ${showDeliveryForm ? 'text-indigo-600' : 'text-muted-foreground'}`} />
+                            <div className="flex-1">
+                                <Label className="font-black cursor-pointer">Enviar para Entrega?</Label>
+                                <p className="text-[10px] text-muted-foreground">Clique para preencher o endereço do cliente</p>
+                            </div>
+                            <input
+                                type="checkbox"
+                                checked={showDeliveryForm}
+                                onChange={e => setShowDeliveryForm(e.target.checked)}
+                                className="w-5 h-5 accent-indigo-600"
+                            />
+                        </div>
+
+                        {showDeliveryForm && (
+                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-4 bg-muted/30 border rounded-xl animate-in fade-in slide-in-from-top-2">
+                                <div className="md:col-span-2 space-y-1">
+                                    <Label className="text-[10px] uppercase font-black">Contato/WhatsApp</Label>
+                                    <Input
+                                        placeholder="(00) 00000-0000"
+                                        value={vendaDelivery.contato}
+                                        onChange={e => setVendaDelivery({ ...vendaDelivery, contato: e.target.value })}
+                                    />
+                                </div>
+                                <div className="md:col-span-2 space-y-1">
+                                    <Label className="text-[10px] uppercase font-black">Logradouro (Rua/Av)</Label>
+                                    <Input
+                                        placeholder="Ex: Rua das Flores"
+                                        value={vendaDelivery.rua}
+                                        onChange={e => setVendaDelivery({ ...vendaDelivery, rua: e.target.value })}
+                                    />
+                                </div>
+                                <div className="space-y-1">
+                                    <Label className="text-[10px] uppercase font-black">Número</Label>
+                                    <Input
+                                        placeholder="123"
+                                        value={vendaDelivery.numero}
+                                        onChange={e => setVendaDelivery({ ...vendaDelivery, numero: e.target.value })}
+                                    />
+                                </div>
+                                <div className="space-y-1">
+                                    <Label className="text-[10px] uppercase font-black">Bairro</Label>
+                                    <Input
+                                        placeholder="Ex: Centro"
+                                        value={vendaDelivery.bairro}
+                                        onChange={e => setVendaDelivery({ ...vendaDelivery, bairro: e.target.value })}
+                                    />
+                                </div>
+                                <div className="space-y-1">
+                                    <Label className="text-[10px] uppercase font-black">Cidade</Label>
+                                    <Input
+                                        placeholder="Cidade"
+                                        value={vendaDelivery.cidade}
+                                        onChange={e => setVendaDelivery({ ...vendaDelivery, cidade: e.target.value })}
+                                    />
+                                </div>
+                                <div className="space-y-1">
+                                    <Label className="text-[10px] uppercase font-black">UF</Label>
+                                    <Input
+                                        placeholder="UF"
+                                        maxLength={2}
+                                        className="uppercase"
+                                        value={vendaDelivery.estado}
+                                        onChange={e => setVendaDelivery({ ...vendaDelivery, estado: e.target.value })}
+                                    />
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     <div className="flex items-center justify-between pt-4 border-t">

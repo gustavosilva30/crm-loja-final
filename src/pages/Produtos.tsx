@@ -78,6 +78,15 @@ export function Produtos() {
   const [selectedCompat, setSelectedCompat] = useState<string | null>(null)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState<string | null>(null)
+  const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false)
+  const [newCat, setNewCat] = useState({
+    nome: '',
+    largura_padrao: 0,
+    altura_padrao: 0,
+    comprimento_padrao: 0,
+    peso_padrao: 0
+  })
+  const [editingCatId, setEditingCatId] = useState<string | null>(null)
   const { atendente } = useAuthStore()
 
   // Pagination State
@@ -86,7 +95,7 @@ export function Produtos() {
   const [selectedIds, setSelectedIds] = useState<string[]>([])
 
   // Resources
-  const [categorias, setCategorias] = useState<{ id: string, nome: string }[]>([])
+  const [categorias, setCategorias] = useState<any[]>([])
   const [locais, setLocais] = useState<{ id: string, nome: string, sigla?: string, parent_id: string | null }[]>([])
 
   // Form State
@@ -151,7 +160,7 @@ export function Produtos() {
   }
 
   const fetchCategorias = async () => {
-    const { data } = await supabase.from('categorias').select('id, nome')
+    const { data } = await supabase.from('categorias').select('*').order('nome')
     if (data) setCategorias(data)
   }
 
@@ -186,11 +195,11 @@ export function Produtos() {
         const fileName = `${Math.random()}.${fileExt}`
         const filePath = `product-images/${fileName}`
 
-        const { error: uploadError, data } = await supabase.storage
+        const { error: uploadError } = await supabase.storage
           .from('produtos')
           .upload(filePath, selectedFile)
 
-        if (uploadError) throw uploadError
+        if (uploadError) throw new Error(`Erro no upload: ${uploadError.message}`)
 
         const { data: { publicUrl } } = supabase.storage
           .from('produtos')
@@ -199,9 +208,11 @@ export function Produtos() {
         finalImageUrl = publicUrl
       }
 
+      const { localizacao, ...productData } = newProduto
+
       const { data: savedProd, error: prodError } = editingProduto
-        ? await supabase.from('produtos').update({ ...newProduto, imagem_url: finalImageUrl, categoria_id: newProduto.categoria_id || null }).eq('id', editingProduto.id).select().single()
-        : await supabase.from('produtos').insert([{ ...newProduto, imagem_url: finalImageUrl, categoria_id: newProduto.categoria_id || null, atendente_id: atendente?.id }]).select().single()
+        ? await supabase.from('produtos').update({ ...productData, imagem_url: finalImageUrl, categoria_id: productData.categoria_id || null }).eq('id', editingProduto.id).select().single()
+        : await supabase.from('produtos').insert([{ ...productData, imagem_url: finalImageUrl, categoria_id: productData.categoria_id || null, atendente_id: atendente?.id }]).select().single()
 
       if (prodError) throw prodError
 
@@ -267,9 +278,13 @@ export function Produtos() {
       setImagePreview(null)
       fetchProdutos()
       setIsModalOpen(false)
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error adding product:', err)
-      alert('Erro ao salvar produto. Verifique se o SKU está em uso.')
+      if (err.code === '23505') {
+        alert('Erro ao salvar produto: O SKU digitado já está em uso em outro produto.')
+      } else {
+        alert(`Erro ao salvar produto: ${err.message || 'Verifique os dados e tente novamente.'}`)
+      }
     } finally {
       setSubmitting(false)
     }
@@ -280,6 +295,35 @@ export function Produtos() {
     const { error } = await supabase.from('produtos').delete().eq('id', id)
     if (error) alert("Erro ao excluir produto. Verifique se ele possui vendas vinculadas.")
     else fetchProdutos()
+  }
+
+  const handleSaveCategory = async () => {
+    if (!newCat.nome) return
+
+    let error;
+    if (editingCatId) {
+      const { error: err } = await supabase.from('categorias').update(newCat).eq('id', editingCatId)
+      error = err
+    } else {
+      const { error: err } = await supabase.from('categorias').insert([newCat])
+      error = err
+    }
+
+    if (!error) {
+      setNewCat({ nome: '', largura_padrao: 0, altura_padrao: 0, comprimento_padrao: 0, peso_padrao: 0 })
+      setEditingCatId(null)
+      fetchCategorias()
+    } else {
+      alert("Erro ao salvar categoria: " + error.message)
+    }
+  }
+
+  const handleDeleteCategory = async (id: string) => {
+    if (confirm("Deseja realmente excluir esta categoria?")) {
+      const { error } = await supabase.from('categorias').delete().eq('id', id)
+      if (!error) fetchCategorias()
+      else alert("Erro ao excluir: " + error.message)
+    }
   }
 
   const startEdit = async (produto: Produto) => {
@@ -816,8 +860,34 @@ export function Produtos() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Categoria</Label>
-                  <Select value={newProduto.categoria_id} onChange={e => setNewProduto({ ...newProduto, categoria_id: e.target.value })}>
+                  <div className="flex items-center justify-between">
+                    <Label>Categoria</Label>
+                    <Button
+                      type="button"
+                      variant="link"
+                      className="h-auto p-0 text-[10px] text-primary hover:text-primary/80 gap-1 font-bold uppercase"
+                      onClick={() => setIsCategoryModalOpen(true)}
+                    >
+                      <Settings className="w-3 h-3" /> Gerenciar Categorias
+                    </Button>
+                  </div>
+                  <Select value={newProduto.categoria_id} onChange={e => {
+                    const selectedCatId = e.target.value;
+                    const cat = categorias.find(c => c.id === selectedCatId);
+                    if (cat) {
+                      // Herdar dimensões da categoria selecionada
+                      setNewProduto({
+                        ...newProduto,
+                        categoria_id: selectedCatId,
+                        largura_cm: cat.largura_padrao || newProduto.largura_cm,
+                        altura_cm: cat.altura_padrao || newProduto.altura_cm,
+                        comprimento_cm: cat.comprimento_padrao || newProduto.comprimento_padrao,
+                        peso_g: (cat.peso_padrao * 1000) || newProduto.peso_g // Convertendo kg para g
+                      });
+                    } else {
+                      setNewProduto({ ...newProduto, categoria_id: '' });
+                    }
+                  }}>
                     <option value="">Selecione categoria...</option>
                     {categorias.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
                   </Select>
@@ -985,6 +1055,97 @@ export function Produtos() {
         <div className="p-4 space-y-4">
           <div className="p-4 bg-muted/30 rounded-lg border border-border/50 text-sm whitespace-pre-wrap">{selectedCompat || "Nenhuma compatibilidade cadastrada."}</div>
           <div className="flex justify-end font-medium"><Button onClick={() => setIsCompatModalOpen(false)}>Fechar</Button></div>
+        </div>
+      </Modal>
+
+      <Modal isOpen={isCategoryModalOpen} onClose={() => setIsCategoryModalOpen(false)} title="Gerenciar Categorias" className="max-w-lg">
+        <div className="space-y-6">
+          <div className="p-4 border border-amber-500/10 rounded-xl bg-amber-500/5 space-y-4">
+            <h3 className="font-bold text-sm text-amber-600 flex items-center gap-2">
+              {editingCatId ? <Pencil className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+              {editingCatId ? "Editar Categoria" : "Nova Categoria"}
+            </h3>
+            <div className="space-y-2">
+              <Label>Nome da Categoria</Label>
+              <Input
+                placeholder="Ex: Motor, Suspensão..."
+                value={newCat.nome}
+                onChange={e => setNewCat({ ...newCat, nome: e.target.value })}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-[10px] uppercase">Largura (cm)</Label>
+                <Input type="number" step="0.1" value={newCat.largura_padrao} onChange={e => setNewCat({ ...newCat, largura_padrao: parseFloat(e.target.value) || 0 })} />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-[10px] uppercase">Altura (cm)</Label>
+                <Input type="number" step="0.1" value={newCat.altura_padrao} onChange={e => setNewCat({ ...newCat, altura_padrao: parseFloat(e.target.value) || 0 })} />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-[10px] uppercase">Compr. (cm)</Label>
+                <Input type="number" step="0.1" value={newCat.comprimento_padrao} onChange={e => setNewCat({ ...newCat, comprimento_padrao: parseFloat(e.target.value) || 0 })} />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-[10px] uppercase">Peso (kg)</Label>
+                <Input type="number" step="0.001" value={newCat.peso_padrao} onChange={e => setNewCat({ ...newCat, peso_padrao: parseFloat(e.target.value) || 0 })} />
+              </div>
+            </div>
+            <div className="flex gap-2">
+              {editingCatId && (
+                <Button variant="outline" className="flex-1" onClick={() => {
+                  setEditingCatId(null)
+                  setNewCat({ nome: '', largura_padrao: 0, altura_padrao: 0, comprimento_padrao: 0, peso_padrao: 0 })
+                }}>
+                  Cancelar Edição
+                </Button>
+              )}
+              <Button className="flex-1 bg-amber-600 hover:bg-amber-700 font-bold" onClick={handleSaveCategory}>
+                {editingCatId ? "Atualizar Categoria" : "Salvar Categoria"}
+              </Button>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label className="font-bold">Categorias Cadastradas</Label>
+            <div className="max-h-[300px] overflow-y-auto pr-2 space-y-2">
+              {categorias.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground text-xs italic">Nenhuma categoria cadastrada.</div>
+              ) : (
+                categorias.map((c: any) => (
+                  <div key={c.id} className="flex items-center justify-between p-3 bg-background border rounded-lg">
+                    <div className="flex flex-col">
+                      <span className="font-bold text-sm">{c.nome}</span>
+                      <span className="text-[10px] text-muted-foreground font-mono">
+                        {c.largura_padrao}x{c.altura_padrao}x{c.comprimento_padrao}cm | {c.peso_padrao}kg
+                      </span>
+                    </div>
+                    <div className="flex gap-1">
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-primary" onClick={() => {
+                        setEditingCatId(c.id)
+                        setNewCat({
+                          nome: c.nome,
+                          largura_padrao: c.largura_padrao,
+                          altura_padrao: c.altura_padrao,
+                          comprimento_padrao: c.comprimento_padrao,
+                          peso_padrao: c.peso_padrao
+                        })
+                      }}>
+                        <Pencil className="w-4 h-4" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleDeleteCategory(c.id)}>
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          <div className="flex justify-end border-t pt-4">
+            <Button onClick={() => setIsCategoryModalOpen(false)}>Fechar</Button>
+          </div>
         </div>
       </Modal>
     </div>

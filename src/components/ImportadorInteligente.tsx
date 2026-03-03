@@ -14,7 +14,7 @@ interface ColumnMapping {
 }
 
 const DB_TABLES = [
-    { value: 'produtos', label: 'Produtos', columns: ['nome', 'sku', 'part_number', 'marca', 'modelo', 'ano', 'preco', 'custo', 'estoque_atual', 'imagem_url', 'localizacao', 'ncm', 'cfop', 'cst', 'unidade_medida', 'descricao'] },
+    { value: 'produtos', label: 'Produtos', columns: ['nome', 'sku', 'part_number', 'marca', 'modelo', 'ano', 'preco', 'custo', 'estoque_atual', 'imagem_url', 'ncm', 'cfop', 'cst', 'unidade_medida', 'descricao'] },
     { value: 'clientes', label: 'Clientes', columns: ['nome', 'documento', 'telefone', 'email', 'endereco'] },
     { value: 'fornecedores', label: 'Fornecedores', columns: ['nome', 'documento', 'razao_social', 'email', 'telefone'] },
     { value: 'financeiro_lancamentos', label: 'Contas a Pagar/Receber', columns: ['tipo', 'descricao', 'valor', 'data_vencimento', 'data_pagamento', 'status', 'categoria_financeira'] },
@@ -193,16 +193,29 @@ export function ImportadorInteligente() {
             const obj: any = {}
             mappings.forEach(m => {
                 let val = row[m.fileColumn]
-                // Intelligent cleaning
-                if (m.dbColumn === 'preco' || m.dbColumn === 'custo' || m.dbColumn === 'estoque_atual' || m.dbColumn === 'valor') {
-                    val = typeof val === 'string' ? parseFloat(val.replace(/[^\d.,]/g, '').replace(',', '.')) : val
+
+                // Tratar valores vazios como null para não dar erro de tipo
+                if (val === undefined || val === null || val === '') {
+                    val = null
+                } else {
+                    // Limpeza inteligente para números
+                    if (['preco', 'custo', 'estoque_atual', 'valor', 'ano'].includes(m.dbColumn)) {
+                        if (typeof val === 'string') {
+                            val = parseFloat(val.replace(/[^\d.,-]/g, '').replace(',', '.'))
+                        }
+                        if (isNaN(val)) val = 0
+                    }
                 }
-                obj[m.dbColumn] = val
+
+                if (val !== null || m.dbColumn === 'sku' || m.dbColumn === 'nome') {
+                    obj[m.dbColumn] = val
+                }
             })
 
-            // Generate SKU if missing for products
-            if (selectedTable === 'produtos' && !obj.sku) {
-                obj.sku = `IMP-${Math.random().toString(36).substr(2, 9).toUpperCase()}`
+            // Garantir campos obrigatórios mínimos
+            if (selectedTable === 'produtos') {
+                if (!obj.sku) obj.sku = `IMP-${Math.random().toString(36).substr(2, 6).toUpperCase()}`
+                if (!obj.nome) obj.nome = 'Produto Importado s/ Nome'
             }
 
             return obj
