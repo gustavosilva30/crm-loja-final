@@ -26,7 +26,7 @@ export function ImportadorInteligente() {
     const [selectedTable, setSelectedTable] = useState('')
     const [mappings, setMappings] = useState<ColumnMapping[]>([])
     const [isProcessing, setIsProcessing] = useState(false)
-    const [result, setResult] = useState<{ success: number, error: number } | null>(null)
+    const [result, setResult] = useState<{ success: number, error: number, message?: string } | null>(null)
     const [xmlMode, setXmlMode] = useState<'venda' | 'pagar' | 'receber' | 'produtos' | 'guardar' | null>(null)
     const [xmlMeta, setXmlMeta] = useState<any>(null)
     const [xmlRaw, setXmlRaw] = useState<string>('')
@@ -188,6 +188,7 @@ export function ImportadorInteligente() {
 
         let success = 0
         let error = 0
+        let errorMessage = ''
 
         const itemsToInsert = fileData.map(row => {
             const obj: any = {}
@@ -249,12 +250,13 @@ export function ImportadorInteligente() {
             if (insertError) {
                 console.error('Import error:', insertError)
                 error += chunk.length
+                errorMessage = insertError.message || 'Erro desconhecido ao inserir dados.'
             } else {
                 success += chunk.length
             }
         }
 
-        setResult({ success, error })
+        setResult({ success, error, message: errorMessage })
         setIsProcessing(false)
     }
 
@@ -352,15 +354,17 @@ export function ImportadorInteligente() {
                     </div>
 
                     {result && (
-                        <div className={`p-4 rounded-lg flex items-center gap-3 ${result.error === 0 ? 'bg-emerald-500/20 text-emerald-600' : 'bg-amber-500/20 text-amber-600'}`}>
-                            {result.error === 0 ? <Check className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />}
-                            <div>
-                                <p className="font-bold">Resultado da Importação</p>
-                                <p className="text-sm">{result.success} processados com sucesso. {result.error} falhas.</p>
+                        <div className={`p-4 rounded-xl border animate-in zoom-in-95 ${result.error > 0 ? 'bg-destructive/10 border-destructive/20' : 'bg-emerald-500/10 border-emerald-500/20'}`}>
+                            <div className="flex items-center gap-3">
+                                {result.error > 0 ? <AlertCircle className="w-6 h-6 text-destructive" /> : <Check className="w-6 h-6 text-emerald-600" />}
+                                <div>
+                                    <h4 className="font-bold">Resultado da Importação</h4>
+                                    <p className="text-sm">{result.success} processados com sucesso. {result.error} falhas.</p>
+                                    {result.message && <p className="text-xs text-destructive mt-1 font-mono"><b>Motivo da Falha:</b> {result.message}</p>}
+                                </div>
                             </div>
                         </div>
                     )}
-
                     {fileData.length > 0 && !result && (
                         <div className="pt-6 border-t">
                             <Label className="mb-2 block">Prévia dos Dados (Primeiras 5 linhas)</Label>
