@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Select } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Upload, FileType, Check, AlertCircle, Loader2 } from "lucide-react"
+import { Upload, FileType, Check, AlertCircle, Loader2, Maximize2 } from "lucide-react"
+import { ImageViewer } from "./ImageViewer"
 import { supabase } from "@/lib/supabase"
 
 interface ColumnMapping {
@@ -26,10 +27,12 @@ export function ImportadorInteligente() {
     const [selectedTable, setSelectedTable] = useState('')
     const [mappings, setMappings] = useState<ColumnMapping[]>([])
     const [isProcessing, setIsProcessing] = useState(false)
-    const [result, setResult] = useState<{ success: number, error: number, message?: string } | null>(null)
+    const [result, setResult] = useState<{ success: number, error: number, skipped: number, message?: string } | null>(null)
     const [xmlMode, setXmlMode] = useState<'venda' | 'pagar' | 'receber' | 'produtos' | 'guardar' | null>(null)
     const [xmlMeta, setXmlMeta] = useState<any>(null)
     const [xmlRaw, setXmlRaw] = useState<string>('')
+    const [selectedImage, setSelectedImage] = useState<string | null>(null)
+    const [isViewerOpen, setIsViewerOpen] = useState(false)
 
     const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0]
@@ -164,7 +167,7 @@ export function ImportadorInteligente() {
                 data_emissao: xmlMeta.data
             })
             if (!archiveError) {
-                setResult({ success: 1, error: 0 })
+                setResult({ success: 1, error: 0, skipped: 0 })
                 setIsProcessing(false)
                 return
             }
@@ -180,7 +183,7 @@ export function ImportadorInteligente() {
                 status: 'Pendente'
             })
             if (!finError) {
-                setResult({ success: 1, error: 0 })
+                setResult({ success: 1, error: 0, skipped: 0 })
                 setIsProcessing(false)
                 return
             }
@@ -188,6 +191,7 @@ export function ImportadorInteligente() {
 
         let success = 0
         let error = 0
+        let skipped = 0
         let errorMessage = ''
 
         const itemsToInsert = fileData.map(row => {
@@ -223,6 +227,28 @@ export function ImportadorInteligente() {
             return obj
         })
 
+        let filteredItems = itemsToInsert
+
+        // 4. Skip duplicates for specific tables
+        if (selectedTable === 'produtos') {
+            try {
+                const { data: existingProducts } = await supabase.from('produtos').select('sku')
+                if (existingProducts) {
+                    const existingSkus = new Set(existingProducts.map(p => String(p.sku).trim().toLowerCase()))
+
+                    const originalCount = filteredItems.length
+                    filteredItems = filteredItems.filter(item => {
+                        if (!item.sku) return true // Allow items without SKU to be processed (they will get an AUTO SKU later)
+                        const itemSku = String(item.sku).trim().toLowerCase()
+                        return !existingSkus.has(itemSku)
+                    })
+                    skipped = originalCount - filteredItems.length
+                }
+            } catch (err) {
+                console.error('Erro ao verificar duplicados:', err)
+            }
+        }
+
         // 3. Handling Sale Creation from XML
         if (xmlMode === 'venda' && xmlMeta) {
             const { data: venda, error: vError } = await supabase.from('vendas').insert({
@@ -245,8 +271,8 @@ export function ImportadorInteligente() {
 
         // Chunking inserts to avoid payload limits
         const chunkSize = 100
-        for (let i = 0; i < itemsToInsert.length; i += chunkSize) {
-            const chunk = itemsToInsert.slice(i, i + chunkSize)
+        for (let i = 0; i < filteredItems.length; i += chunkSize) {
+            const chunk = filteredItems.slice(i, i + chunkSize)
             const { error: insertError } = await supabase.from(selectedTable).insert(chunk)
             if (insertError) {
                 console.error('Import error:', insertError)
@@ -257,7 +283,7 @@ export function ImportadorInteligente() {
             }
         }
 
-        setResult({ success, error, message: errorMessage })
+        setResult({ success, error, skipped, message: errorMessage })
         setIsProcessing(false)
     }
 
@@ -360,7 +386,11 @@ export function ImportadorInteligente() {
                                 {result.error > 0 ? <AlertCircle className="w-6 h-6 text-destructive" /> : <Check className="w-6 h-6 text-emerald-600" />}
                                 <div>
                                     <h4 className="font-bold">Resultado da Importação</h4>
-                                    <p className="text-sm">{result.success} processados com sucesso. {result.error} falhas.</p>
+                                    <p className="text-sm">
+                                        {result.success} processados com sucesso.
+                                        {result.skipped > 0 && <span className="text-amber-600 font-bold ml-1"> {result.skipped} ignorados (já existiam).</span>}
+                                        {result.error > 0 && <span className="text-destructive font-bold ml-1"> {result.error} falhas.</span>}
+                                    </p>
                                     {result.message && <p className="text-xs text-destructive mt-1 font-mono"><b>Motivo da Falha:</b> {result.message}</p>}
                                 </div>
                             </div>
@@ -386,7 +416,18 @@ export function ImportadorInteligente() {
                                                         <TableCell key={h} className="text-xs truncate max-w-[150px]">
                                                             {isImg ? (
                                                                 <div className="flex items-center gap-2">
-                                                                    <img src={val} alt="Preview" className="w-8 h-8 rounded border object-cover" onError={(e) => (e.currentTarget.style.display = 'none')} />
+                                                                    <div
+                                                                        className="relative w-8 h-8 rounded border overflow-hidden cursor-zoom-in group"
+                                                                        onClick={() => {
+                                                                            setSelectedImage(val)
+                                                                            setIsViewerOpen(true)
+                                                                        }}
+                                                                    >
+                                                                        <img src={val} alt="Preview" className="w-full h-full object-cover transition-transform group-hover:scale-110" onError={(e) => (e.currentTarget.style.display = 'none')} />
+                                                                        <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                                                            <Maximize2 className="w-3 h-3 text-white" />
+                                                                        </div>
+                                                                    </div>
                                                                     <span className="truncate">{val}</span>
                                                                 </div>
                                                             ) : val}
@@ -402,6 +443,12 @@ export function ImportadorInteligente() {
                     )}
                 </CardContent>
             </Card>
+
+            <ImageViewer
+                src={selectedImage}
+                isOpen={isViewerOpen}
+                onClose={() => setIsViewerOpen(false)}
+            />
         </div>
     )
 }

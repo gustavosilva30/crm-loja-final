@@ -7,10 +7,11 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select } from "@/components/ui/select"
 import { Modal } from "@/components/ui/modal"
-import { Plus, Search, Filter, LayoutGrid, List, Package, Trash2, Pencil, ShoppingCart, FileText, Camera, Upload, X, Shield, Activity, Box, Tag, Ruler, Truck, Info, Settings } from "lucide-react"
+import { Plus, Search, Filter, LayoutGrid, List, Package, Trash2, Pencil, ShoppingCart, FileText, Camera, Upload, X, Shield, Activity, Box, Tag, Ruler, Truck, Info, Settings, Maximize2 } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { supabase } from "@/lib/supabase"
 import { useAuthStore } from "@/store/authStore"
+import { ImageViewer } from "@/components/ImageViewer"
 
 interface Produto {
   id: string
@@ -79,6 +80,10 @@ export function Produtos() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState<string | null>(null)
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false)
+
+  // Image Viewer State
+  const [selectedImage, setSelectedImage] = useState<string | null>(null)
+  const [isViewerOpen, setIsViewerOpen] = useState(false)
   const [newCat, setNewCat] = useState({
     nome: '',
     largura_padrao: 0,
@@ -709,8 +714,23 @@ export function Produtos() {
                     <TableCell className="font-mono text-xs">{produto.sku}</TableCell>
                     <TableCell>
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded border bg-muted overflow-hidden flex items-center justify-center shrink-0">
-                          {produto.imagem_url ? <img src={produto.imagem_url} alt={produto.nome} className="w-full h-full object-cover" /> : <Package className="w-5 h-5 text-muted-foreground/40" />}
+                        <div
+                          className="w-10 h-10 rounded border bg-muted overflow-hidden flex items-center justify-center shrink-0 cursor-zoom-in group/img relative"
+                          onClick={() => {
+                            if (produto.imagem_url) {
+                              setSelectedImage(produto.imagem_url)
+                              setIsViewerOpen(true)
+                            }
+                          }}
+                        >
+                          {produto.imagem_url ? (
+                            <>
+                              <img src={produto.imagem_url} alt={produto.nome} className="w-full h-full object-cover transition-transform group-hover/img:scale-110" />
+                              <div className="absolute inset-0 bg-black/20 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center">
+                                <Maximize2 className="w-4 h-4 text-white" />
+                              </div>
+                            </>
+                          ) : <Package className="w-5 h-5 text-muted-foreground/40" />}
                         </div>
                         <div>
                           <div className="font-medium flex items-center gap-2">
@@ -769,9 +789,26 @@ export function Produtos() {
                       }}
                     />
                   </div>
-                  <div className="h-40 bg-muted/30 flex items-center justify-center border-b border-border/10 relative overflow-hidden">
-                    {produto.imagem_url ? <img src={produto.imagem_url} alt={produto.nome} className="w-full h-full object-cover transition-transform hover:scale-105 duration-300" /> : <Package className="w-12 h-12 text-muted-foreground/20" />}
-                    <div className="absolute top-2 right-2 flex flex-col gap-1 items-end">
+                  <div
+                    className="h-40 bg-muted/30 flex items-center justify-center border-b border-border/10 relative overflow-hidden cursor-zoom-in group/img"
+                    onClick={() => {
+                      if (produto.imagem_url) {
+                        setSelectedImage(produto.imagem_url)
+                        setIsViewerOpen(true)
+                      }
+                    }}
+                  >
+                    {produto.imagem_url ? (
+                      <>
+                        <img src={produto.imagem_url} alt={produto.nome} className="w-full h-full object-cover transition-transform group-hover/img:scale-110 duration-500" />
+                        <div className="absolute inset-0 bg-black/20 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-[2px]">
+                          <div className="bg-white/20 p-2 rounded-full backdrop-blur-md">
+                            <Maximize2 className="w-6 h-6 text-white" />
+                          </div>
+                        </div>
+                      </>
+                    ) : <Package className="w-12 h-12 text-muted-foreground/20" />}
+                    <div className="absolute top-2 right-2 flex flex-col gap-1 items-end pointer-events-none">
                       {!!produto.meli_id && <Badge variant="secondary" className="text-[10px] shadow-sm bg-yellow-500/20 text-yellow-700 border-yellow-500/20">MELI</Badge>}
                       {!!(produto.quantidade_orcamento && produto.quantidade_orcamento > 0) && (
                         <Badge variant="outline" className="text-[10px] shadow-sm border-blue-500 text-blue-500 bg-blue-500/10 backdrop-blur-sm">{produto.quantidade_orcamento} em Orçamento</Badge>
@@ -940,9 +977,22 @@ export function Produtos() {
               <div className="p-4 border border-dashed rounded-lg bg-muted/10">
                 <Label className="mb-2 block">Imagens do Produto</Label>
                 <div className="flex items-center gap-4">
-                  <div className="relative w-24 h-24 rounded border flex items-center justify-center bg-background overflow-hidden group">
+                  <div
+                    className="relative w-24 h-24 rounded border flex items-center justify-center bg-background overflow-hidden group cursor-zoom-in"
+                    onClick={() => {
+                      if (imagePreview) {
+                        setSelectedImage(imagePreview)
+                        setIsViewerOpen(true)
+                      }
+                    }}
+                  >
                     {imagePreview ? (
-                      <img src={imagePreview} className="w-full h-full object-cover" />
+                      <>
+                        <img src={imagePreview} className="w-full h-full object-cover transition-transform group-hover:scale-110" />
+                        <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                          <Maximize2 className="w-4 h-4 text-white" />
+                        </div>
+                      </>
                     ) : (
                       <Camera className="w-8 h-8 text-muted-foreground/30" />
                     )}
@@ -1157,6 +1207,12 @@ export function Produtos() {
           </div>
         </div>
       </Modal>
+
+      <ImageViewer
+        src={selectedImage}
+        isOpen={isViewerOpen}
+        onClose={() => setIsViewerOpen(false)}
+      />
     </div>
   )
 }

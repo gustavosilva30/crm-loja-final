@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Plus, Truck, Warehouse, Tags, Wallet, Save, Trash2, Users, Search, Database, MapPin, Layers, ChevronRight, Package, Pencil } from "lucide-react"
+import { Plus, Truck, Warehouse, Tags, Wallet, Save, Trash2, Users, Search, Database, MapPin, Layers, ChevronRight, Package, Pencil, ShoppingCart } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { useAuthStore } from "@/store/authStore"
 import { ImportadorInteligente } from "@/components/ImportadorInteligente"
@@ -14,6 +14,7 @@ import { Select } from "@/components/ui/select"
 import { Modal } from "@/components/ui/modal"
 
 export function Configuracoes() {
+    const { atendente } = useAuthStore()
     const [activeTab, setActiveTab] = useState("shipping")
     const [loading, setLoading] = useState(false)
 
@@ -24,6 +25,7 @@ export function Configuracoes() {
     const [financeCategories, setFinanceCategories] = useState<any[]>([])
     const [atendentes, setAtendentes] = useState<any[]>([])
     const [locations, setLocations] = useState<any[]>([])
+    const [mlAccounts, setMlAccounts] = useState<any[]>([])
     const [selectedLocationProducts, setSelectedLocationProducts] = useState<any[]>([])
     const [isProductListModalOpen, setIsProductListModalOpen] = useState(false)
     const [viewingLocationName, setViewingLocationName] = useState("")
@@ -81,6 +83,7 @@ export function Configuracoes() {
         const { data: at } = await supabase.from('atendentes').select('*').order('nome')
         const { data: comp } = await supabase.from('configuracoes_empresa').select('*').single()
         const { data: loc } = await supabase.from('localizacoes').select('*').order('nome')
+        const { data: ml } = await supabase.from('mercadolivre_accounts').select('*').order('ml_nickname')
 
         if (s) setShipping(s)
         if (sup) setSuppliers(sup)
@@ -89,6 +92,7 @@ export function Configuracoes() {
         if (at) setAtendentes(at)
         if (comp) setCompany(comp)
         if (loc) setLocations(loc)
+        if (ml) setMlAccounts(ml)
     }
 
     useEffect(() => { fetchData() }, [])
@@ -239,6 +243,42 @@ export function Configuracoes() {
         setLoading(false)
     }
 
+    const handleMLConnect = async () => {
+        if (!atendente?.id) return alert("Usuário não identificado.");
+        setLoading(true);
+        try {
+            const apiBase = "http://localhost:8000"; // Ajuste conforme necessário
+            const res = await fetch(`${apiBase}/api/integrations/ml/connect?x_system_user_id=${atendente.id}`);
+            if (!res.ok) throw new Error("Erro ao gerar URL de conexão");
+            const data = await res.json();
+            if (data.authUrl) {
+                window.location.href = data.authUrl;
+            }
+        } catch (err: any) {
+            alert("Erro ao conectar ML: " + err.message);
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    const handleMLRefresh = async (accountId: string) => {
+        if (!atendente?.id) return;
+        setLoading(true);
+        try {
+            const apiBase = "http://localhost:8000";
+            const res = await fetch(`${apiBase}/api/integrations/ml/refresh?account_id=${accountId}&x_system_user_id=${atendente.id}`, {
+                method: 'POST'
+            });
+            if (!res.ok) throw new Error("Erro ao renovar token");
+            await fetchData();
+            alert("Token renovado com sucesso!");
+        } catch (err: any) {
+            alert("Erro ao renovar: " + err.message);
+        } finally {
+            setLoading(false);
+        }
+    }
+
     const deleteItem = async (table: string, id: string) => {
         if (confirm("Deseja realmente excluir este item?")) {
             await supabase.from(table).delete().eq('id', id)
@@ -262,6 +302,7 @@ export function Configuracoes() {
                     <TabsTrigger value="staff" className="gap-2 flex-grow sm:flex-grow-0"><Users className="w-4 h-4" /> Atendentes</TabsTrigger>
                     <TabsTrigger value="company" className="gap-2 flex-grow sm:flex-grow-0"><Save className="w-4 h-4" /> Dados da Empresa</TabsTrigger>
                     <TabsTrigger value="locations" className="gap-2 flex-grow sm:flex-grow-0"><MapPin className="w-4 h-4" /> Localizações (WMS)</TabsTrigger>
+                    <TabsTrigger value="mercadolivre" className="gap-2 flex-grow sm:flex-grow-0 bg-yellow-400/10 text-yellow-700 data-[state=active]:bg-yellow-400 font-bold"><ShoppingCart className="w-4 h-4" /> Mercado Livre</TabsTrigger>
                     <TabsTrigger value="import" className="gap-2 flex-grow sm:flex-grow-0"><Database className="w-4 h-4" /> Importador Inteligente</TabsTrigger>
                 </TabsList>
 
@@ -874,6 +915,68 @@ export function Configuracoes() {
                         </CardContent>
                     </Card>
                 </TabsContent>
+                {/* MERCADO LIVRE */}
+                <TabsContent value="mercadolivre">
+                    <Card className="border-yellow-500/20 bg-yellow-500/5">
+                        <CardHeader className="flex flex-row items-center justify-between">
+                            <div>
+                                <CardTitle className="text-yellow-700 flex items-center gap-2">
+                                    <ShoppingCart className="w-5 h-5" /> Integração Mercado Livre
+                                </CardTitle>
+                                <CardDescription>Conecte várias contas para gerenciar vendas e anúncios.</CardDescription>
+                            </div>
+                            <Button className="bg-yellow-500 hover:bg-yellow-600 font-bold text-yellow-950" onClick={handleMLConnect} disabled={loading}>
+                                <Plus className="w-4 h-4 mr-2" /> Conectar Nova Conta
+                            </Button>
+                        </CardHeader>
+                        <CardContent className="space-y-6">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>Apelido / Conta</TableHead>
+                                        <TableHead>ML User ID</TableHead>
+                                        <TableHead>Expiração do Token</TableHead>
+                                        <TableHead>Status</TableHead>
+                                        <TableHead className="text-right">Ações</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {mlAccounts.length === 0 ? (
+                                        <TableRow>
+                                            <TableCell colSpan={5} className="text-center py-8 text-muted-foreground italic">
+                                                Nenhuma conta conectada. Clique no botão acima para conectar.
+                                            </TableCell>
+                                        </TableRow>
+                                    ) : mlAccounts.map(account => (
+                                        <TableRow key={account.id}>
+                                            <TableCell className="font-black text-yellow-800 uppercase italic tracking-wider">
+                                                {account.ml_nickname || "Sem apelido"}
+                                            </TableCell>
+                                            <TableCell className="font-mono text-xs">{account.ml_user_id}</TableCell>
+                                            <TableCell className="text-xs">
+                                                {new Date(account.token_expires_at).toLocaleString('pt-BR')}
+                                            </TableCell>
+                                            <TableCell>
+                                                <Badge className={account.is_active ? "bg-emerald-500" : "bg-destructive"}>
+                                                    {account.is_active ? "Ativa" : "Inativa"}
+                                                </Badge>
+                                            </TableCell>
+                                            <TableCell className="text-right flex justify-end gap-2">
+                                                <Button variant="outline" size="sm" className="h-8 text-[10px] font-bold border-yellow-500/30 text-yellow-700" onClick={() => handleMLRefresh(account.id)}>
+                                                    RENOVAR TOKEN
+                                                </Button>
+                                                <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => deleteItem('mercadolivre_accounts', account.id)}>
+                                                    <Trash2 className="w-4 h-4" />
+                                                </Button>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+
                 {/* IMPORTADOR */}
                 <TabsContent value="import">
                     <ImportadorInteligente />
