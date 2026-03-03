@@ -905,10 +905,10 @@ export function Vendas() {
                                     .print-preview-container { 
                                         display: block !important; 
                                         position: static !important;
-                                        width: 100% !important;
                                         margin: 0 !important;
                                         border: none !important;
                                         background: white !important;
+                                        overflow: hidden !important;
                                     }
                                     .a4 { width: 210mm !important; }
                                     .a5 { width: 148mm !important; }
@@ -958,12 +958,14 @@ export function Vendas() {
                                         <p><span className="font-bold">Telefone:</span> {selectedVendaForReceipt.clientes?.telefone || '---'}</p>
 
                                         {selectedVendaForReceipt.entrega && (
-                                            <div className="mt-2 border border-black p-1 bg-gray-50">
-                                                <p className="font-bold text-center underline mb-1">DADOS PARA ENTREGA</p>
-                                                <p><span className="font-bold">Endereço:</span> {selectedVendaForReceipt.entrega.rua}, {selectedVendaForReceipt.entrega.numero}</p>
-                                                <p><span className="font-bold">Bairro:</span> {selectedVendaForReceipt.entrega.bairro}</p>
-                                                <p><span className="font-bold">Cidade:</span> {selectedVendaForReceipt.entrega.cidade}/{selectedVendaForReceipt.entrega.estado}</p>
-                                                <p><span className="font-bold">Status:</span> {selectedVendaForReceipt.status === 'Pago' || selectedVendaForReceipt.status === 'Entregue' ? '✅ JÁ ESTÁ PAGO' : '💰 A RECEBER'}</p>
+                                            <div className="mt-2 pt-1 border-t border-black" style={{ backgroundColor: '#f9f9f9' }}>
+                                                <p className="font-bold text-center underline mb-1">ENTREGA</p>
+                                                <p className="text-black"><span className="font-bold">End:</span> {selectedVendaForReceipt.entrega.rua}, {selectedVendaForReceipt.entrega.numero}</p>
+                                                <p className="text-black"><span className="font-bold">Bairro:</span> {selectedVendaForReceipt.entrega.bairro}</p>
+                                                <p className="text-black"><span className="font-bold">Cidade:</span> {selectedVendaForReceipt.entrega.cidade}</p>
+                                                <p className="font-bold text-center mt-1 border border-black uppercase text-[12px] bg-white text-black">
+                                                    {selectedVendaForReceipt.status === 'Pago' || selectedVendaForReceipt.status === 'Entregue' ? '✅ JÁ ESTÁ PAGO' : '💰 COBRAR NA ENTREGA'}
+                                                </p>
                                             </div>
                                         )}
                                         {!selectedVendaForReceipt.entrega && (
@@ -1116,6 +1118,25 @@ export function Vendas() {
                                                     {selectedVendaForReceipt.status === 'Pago' || selectedVendaForReceipt.status === 'Entregue' ? '✅ PEDIDO PAGO' : '⚠️ AGUARDANDO PAGAMENTO'}
                                                 </p>
                                             </div>
+
+                                            {selectedVendaForReceipt.entrega && (
+                                                <div className="formal-section">
+                                                    <p className="formal-label">Informações de Entrega</p>
+                                                    <div className="mt-2 border border-black p-3 text-black" style={{ backgroundColor: '#f9f9f9' }}>
+                                                        <div className="grid grid-cols-2 text-[11px] gap-2">
+                                                            <p><span className="font-bold">Nome:</span> {selectedVendaForReceipt.clientes?.nome}</p>
+                                                            <p><span className="font-bold">Telefone:</span> {selectedVendaForReceipt.entrega.contato || selectedVendaForReceipt.clientes?.telefone}</p>
+                                                            <p className="col-span-2"><span className="font-bold">Endereço:</span> {selectedVendaForReceipt.entrega.rua}, {selectedVendaForReceipt.entrega.numero}</p>
+                                                            <p><span className="font-bold">Bairro:</span> {selectedVendaForReceipt.entrega.bairro}</p>
+                                                            <p><span className="font-bold">Cidade:</span> {selectedVendaForReceipt.entrega.cidade}/{selectedVendaForReceipt.entrega.estado}</p>
+                                                            <p><span className="font-bold">CEP:</span> {selectedVendaForReceipt.entrega.cep}</p>
+                                                            <p className="col-span-2 font-black border-t border-black pt-1 mt-1 text-center" style={{ fontSize: '12px' }}>
+                                                                STATUS: {selectedVendaForReceipt.status === 'Pago' || selectedVendaForReceipt.status === 'Entregue' ? '✅ PAGAMENTO CONFIRMADO' : '💰 COBRAR VALOR TOTAL NA ENTREGA'}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
                                         <div className="space-y-1">
                                             <div className="formal-section text-right">
