@@ -14,7 +14,7 @@ interface ColumnMapping {
 }
 
 const DB_TABLES = [
-    { value: 'produtos', label: 'Produtos', columns: ['nome', 'sku', 'part_number', 'marca', 'modelo', 'ano', 'preco', 'custo', 'estoque_atual', 'imagem_url', 'ncm', 'cfop', 'cst', 'unidade_medida', 'descricao', 'sku_ml', 'localizacao_id'] },
+    { value: 'produtos', label: 'Produtos', columns: ['nome', 'sku', 'part_number', 'marca', 'modelo', 'ano', 'preco', 'custo', 'estoque_atual', 'imagem_url', 'ncm', 'cfop', 'cst', 'unidade_medida', 'descricao', 'ML_ID', 'localizacao_id'] },
     { value: 'clientes', label: 'Clientes', columns: ['nome', 'documento', 'telefone', 'email', 'endereco'] },
     { value: 'fornecedores', label: 'Fornecedores', columns: ['nome', 'documento', 'razao_social', 'email', 'telefone'] },
     { value: 'financeiro_lancamentos', label: 'Contas a Pagar/Receber', columns: ['tipo', 'descricao', 'valor', 'data_vencimento', 'data_pagamento', 'status', 'categoria_financeira'] },
@@ -209,14 +209,16 @@ export function ImportadorInteligente() {
                 }
 
                 if (val !== null || m.dbColumn === 'sku' || m.dbColumn === 'nome') {
-                    obj[m.dbColumn] = val
+                    const dbCol = m.dbColumn === 'ML_ID' ? 'sku_ml' : m.dbColumn
+                    obj[dbCol] = val
                 }
             })
 
-            // Garantir campos obrigatórios mínimos
+            // Garantir campos obrigatórios mínimos e evitar duplicidade de SKU no lote
             if (selectedTable === 'produtos') {
-                if (!obj.sku) obj.sku = `IMP-${Math.random().toString(36).substr(2, 6).toUpperCase()}`
-                if (!obj.nome) obj.nome = 'Produto Importado s/ Nome'
+                if (!obj.sku) {
+                    obj.sku = `IMP-${Math.random().toString(36).substr(2, 6).toUpperCase()}`
+                }
             }
 
             return obj
@@ -325,7 +327,7 @@ export function ImportadorInteligente() {
                                     <p className="text-[10px] uppercase font-black text-muted-foreground mb-4">Relacione as colunas da sua planilha com o sistema:</p>
                                     {DB_TABLES.find(t => t.value === selectedTable)?.columns.map(dbCol => (
                                         <div key={dbCol} className="grid grid-cols-2 gap-4 items-center">
-                                            <span className="text-sm font-bold capitalize">{dbCol.replace('_', ' ')}</span>
+                                            <span className="text-sm font-bold capitalize">{dbCol.replace('_', ' ').replace('sku ', 'SKU ')}</span>
                                             <Select
                                                 value={mappings.find(m => m.dbColumn === dbCol)?.fileColumn || ''}
                                                 onChange={(e) => updateMapping(dbCol, e.target.value)}

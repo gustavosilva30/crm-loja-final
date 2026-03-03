@@ -682,7 +682,7 @@ export function Produtos() {
                   <TableHead>Produto</TableHead>
                   <TableHead>Estoque</TableHead>
                   <TableHead>Preço</TableHead>
-                  <TableHead>Integração</TableHead>
+                  <TableHead>ML ID</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
@@ -732,7 +732,7 @@ export function Produtos() {
                       <span className={produto.estoque_atual <= produto.estoque_minimo ? "text-destructive font-bold" : ""}>{produto.estoque_atual} un</span>
                     </TableCell>
                     <TableCell className="font-bold">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(produto.preco)}</TableCell>
-                    <TableCell>{produto.sku_ml ? <Badge variant="ml" className="text-[10px]">Sincronizado</Badge> : <span className="text-xs text-muted-foreground">-</span>}</TableCell>
+                    <TableCell>{produto.sku_ml ? <Badge variant="secondary" className="text-[10px] bg-yellow-500/10 text-yellow-700 border-yellow-500/20">{produto.sku_ml}</Badge> : <span className="text-xs text-muted-foreground">-</span>}</TableCell>
                     <TableCell>
                       <Badge variant={produto.estoque_atual > produto.estoque_minimo ? 'default' : produto.estoque_atual > 0 ? 'secondary' : 'destructive'}>
                         {produto.estoque_atual > produto.estoque_minimo ? 'Ativo' : produto.estoque_atual > 0 ? 'Baixo Estoque' : 'Sem Estoque'}
@@ -902,6 +902,10 @@ export function Produtos() {
                       </option>
                     ))}
                   </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>ML ID (Mercado Livre)</Label>
+                  <Input placeholder="Ex: MLB12345678" value={newProduto.sku_ml || ''} onChange={e => setNewProduto({ ...newProduto, sku_ml: e.target.value })} />
                 </div>
               </div>
 
