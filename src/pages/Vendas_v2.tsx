@@ -885,291 +885,294 @@ export function Vendas() {
                             </Button>
                         </div>
 
-                        <div className={`print-preview-container ${printFormat} bg-white text-black shadow-none border-0 mx-auto`}>
+                        <div className="bg-slate-100 p-8 overflow-auto max-h-[70vh] rounded-lg border border-slate-200">
                             <style>{`
-                                @import url('https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap');
+                                 @import url('https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap');
+ 
+                                 .print-preview-container { 
+                                     background-color: #ffffff !important; 
+                                     color: #000000 !important;
+                                     margin-left: auto;
+                                     margin-right: auto;
+                                     box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+                                     overflow: visible;
+                                     min-height: 100px;
+                                 }
+ 
+                                 @media print {
+                                     @page { margin: 0; size: auto; }
+                                     html, body { margin: 0 !important; padding: 0 !important; height: auto !important; overflow: visible !important; }
+                                     body > * { display: none !important; }
+                                     #root, #__next { display: block !important; }
+                                     .print-preview-container { 
+                                         display: block !important; 
+                                         position: static !important;
+                                         margin: 0 !important;
+                                         border: none !important;
+                                         box-shadow: none !important;
+                                         background: white !important;
+                                     }
+                                     .a4 { width: 210mm !important; }
+                                     .a5 { width: 148mm !important; }
+                                     .cupom { width: 80mm !important; }
+                                     .cupom58 { width: 58mm !important; }
+                                     .no-print { display: none !important; }
+                                 }
+ 
+                                 .a4 { width: 210mm; min-height: 297mm; padding: 15mm; font-family: 'Inter', sans-serif; }
+                                 .a5 { width: 148mm; min-height: 210mm; padding: 10mm; font-family: 'Inter', sans-serif; }
+                                 .cupom { width: 80mm; font-size: 12px; padding: 6mm; font-family: 'Courier Prime', monospace; }
+                                 .cupom58 { width: 58mm; font-size: 10px; padding: 4mm; font-family: 'Courier Prime', monospace; }
+ 
+                                 /* Estilos Imagem 1 (A4/A5) */
+                                 .formal-header { border: 1px solid #000; padding: 10px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; }
+                                 .formal-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+                                 .formal-table th { text-align: left; font-size: 10px; border-bottom: 1px solid #000; padding: 5px; text-transform: uppercase; color: #000; }
+                                 .formal-table td { padding: 5px; font-size: 11px; border-bottom: 1px dotted #ccc; color: #000; }
+                                 .formal-section { border-top: 2px solid #000; margin-top: 15px; padding-top: 5px; }
+                                 .formal-label { font-size: 9px; font-weight: bold; text-transform: uppercase; color: #000; }
+                                 
+                                 /* Estilos Imagem 2 (Cupom) */
+                                 .ticket-line { border-top: 1px dashed #000; margin: 5px 0; }
+                                 .ticket-double-line { border-top: 3px double #000; margin: 5px 0; }
+                                 .ticket-header { text-align: center; margin-bottom: 10px; color: #000; }
+                                 .ticket-title { font-weight: bold; text-align: center; text-transform: uppercase; margin: 10px 0; color: #000; }
+                                 .ticket-content { color: #000 !important; }
+                                 .ticket-content p, .ticket-content span, .ticket-content div, .ticket-content td, .ticket-content th { color: #000 !important; }
+                             `}</style>
 
-                                .print-preview-container { 
-                                    background-color: #fff !important; 
-                                    color: #000 !important;
-                                    margin-left: auto;
-                                    margin-right: auto;
-                                    box-shadow: 0 0 10px rgba(0,0,0,0.1);
-                                    overflow: visible;
-                                }
-
-                                @media print {
-                                    @page { margin: 0; size: auto; }
-                                    html, body { margin: 0 !important; padding: 0 !important; height: auto !important; overflow: visible !important; }
-                                    body > * { display: none !important; }
-                                    #root, #__next { display: block !important; }
-                                    .print-preview-container { 
-                                        display: block !important; 
-                                        position: static !important;
-                                        margin: 0 !important;
-                                        border: none !important;
-                                        box-shadow: none !important;
-                                        background: white !important;
-                                    }
-                                    .a4 { width: 210mm !important; }
-                                    .a5 { width: 148mm !important; }
-                                    .cupom { width: 80mm !important; }
-                                    .cupom58 { width: 58mm !important; }
-                                    .no-print { display: none !important; }
-                                }
-
-                                .a4 { width: 210mm; min-height: 297mm; padding: 15mm; font-family: 'Inter', sans-serif; }
-                                .a5 { width: 148mm; min-height: 210mm; padding: 10mm; font-family: 'Inter', sans-serif; }
-                                .cupom { width: 80mm; font-size: 12px; padding: 4mm; font-family: 'Courier Prime', monospace; }
-                                .cupom58 { width: 58mm; font-size: 10px; padding: 2mm; font-family: 'Courier Prime', monospace; }
-
-                                /* Estilos Imagem 1 (A4/A5) */
-                                .formal-header { border: 1px solid #000; padding: 10px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; }
-                                .formal-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-                                .formal-table th { text-align: left; font-size: 10px; border-bottom: 1px solid #000; padding: 5px; text-transform: uppercase; color: #000; }
-                                .formal-table td { padding: 5px; font-size: 11px; border-bottom: 1px dotted #ccc; color: #000; }
-                                .formal-section { border-top: 2px solid #000; margin-top: 15px; padding-top: 5px; }
-                                .formal-label { font-size: 9px; font-weight: bold; text-transform: uppercase; color: #000; }
-                                
-                                /* Estilos Imagem 2 (Cupom) */
-                                .ticket-line { border-top: 1px dashed #000; margin: 5px 0; }
-                                .ticket-double-line { border-top: 3px double #000; margin: 5px 0; }
-                                .ticket-header { text-align: center; margin-bottom: 10px; color: #000; }
-                                .ticket-title { font-weight: bold; text-align: center; text-transform: uppercase; margin: 10px 0; color: #000; }
-                                .ticket-content { color: #000 !important; }
-                                .ticket-content p, .ticket-content span, .ticket-content div { color: #000 !important; }
-                            `}</style>
-
-                            {printFormat.includes('cupom') ? (
-                                /* LAYOUT TICKET TÉRMICO (Imagem 2) */
-                                <div className="ticket-content">
-                                    <div className="ticket-header">
-                                        <p className="font-bold text-lg">{company?.nome_fantasia || 'LOJA'}</p>
-                                        <p>CNPJ: {company?.cnpj || '00.000.000/0000-00'}</p>
-                                        <p>{company?.logradouro}, {company?.numero}</p>
-                                        <p>{company?.bairro} - {company?.cidade}/{company?.estado}</p>
-                                        <p>TEL: {company?.telefone || '(00) 0000-0000'}</p>
-                                        <p>Vendedor: {selectedVendaForReceipt.atendentes?.nome || 'N/A'}</p>
-                                    </div>
-
-                                    <div className="ticket-double-line" />
-                                    <div className="ticket-title">PEDIDO Nº {formatNumPedido(selectedVendaForReceipt.numero_pedido)}</div>
-                                    <div className="ticket-double-line" />
-
-                                    <div className="grid grid-cols-2 text-[11px] mb-2">
-                                        <div>Data: {new Date(selectedVendaForReceipt.data_venda).toLocaleDateString()}</div>
-                                        {selectedVendaForReceipt.entrega && <div className="text-right">Entrega: {new Date().toLocaleDateString()}</div>}
-                                    </div>
-
-                                    <div className="space-y-0.5 mb-2 text-black">
-                                        <p><span className="font-bold">Cliente:</span> {selectedVendaForReceipt.clientes?.nome || 'CONSUMIDOR'}</p>
-                                        <p><span className="font-bold">Telefone:</span> {selectedVendaForReceipt.clientes?.telefone || '---'}</p>
-
-                                        {selectedVendaForReceipt.entrega && (
-                                            <div className="mt-2 pt-1 border-t border-black" style={{ backgroundColor: '#f9f9f9' }}>
-                                                <p className="font-bold text-center underline mb-1">ENTREGA</p>
-                                                <p className="text-black"><span className="font-bold">End:</span> {selectedVendaForReceipt.entrega.rua}, {selectedVendaForReceipt.entrega.numero}</p>
-                                                <p className="text-black"><span className="font-bold">Bairro:</span> {selectedVendaForReceipt.entrega.bairro}</p>
-                                                <p className="text-black"><span className="font-bold">Cidade:</span> {selectedVendaForReceipt.entrega.cidade}</p>
-                                                <p className="font-bold text-center mt-1 border border-black uppercase text-[12px] bg-white text-black">
-                                                    {selectedVendaForReceipt.status === 'Pago' || selectedVendaForReceipt.status === 'Entregue' ? '✅ JÁ ESTÁ PAGO' : '💰 COBRAR NA ENTREGA'}
-                                                </p>
-                                            </div>
-                                        )}
-                                        {!selectedVendaForReceipt.entrega && (
-                                            <p><span className="font-bold">Endereço:</span> {selectedVendaForReceipt.clientes?.endereco || '---'}</p>
-                                        )}
-                                    </div>
-
-                                    <div className="ticket-line" />
-                                    <div className="text-center font-bold">PRODUTOS</div>
-                                    <div className="ticket-line" />
-
-                                    <table className="w-full text-[11px]">
-                                        <thead>
-                                            <tr className="text-left border-b border-black">
-                                                <th>Nome</th>
-                                                <th className="text-right">Qtd</th>
-                                                <th className="text-right">Unit</th>
-                                                <th className="text-right">Sub</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {selectedVendaForReceipt.itens?.map((i: any, idx: number) => (
-                                                <tr key={idx}>
-                                                    <td className="py-1">{i.produtos?.nome}</td>
-                                                    <td className="text-right">{i.quantidade}</td>
-                                                    <td className="text-right">{i.preco_unitario.toFixed(2)}</td>
-                                                    <td className="text-right font-bold">{i.subtotal.toFixed(2)}</td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-
-                                    <div className="ticket-double-line" />
-                                    <div className="text-center font-bold">PAGAMENTO</div>
-                                    <div className="ticket-double-line" />
-
-                                    <div className="flex justify-between font-bold text-lg py-1">
-                                        <span>Total do Pedido:</span>
-                                        <span>R$ {selectedVendaForReceipt.total.toFixed(2)}</span>
-                                    </div>
-
-                                    <div className="ticket-line" />
-                                    <div className="grid grid-cols-2 text-[10px]">
-                                        <div><span className="font-bold">Vencimento</span><br />{new Intl.DateTimeFormat('pt-BR').format(new Date())}</div>
-                                        <div><span className="font-bold">Forma</span><br />{selectedVendaForReceipt.forma_pagamento}</div>
-                                    </div>
-
-                                    <div className="mt-8 text-center text-[10px]">
-                                        <p>*** Este ticket não é documento fiscal ***</p>
-                                        <div className="mt-10 border-t border-black w-3/4 mx-auto pt-1">Assinatura do cliente</div>
-                                        <p className="mt-6 italic opacity-50 text-[8px]">{company?.nome_fantasia} - CRM</p>
-                                    </div>
-                                </div>
-                            ) : (
-                                /* LAYOUT FORMAL A4/A5 (Imagem 1) */
-                                <div className="formal-content">
-                                    <div className="formal-header">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-12 h-12 border border-black rounded-lg flex items-center justify-center">
-                                                <Package className="w-8 h-8 text-black" />
-                                            </div>
-                                            <div>
-                                                <p className="font-black text-xl leading-none text-black">{company?.nome_fantasia || 'SUA EMPRESA'}</p>
-                                                <p className="text-[10px] text-black italic">Slogan ou descrição do seu negócio</p>
-                                            </div>
+                            <div className={`print-preview-container ${printFormat}`}>
+                                {printFormat.includes('cupom') ? (
+                                    /* LAYOUT TICKET TÉRMICO (Imagem 2) */
+                                    <div className="ticket-content">
+                                        <div className="ticket-header">
+                                            <p className="font-bold text-lg">{company?.nome_fantasia || 'LOJA'}</p>
+                                            <p>CNPJ: {company?.cnpj || '00.000.000/0000-00'}</p>
+                                            <p>{company?.logradouro}, {company?.numero}</p>
+                                            <p>{company?.bairro} - {company?.cidade}/{company?.estado}</p>
+                                            <p>TEL: {company?.telefone || '(00) 0000-0000'}</p>
+                                            <p>Vendedor: {selectedVendaForReceipt.atendentes?.nome || 'N/A'}</p>
                                         </div>
-                                        <div className="text-center">
-                                            <p className="text-lg font-black uppercase text-black">Pedido de venda {formatNumPedido(selectedVendaForReceipt.numero_pedido)}</p>
-                                        </div>
-                                        <div className="text-right text-[10px] space-y-0.5 text-black">
-                                            <p>Página 1 de 1</p>
-                                            <p>{new Date().toLocaleDateString('pt-BR')} {new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</p>
-                                        </div>
-                                    </div>
 
-                                    <div className="text-right text-[11px] font-bold mb-2">
-                                        Emissão {new Date(selectedVendaForReceipt.data_venda).toLocaleDateString('pt-BR')}
-                                    </div>
+                                        <div className="ticket-double-line" />
+                                        <div className="ticket-title">PEDIDO Nº {formatNumPedido(selectedVendaForReceipt.numero_pedido)}</div>
+                                        <div className="ticket-double-line" />
 
-                                    <div className="border border-black p-3 space-y-1 text-black">
-                                        <p className="text-sm">
-                                            <span className="font-bold">Cliente:</span> {selectedVendaForReceipt.clientes?.documento || '000.000.000-00'} - {selectedVendaForReceipt.clientes?.nome || 'CONSUMIDOR FINAL'}
-                                        </p>
-                                        <p className="text-[11px]">
-                                            <span className="font-bold underline">Endereço:</span> {selectedVendaForReceipt.clientes?.endereco || 'Não informado'}
-                                        </p>
-                                        <div className="flex gap-10 text-[11px]">
+                                        <div className="grid grid-cols-2 text-[11px] mb-2">
+                                            <div>Data: {new Date(selectedVendaForReceipt.data_venda).toLocaleDateString()}</div>
+                                            {selectedVendaForReceipt.entrega && <div className="text-right">Entrega: {new Date().toLocaleDateString()}</div>}
+                                        </div>
+
+                                        <div className="space-y-0.5 mb-2 text-black">
+                                            <p><span className="font-bold">Cliente:</span> {selectedVendaForReceipt.clientes?.nome || 'CONSUMIDOR'}</p>
                                             <p><span className="font-bold">Telefone:</span> {selectedVendaForReceipt.clientes?.telefone || '---'}</p>
-                                            <p><span className="font-bold">E-mail:</span> {selectedVendaForReceipt.clientes?.email || '---'}</p>
-                                        </div>
 
-                                        {selectedVendaForReceipt.entrega && (
-                                            <div className="mt-2 border-2 border-black p-2 bg-gray-50">
-                                                <div className="flex justify-between items-center mb-1">
-                                                    <p className="font-black text-xs underline">DADOS COMPLETOS PARA ENTREGA</p>
-                                                    <p className={`font-black px-2 py-0.5 border-2 border-black ${selectedVendaForReceipt.status === 'Pago' || selectedVendaForReceipt.status === 'Entregue' ? 'bg-white' : 'bg-black text-white'}`}>
-                                                        {selectedVendaForReceipt.status === 'Pago' || selectedVendaForReceipt.status === 'Entregue' ? 'CONFERIDO / PAGO' : 'COBRAR NO ATO'}
+                                            {selectedVendaForReceipt.entrega && (
+                                                <div className="mt-2 pt-1 border-t border-black" style={{ backgroundColor: '#f9f9f9' }}>
+                                                    <p className="font-bold text-center underline mb-1">ENTREGA</p>
+                                                    <p className="text-black"><span className="font-bold">End:</span> {selectedVendaForReceipt.entrega.rua}, {selectedVendaForReceipt.entrega.numero}</p>
+                                                    <p className="text-black"><span className="font-bold">Bairro:</span> {selectedVendaForReceipt.entrega.bairro}</p>
+                                                    <p className="text-black"><span className="font-bold">Cidade:</span> {selectedVendaForReceipt.entrega.cidade}</p>
+                                                    <p className="font-bold text-center mt-1 border border-black uppercase text-[12px] bg-white text-black">
+                                                        {selectedVendaForReceipt.status === 'Pago' || selectedVendaForReceipt.status === 'Entregue' ? '✅ JÁ ESTÁ PAGO' : '💰 COBRAR NA ENTREGA'}
                                                     </p>
                                                 </div>
-                                                <div className="grid grid-cols-2 text-[11px] gap-x-4">
-                                                    <p><span className="font-bold">Rua:</span> {selectedVendaForReceipt.entrega.rua}, {selectedVendaForReceipt.entrega.numero}</p>
-                                                    <p><span className="font-bold">Bairro:</span> {selectedVendaForReceipt.entrega.bairro}</p>
-                                                    <p><span className="font-bold">Cidade:</span> {selectedVendaForReceipt.entrega.cidade}/{selectedVendaForReceipt.entrega.estado}</p>
-                                                    <p><span className="font-bold">CEP:</span> {selectedVendaForReceipt.entrega.cep}</p>
-                                                    <p className="col-span-2 mt-1"><span className="font-bold">Contato Adicional:</span> {selectedVendaForReceipt.entrega.contato || 'N/A'}</p>
-                                                </div>
-                                            </div>
-                                        )}
-                                        <div className="grid grid-cols-2 text-[11px] pt-2 border-t mt-2">
-                                            <p><span className="font-bold">Natureza da operação:</span> 5101 - Venda de mercadoria</p>
-                                            <p className="text-right"><span className="font-bold">Vendedor:</span> {selectedVendaForReceipt.atendentes?.nome || 'N/A'}</p>
+                                            )}
+                                            {!selectedVendaForReceipt.entrega && (
+                                                <p><span className="font-bold">Endereço:</span> {selectedVendaForReceipt.clientes?.endereco || '---'}</p>
+                                            )}
+                                        </div>
+
+                                        <div className="ticket-line" />
+                                        <div className="text-center font-bold">PRODUTOS</div>
+                                        <div className="ticket-line" />
+
+                                        <table className="w-full text-[11px]">
+                                            <thead>
+                                                <tr className="text-left border-b border-black">
+                                                    <th>Nome</th>
+                                                    <th className="text-right">Qtd</th>
+                                                    <th className="text-right">Unit</th>
+                                                    <th className="text-right">Sub</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {selectedVendaForReceipt.itens?.map((i: any, idx: number) => (
+                                                    <tr key={idx}>
+                                                        <td className="py-1">{i.produtos?.nome}</td>
+                                                        <td className="text-right">{i.quantidade}</td>
+                                                        <td className="text-right">{i.preco_unitario.toFixed(2)}</td>
+                                                        <td className="text-right font-bold">{i.subtotal.toFixed(2)}</td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+
+                                        <div className="ticket-double-line" />
+                                        <div className="text-center font-bold">PAGAMENTO</div>
+                                        <div className="ticket-double-line" />
+
+                                        <div className="flex justify-between font-bold text-lg py-1">
+                                            <span>Total do Pedido:</span>
+                                            <span>R$ {selectedVendaForReceipt.total.toFixed(2)}</span>
+                                        </div>
+
+                                        <div className="ticket-line" />
+                                        <div className="grid grid-cols-2 text-[10px]">
+                                            <div><span className="font-bold">Vencimento</span><br />{new Intl.DateTimeFormat('pt-BR').format(new Date())}</div>
+                                            <div><span className="font-bold">Forma</span><br />{selectedVendaForReceipt.forma_pagamento}</div>
+                                        </div>
+
+                                        <div className="mt-8 text-center text-[10px]">
+                                            <p>*** Este ticket não é documento fiscal ***</p>
+                                            <div className="mt-10 border-t border-black w-3/4 mx-auto pt-1">Assinatura do cliente</div>
+                                            <p className="mt-6 italic opacity-50 text-[8px]">{company?.nome_fantasia} - CRM</p>
                                         </div>
                                     </div>
-
-                                    <table className="formal-table">
-                                        <thead>
-                                            <tr>
-                                                <th>#</th>
-                                                <th>Item / Descrição</th>
-                                                <th>SKU</th>
-                                                <th className="text-center">Qtd</th>
-                                                <th className="text-right">Vl un</th>
-                                                <th className="text-right">Subtotal</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {selectedVendaForReceipt.itens?.map((i: any, idx: number) => (
-                                                <tr key={idx}>
-                                                    <td className="text-center">{idx + 1}</td>
-                                                    <td>{i.produtos?.nome}</td>
-                                                    <td className="font-mono text-[9px]">{i.produtos?.sku}</td>
-                                                    <td className="text-center">{i.quantidade}</td>
-                                                    <td className="text-right">{new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2 }).format(i.preco_unitario)}</td>
-                                                    <td className="text-right font-bold">{new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2 }).format(i.subtotal)}</td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-
-                                    <div className="grid grid-cols-2 gap-10 mt-6">
-                                        <div className="space-y-4">
-                                            <div className="formal-section">
-                                                <p className="formal-label">Cobrança</p>
-                                                <p className="text-sm font-bold">Forma de pagamento: {selectedVendaForReceipt.forma_pagamento}</p>
-                                                <p className="text-[10px]">Status: {selectedVendaForReceipt.status}</p>
+                                ) : (
+                                    /* LAYOUT FORMAL A4/A5 (Imagem 1) */
+                                    <div className="formal-content">
+                                        <div className="formal-header">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-12 h-12 border border-black rounded-lg flex items-center justify-center">
+                                                    <Package className="w-8 h-8 text-black" />
+                                                </div>
+                                                <div>
+                                                    <p className="font-black text-xl leading-none text-black">{company?.nome_fantasia || 'SUA EMPRESA'}</p>
+                                                    <p className="text-[10px] text-black italic">Slogan ou descrição do seu negócio</p>
+                                                </div>
                                             </div>
-                                            <div className="formal-section">
-                                                <p className="formal-label">Status Financeiro</p>
-                                                <p className={`text-sm font-black mt-1 p-1 border border-black text-center ${selectedVendaForReceipt.status === 'Pago' || selectedVendaForReceipt.status === 'Entregue' ? 'bg-white' : 'bg-black text-white'}`}>
-                                                    {selectedVendaForReceipt.status === 'Pago' || selectedVendaForReceipt.status === 'Entregue' ? '✅ PEDIDO PAGO' : '⚠️ AGUARDANDO PAGAMENTO'}
-                                                </p>
+                                            <div className="text-center">
+                                                <p className="text-lg font-black uppercase text-black">Pedido de venda {formatNumPedido(selectedVendaForReceipt.numero_pedido)}</p>
+                                            </div>
+                                            <div className="text-right text-[10px] space-y-0.5 text-black">
+                                                <p>Página 1 de 1</p>
+                                                <p>{new Date().toLocaleDateString('pt-BR')} {new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</p>
+                                            </div>
+                                        </div>
+
+                                        <div className="text-right text-[11px] font-bold mb-2">
+                                            Emissão {new Date(selectedVendaForReceipt.data_venda).toLocaleDateString('pt-BR')}
+                                        </div>
+
+                                        <div className="border border-black p-3 space-y-1 text-black">
+                                            <p className="text-sm">
+                                                <span className="font-bold">Cliente:</span> {selectedVendaForReceipt.clientes?.documento || '000.000.000-00'} - {selectedVendaForReceipt.clientes?.nome || 'CONSUMIDOR FINAL'}
+                                            </p>
+                                            <p className="text-[11px]">
+                                                <span className="font-bold underline">Endereço:</span> {selectedVendaForReceipt.clientes?.endereco || 'Não informado'}
+                                            </p>
+                                            <div className="flex gap-10 text-[11px]">
+                                                <p><span className="font-bold">Telefone:</span> {selectedVendaForReceipt.clientes?.telefone || '---'}</p>
+                                                <p><span className="font-bold">E-mail:</span> {selectedVendaForReceipt.clientes?.email || '---'}</p>
                                             </div>
 
                                             {selectedVendaForReceipt.entrega && (
-                                                <div className="formal-section">
-                                                    <p className="formal-label">Informações de Entrega</p>
-                                                    <div className="mt-2 border border-black p-3 text-black" style={{ backgroundColor: '#f9f9f9' }}>
-                                                        <div className="grid grid-cols-2 text-[11px] gap-2">
-                                                            <p><span className="font-bold">Nome:</span> {selectedVendaForReceipt.clientes?.nome}</p>
-                                                            <p><span className="font-bold">Telefone:</span> {selectedVendaForReceipt.entrega.contato || selectedVendaForReceipt.clientes?.telefone}</p>
-                                                            <p className="col-span-2"><span className="font-bold">Endereço:</span> {selectedVendaForReceipt.entrega.rua}, {selectedVendaForReceipt.entrega.numero}</p>
-                                                            <p><span className="font-bold">Bairro:</span> {selectedVendaForReceipt.entrega.bairro}</p>
-                                                            <p><span className="font-bold">Cidade:</span> {selectedVendaForReceipt.entrega.cidade}/{selectedVendaForReceipt.entrega.estado}</p>
-                                                            <p><span className="font-bold">CEP:</span> {selectedVendaForReceipt.entrega.cep}</p>
-                                                            <p className="col-span-2 font-black border-t border-black pt-1 mt-1 text-center" style={{ fontSize: '12px' }}>
-                                                                STATUS: {selectedVendaForReceipt.status === 'Pago' || selectedVendaForReceipt.status === 'Entregue' ? '✅ PAGAMENTO CONFIRMADO' : '💰 COBRAR VALOR TOTAL NA ENTREGA'}
-                                                            </p>
-                                                        </div>
+                                                <div className="mt-2 border-2 border-black p-2 bg-gray-50">
+                                                    <div className="flex justify-between items-center mb-1">
+                                                        <p className="font-black text-xs underline">DADOS COMPLETOS PARA ENTREGA</p>
+                                                        <p className={`font-black px-2 py-0.5 border-2 border-black ${selectedVendaForReceipt.status === 'Pago' || selectedVendaForReceipt.status === 'Entregue' ? 'bg-white' : 'bg-black text-white'}`}>
+                                                            {selectedVendaForReceipt.status === 'Pago' || selectedVendaForReceipt.status === 'Entregue' ? 'CONFERIDO / PAGO' : 'COBRAR NO ATO'}
+                                                        </p>
+                                                    </div>
+                                                    <div className="grid grid-cols-2 text-[11px] gap-x-4">
+                                                        <p><span className="font-bold">Rua:</span> {selectedVendaForReceipt.entrega.rua}, {selectedVendaForReceipt.entrega.numero}</p>
+                                                        <p><span className="font-bold">Bairro:</span> {selectedVendaForReceipt.entrega.bairro}</p>
+                                                        <p><span className="font-bold">Cidade:</span> {selectedVendaForReceipt.entrega.cidade}/{selectedVendaForReceipt.entrega.estado}</p>
+                                                        <p><span className="font-bold">CEP:</span> {selectedVendaForReceipt.entrega.cep}</p>
+                                                        <p className="col-span-2 mt-1"><span className="font-bold">Contato Adicional:</span> {selectedVendaForReceipt.entrega.contato || 'N/A'}</p>
                                                     </div>
                                                 </div>
                                             )}
+                                            <div className="grid grid-cols-2 text-[11px] pt-2 border-t mt-2">
+                                                <p><span className="font-bold">Natureza da operação:</span> 5101 - Venda de mercadoria</p>
+                                                <p className="text-right"><span className="font-bold">Vendedor:</span> {selectedVendaForReceipt.atendentes?.nome || 'N/A'}</p>
+                                            </div>
                                         </div>
-                                        <div className="space-y-1">
-                                            <div className="formal-section text-right">
-                                                <p className="formal-label">Totais</p>
-                                                <div className="flex justify-between text-sm py-1 text-black">
-                                                    <span>Subtotal dos produtos</span>
-                                                    <span>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(selectedVendaForReceipt.total)}</span>
+
+                                        <table className="formal-table">
+                                            <thead>
+                                                <tr>
+                                                    <th>#</th>
+                                                    <th>Item / Descrição</th>
+                                                    <th>SKU</th>
+                                                    <th className="text-center">Qtd</th>
+                                                    <th className="text-right">Vl un</th>
+                                                    <th className="text-right">Subtotal</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {selectedVendaForReceipt.itens?.map((i: any, idx: number) => (
+                                                    <tr key={idx}>
+                                                        <td className="text-center">{idx + 1}</td>
+                                                        <td>{i.produtos?.nome}</td>
+                                                        <td className="font-mono text-[9px]">{i.produtos?.sku}</td>
+                                                        <td className="text-center">{i.quantidade}</td>
+                                                        <td className="text-right">{new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2 }).format(i.preco_unitario)}</td>
+                                                        <td className="text-right font-bold">{new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2 }).format(i.subtotal)}</td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+
+                                        <div className="grid grid-cols-2 gap-10 mt-6">
+                                            <div className="space-y-4">
+                                                <div className="formal-section">
+                                                    <p className="formal-label">Cobrança</p>
+                                                    <p className="text-sm font-bold">Forma de pagamento: {selectedVendaForReceipt.forma_pagamento}</p>
+                                                    <p className="text-[10px]">Status: {selectedVendaForReceipt.status}</p>
                                                 </div>
-                                                <div className="flex justify-between text-sm py-1 text-black">
-                                                    <span>Frete / Outros</span>
-                                                    <span>R$ 0,00</span>
+                                                <div className="formal-section">
+                                                    <p className="formal-label">Status Financeiro</p>
+                                                    <p className={`text-sm font-black mt-1 p-1 border border-black text-center ${selectedVendaForReceipt.status === 'Pago' || selectedVendaForReceipt.status === 'Entregue' ? 'bg-white' : 'bg-black text-white'}`}>
+                                                        {selectedVendaForReceipt.status === 'Pago' || selectedVendaForReceipt.status === 'Entregue' ? '✅ PEDIDO PAGO' : '⚠️ AGUARDANDO PAGAMENTO'}
+                                                    </p>
                                                 </div>
-                                                <div className="flex justify-between text-lg font-black border-t-2 border-black pt-2 mt-2 text-black">
-                                                    <span>VALOR TOTAL</span>
-                                                    <span>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(selectedVendaForReceipt.total)}</span>
+
+                                                {selectedVendaForReceipt.entrega && (
+                                                    <div className="formal-section">
+                                                        <p className="formal-label">Informações de Entrega</p>
+                                                        <div className="mt-2 border border-black p-3 text-black" style={{ backgroundColor: '#f9f9f9' }}>
+                                                            <div className="grid grid-cols-2 text-[11px] gap-2">
+                                                                <p><span className="font-bold">Nome:</span> {selectedVendaForReceipt.clientes?.nome}</p>
+                                                                <p><span className="font-bold">Telefone:</span> {selectedVendaForReceipt.entrega.contato || selectedVendaForReceipt.clientes?.telefone}</p>
+                                                                <p className="col-span-2"><span className="font-bold">Endereço:</span> {selectedVendaForReceipt.entrega.rua}, {selectedVendaForReceipt.entrega.numero}</p>
+                                                                <p><span className="font-bold">Bairro:</span> {selectedVendaForReceipt.entrega.bairro}</p>
+                                                                <p><span className="font-bold">Cidade:</span> {selectedVendaForReceipt.entrega.cidade}/{selectedVendaForReceipt.entrega.estado}</p>
+                                                                <p><span className="font-bold">CEP:</span> {selectedVendaForReceipt.entrega.cep}</p>
+                                                                <p className="col-span-2 font-black border-t border-black pt-1 mt-1 text-center" style={{ fontSize: '12px' }}>
+                                                                    STATUS: {selectedVendaForReceipt.status === 'Pago' || selectedVendaForReceipt.status === 'Entregue' ? '✅ PAGAMENTO CONFIRMADO' : '💰 COBRAR VALOR TOTAL NA ENTREGA'}
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <div className="space-y-1">
+                                                <div className="formal-section text-right">
+                                                    <p className="formal-label">Totais</p>
+                                                    <div className="flex justify-between text-sm py-1 text-black">
+                                                        <span>Subtotal dos produtos</span>
+                                                        <span>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(selectedVendaForReceipt.total)}</span>
+                                                    </div>
+                                                    <div className="flex justify-between text-sm py-1 text-black">
+                                                        <span>Frete / Outros</span>
+                                                        <span>R$ 0,00</span>
+                                                    </div>
+                                                    <div className="flex justify-between text-lg font-black border-t-2 border-black pt-2 mt-2 text-black">
+                                                        <span>VALOR TOTAL</span>
+                                                        <span>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(selectedVendaForReceipt.total)}</span>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
-                                    </div>
 
-                                    <div className="mt-12 pt-4 border-t border-dashed text-center">
-                                        <p className="text-[10px] opacity-70 italic uppercase tracking-widest">{company?.mensagem_rodape || 'OBRIGADO PELA PREFERÊNCIA!'}</p>
+                                        <div className="mt-12 pt-4 border-t border-dashed text-center">
+                                            <p className="text-[10px] opacity-70 italic uppercase tracking-widest">{company?.mensagem_rodape || 'OBRIGADO PELA PREFERÊNCIA!'}</p>
+                                        </div>
                                     </div>
-                                </div>
-                            )}
+                                )}
+                            </div>
                         </div>
                     </div>
                 )}
