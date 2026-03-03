@@ -920,16 +920,16 @@ export function Vendas() {
                                 /* Estilos Imagem 1 (A4/A5) */
                                 .formal-header { border: 1px solid #000; padding: 10px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; }
                                 .formal-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-                                .formal-table th { text-align: left; font-size: 10px; border-bottom: 1px solid #000; padding: 5px; text-transform: uppercase; }
-                                .formal-table td { padding: 5px; font-size: 11px; border-bottom: 1px dotted #ccc; }
+                                .formal-table th { text-align: left; font-size: 10px; border-bottom: 1px solid #000; padding: 5px; text-transform: uppercase; color: #000; }
+                                .formal-table td { padding: 5px; font-size: 11px; border-bottom: 1px dotted #ccc; color: #000; }
                                 .formal-section { border-top: 2px solid #000; margin-top: 15px; padding-top: 5px; }
-                                .formal-label { font-size: 9px; font-weight: bold; text-transform: uppercase; color: #444; }
+                                .formal-label { font-size: 9px; font-weight: bold; text-transform: uppercase; color: #000; }
                                 
                                 /* Estilos Imagem 2 (Cupom) */
                                 .ticket-line { border-top: 1px dashed #000; margin: 5px 0; }
                                 .ticket-double-line { border-top: 3px double #000; margin: 5px 0; }
-                                .ticket-header { text-align: center; margin-bottom: 10px; }
-                                .ticket-title { font-weight: bold; text-align: center; text-transform: uppercase; margin: 10px 0; }
+                                .ticket-header { text-align: center; margin-bottom: 10px; color: #000; }
+                                .ticket-title { font-weight: bold; text-align: center; text-transform: uppercase; margin: 10px 0; color: #000; }
                             `}</style>
 
                             {printFormat.includes('cupom') ? (
@@ -1011,18 +1011,18 @@ export function Vendas() {
                                 <div className="formal-content">
                                     <div className="formal-header">
                                         <div className="flex items-center gap-3">
-                                            <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center">
-                                                <Package className="w-8 h-8 text-primary" />
+                                            <div className="w-12 h-12 border border-black rounded-lg flex items-center justify-center">
+                                                <Package className="w-8 h-8 text-black" />
                                             </div>
                                             <div>
-                                                <p className="font-black text-xl leading-none">{company?.nome_fantasia || 'SUA EMPRESA'}</p>
-                                                <p className="text-[10px] opacity-70">Slogan ou descrição do seu negócio</p>
+                                                <p className="font-black text-xl leading-none text-black">{company?.nome_fantasia || 'SUA EMPRESA'}</p>
+                                                <p className="text-[10px] text-black italic">Slogan ou descrição do seu negócio</p>
                                             </div>
                                         </div>
                                         <div className="text-center">
-                                            <p className="text-lg font-black uppercase">Pedido de venda {formatNumPedido(selectedVendaForReceipt.numero_pedido)}</p>
+                                            <p className="text-lg font-black uppercase text-black">Pedido de venda {formatNumPedido(selectedVendaForReceipt.numero_pedido)}</p>
                                         </div>
-                                        <div className="text-right text-[10px] space-y-0.5">
+                                        <div className="text-right text-[10px] space-y-0.5 text-black">
                                             <p>Página 1 de 1</p>
                                             <p>{new Date().toLocaleDateString('pt-BR')} {new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</p>
                                         </div>
@@ -1097,15 +1097,15 @@ export function Vendas() {
                                         <div className="space-y-1">
                                             <div className="formal-section text-right">
                                                 <p className="formal-label">Totais</p>
-                                                <div className="flex justify-between text-sm py-1">
+                                                <div className="flex justify-between text-sm py-1 text-black">
                                                     <span>Subtotal dos produtos</span>
                                                     <span>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(selectedVendaForReceipt.total)}</span>
                                                 </div>
-                                                <div className="flex justify-between text-sm py-1">
+                                                <div className="flex justify-between text-sm py-1 text-black">
                                                     <span>Frete / Outros</span>
                                                     <span>R$ 0,00</span>
                                                 </div>
-                                                <div className="flex justify-between text-lg font-black border-t-2 border-black pt-2 mt-2">
+                                                <div className="flex justify-between text-lg font-black border-t-2 border-black pt-2 mt-2 text-black">
                                                     <span>VALOR TOTAL</span>
                                                     <span>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(selectedVendaForReceipt.total)}</span>
                                                 </div>
