@@ -15,7 +15,7 @@ import { useAuthStore } from "@/store/authStore"
 interface Produto {
   id: string
   sku: string
-  sku_ml: string | null
+  meli_id: string | null
   nome: string
   descricao: string | null
   estoque_atual: number
@@ -137,7 +137,8 @@ export function Produtos() {
     largura_cm: 0,
     comprimento_cm: 0,
     informacoes_adicionais: '',
-    localizacao_id: ''
+    localizacao_id: '',
+    meli_id: ''
   })
 
   const [compatList, setCompatList] = useState<Compatibilidade[]>([])
@@ -682,7 +683,7 @@ export function Produtos() {
                   <TableHead>Produto</TableHead>
                   <TableHead>Estoque</TableHead>
                   <TableHead>Preço</TableHead>
-                  <TableHead>ML ID</TableHead>
+                  <TableHead>MELI ID</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
@@ -732,7 +733,7 @@ export function Produtos() {
                       <span className={produto.estoque_atual <= produto.estoque_minimo ? "text-destructive font-bold" : ""}>{produto.estoque_atual} un</span>
                     </TableCell>
                     <TableCell className="font-bold">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(produto.preco)}</TableCell>
-                    <TableCell>{produto.sku_ml ? <Badge variant="secondary" className="text-[10px] bg-yellow-500/10 text-yellow-700 border-yellow-500/20">{produto.sku_ml}</Badge> : <span className="text-xs text-muted-foreground">-</span>}</TableCell>
+                    <TableCell>{produto.meli_id ? <Badge variant="secondary" className="text-[10px] bg-yellow-500/10 text-yellow-700 border-yellow-500/20">{produto.meli_id}</Badge> : <span className="text-xs text-muted-foreground">-</span>}</TableCell>
                     <TableCell>
                       <Badge variant={produto.estoque_atual > produto.estoque_minimo ? 'default' : produto.estoque_atual > 0 ? 'secondary' : 'destructive'}>
                         {produto.estoque_atual > produto.estoque_minimo ? 'Ativo' : produto.estoque_atual > 0 ? 'Baixo Estoque' : 'Sem Estoque'}
@@ -767,7 +768,7 @@ export function Produtos() {
                   <div className="h-40 bg-muted/30 flex items-center justify-center border-b border-border/10 relative overflow-hidden">
                     {produto.imagem_url ? <img src={produto.imagem_url} alt={produto.nome} className="w-full h-full object-cover transition-transform hover:scale-105 duration-300" /> : <Package className="w-12 h-12 text-muted-foreground/20" />}
                     <div className="absolute top-2 right-2 flex flex-col gap-1 items-end">
-                      {!!produto.sku_ml && <Badge variant="ml" className="text-[10px] shadow-sm">ML</Badge>}
+                      {!!produto.meli_id && <Badge variant="secondary" className="text-[10px] shadow-sm bg-yellow-500/20 text-yellow-700 border-yellow-500/20">MELI</Badge>}
                       {!!(produto.quantidade_orcamento && produto.quantidade_orcamento > 0) && (
                         <Badge variant="outline" className="text-[10px] shadow-sm border-blue-500 text-blue-500 bg-blue-500/10 backdrop-blur-sm">{produto.quantidade_orcamento} em Orçamento</Badge>
                       )}
@@ -904,8 +905,8 @@ export function Produtos() {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label>ML ID (Mercado Livre)</Label>
-                  <Input placeholder="Ex: MLB12345678" value={newProduto.sku_ml || ''} onChange={e => setNewProduto({ ...newProduto, sku_ml: e.target.value })} />
+                  <Label>MELI ID (Mercado Livre)</Label>
+                  <Input placeholder="Ex: MLB12345678" value={newProduto.meli_id || ''} onChange={e => setNewProduto({ ...newProduto, meli_id: e.target.value })} />
                 </div>
               </div>
 
