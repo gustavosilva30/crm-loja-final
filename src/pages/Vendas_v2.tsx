@@ -97,6 +97,27 @@ export function Vendas() {
     })
 
     const [editingVendaId, setEditingVendaId] = useState<string | null>(null)
+
+    // Efeito para preencher vendedor logado por padrão
+    useEffect(() => {
+        if (atendente && !vendaForm.atendente_id && !editingVendaId) {
+            setVendaForm(prev => ({ ...prev, atendente_id: atendente.id }))
+        }
+    }, [atendente, isNovoPedidoModalOpen, editingVendaId])
+
+    const handleOpenNovoPedido = () => {
+        setEditingVendaId(null)
+        setVendaForm({
+            cliente_id: '',
+            atendente_id: atendente?.id || '',
+            status: 'Pendente',
+            forma_pagamento: 'Dinheiro'
+        })
+        setVendaItems([{ produto_id: '', quantidade: 1, preco_unitario: 0, subtotal: 0 }])
+        setShowDeliveryForm(false)
+        setIsNovoPedidoModalOpen(true)
+    }
+
     const [showDeliveryForm, setShowDeliveryForm] = useState(false)
     const [vendaDelivery, setVendaDelivery] = useState({
         contato: '',
@@ -538,11 +559,13 @@ export function Vendas() {
         const termLower = searchTerm.toLowerCase().trim();
         const matchesSearch = !searchTerm ||
             (v.clientes?.nome?.toLowerCase() || '').includes(termLower) ||
+            (v.atendentes?.nome?.toLowerCase() || '').includes(termLower) ||
             String(v.numero_pedido).includes(termLower) ||
             v.vendas_itens?.some(i => (i.produtos?.nome || '').toLowerCase().includes(termLower));
 
-        // Agora mostra qualquer venda que NÃO seja "Pago", "Entregue" ou "Cancelado"
-        const matchesStatus = !['pago', 'entregue', 'cancelado'].includes(String(v.status).toLowerCase());
+        const statusLower = String(v.status).toLowerCase();
+        // Mostra pedidos que não estão finalizados
+        const matchesStatus = !['pago', 'entregue', 'cancelado'].includes(statusLower);
         return matchesSearch && matchesStatus;
     })
 
@@ -555,7 +578,7 @@ export function Vendas() {
                     <h1 className="text-3xl font-bold tracking-tight">Vendas Pendentes ({filteredVendas.length})</h1>
                     <p className="text-muted-foreground mt-1">Gerencie suas vendas em aberto.</p>
                 </div>
-                <Button onClick={() => setIsNovoPedidoModalOpen(true)} className="gap-2 bg-primary hover:bg-primary/90">
+                <Button onClick={handleOpenNovoPedido} className="gap-2 bg-primary hover:bg-primary/90">
                     <Plus className="w-4 h-4" /> Nova Venda
                 </Button>
             </div>
@@ -888,7 +911,7 @@ export function Vendas() {
                             <Button type="submit" variant="outline" onClick={() => setPrintAfterSave(true)} className="gap-2 border-primary text-primary hover:bg-primary hover:text-white">
                                 <Printer className="w-4 h-4" /> Salvar e Imprimir
                             </Button>
-                            <Button type="submit" disabled={submitting}>{submitting ? 'Salvando...' : 'Finalizar Pedido'}</Button>
+                            <Button type="submit" disabled={submitting}>{submitting ? 'Salvando...' : 'Salvar Pedido'}</Button>
                         </div>
                     </div>
                 </form>
