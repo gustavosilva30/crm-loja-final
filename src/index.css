@@ -42,52 +42,53 @@
 
 @layer base {
   :root {
-    --background: #ffffff;
-    --foreground: #09090b;
+    --background: #f8fafc;
+    --foreground: #000000;
     --card: #ffffff;
-    --card-foreground: #09090b;
+    --card-foreground: #000000;
     --popover: #ffffff;
-    --popover-foreground: #09090b;
-    --primary: #00ff9d; /* Neon Green */
-    --primary-foreground: #09090b;
-    --secondary: #f4f4f5;
-    --secondary-foreground: #09090b;
-    --muted: #f4f4f5;
-    --muted-foreground: #71717a;
-    --accent: #00e5ff; /* Neon Blue */
-    --accent-foreground: #09090b;
+    --popover-foreground: #000000;
+    --primary: #cbd5e1;
+    --primary-foreground: #000000;
+    --secondary: #e2e8f0;
+    --secondary-foreground: #000000;
+    --muted: #f1f5f9;
+    --muted-foreground: #000000;
+    --accent: #64748b;
+    --accent-foreground: #ffffff;
     --destructive: #ef4444;
     --destructive-foreground: #fafafa;
-    --border: #e4e4e7;
-    --input: #e4e4e7;
-    --ring: #00ff9d;
+    --border: #e2e8f0;
+    --input: #e2e8f0;
+    --ring: #475569;
   }
 
   .dark {
     --background: #09090b;
-    --foreground: #fafafa;
+    --foreground: #ffffff;
     --card: #09090b;
-    --card-foreground: #fafafa;
+    --card-foreground: #ffffff;
     --popover: #09090b;
-    --popover-foreground: #fafafa;
-    --primary: #00ff9d; /* Neon Green */
-    --primary-foreground: #09090b;
-    --secondary: #27272a;
-    --secondary-foreground: #fafafa;
-    --muted: #27272a;
-    --muted-foreground: #a1a1aa;
-    --accent: #00e5ff; /* Neon Blue */
-    --accent-foreground: #09090b;
+    --popover-foreground: #ffffff;
+    --primary: #1e293b;
+    --primary-foreground: #ffffff;
+    --secondary: #0f172a;
+    --secondary-foreground: #ffffff;
+    --muted: #1e293b;
+    --muted-foreground: #ffffff;
+    --accent: #334155;
+    --accent-foreground: #ffffff;
     --destructive: #ef4444;
     --destructive-foreground: #fafafa;
-    --border: #27272a;
-    --input: #27272a;
-    --ring: #00ff9d;
+    --border: #334155;
+    --input: #334155;
+    --ring: #475569;
   }
 
   * {
     border-color: var(--border);
   }
+
   body {
     background-color: var(--background);
     color: var(--foreground);
@@ -100,13 +101,16 @@
   width: 8px;
   height: 8px;
 }
+
 ::-webkit-scrollbar-track {
   background: transparent;
 }
+
 ::-webkit-scrollbar-thumb {
   background: var(--muted);
   border-radius: 4px;
 }
+
 ::-webkit-scrollbar-thumb:hover {
   background: var(--border);
 }

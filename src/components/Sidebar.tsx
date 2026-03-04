@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom"
-import { LayoutDashboard, Package, ShoppingCart, DollarSign, Users, Truck, Settings, LogOut, FileText, Bell, BarChart, Wallet, MessageCircle, CheckCircle2 } from "lucide-react"
+import { LayoutDashboard, Package, ShoppingCart, DollarSign, Users, Truck, Settings, LogOut, FileText, Bell, BarChart, Wallet, MessageCircle, CheckCircle2, Gavel } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { ModeToggle } from "./ModeToggle"
 import { supabase } from "@/lib/supabase"
@@ -20,6 +20,7 @@ const navItems = [
   { icon: FileText, label: "Fiscal", href: "/fiscal" },
   { icon: Users, label: "Clientes", href: "/clientes" },
   { icon: Truck, label: "Entregas", href: "/entregas" },
+  { icon: Gavel, label: "Leilões", href: "/leiloes" },
 ]
 
 export function Sidebar() {
@@ -76,12 +77,12 @@ export function Sidebar() {
     <aside className="w-64 border-r border-border bg-card flex flex-col h-screen sticky top-0">
       <div className="p-6 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center shadow-[0_0_15px_rgba(0,255,157,0.4)]">
+          <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center shadow-sm border border-border">
             <Package className="w-5 h-5 text-primary-foreground" />
           </div>
           <div className="flex flex-col">
-            <span className="font-bold text-xl tracking-tight">CRM</span>
-            <span className="text-[10px] text-primary font-black uppercase leading-none tracking-wider">Dourados Auto Peças</span>
+            <span className="font-bold text-xl tracking-tight text-foreground">CRM</span>
+            <span className="text-[10px] text-foreground font-black uppercase leading-none tracking-wider">Dourados Auto Peças</span>
           </div>
         </div>
         <ModeToggle />
@@ -97,12 +98,12 @@ export function Sidebar() {
               className={cn(
                 "flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200",
                 isActive
-                  ? "bg-primary/10 text-primary border border-primary/20 shadow-[inset_0_0_10px_rgba(0,255,157,0.1)]"
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                  ? "bg-primary text-primary-foreground border-transparent shadow-sm"
+                  : "text-foreground hover:bg-muted hover:text-foreground"
               )}
             >
               <div className="flex items-center gap-3">
-                <item.icon className={cn("w-5 h-5", isActive ? "text-primary" : "text-muted-foreground")} />
+                <item.icon className={cn("w-5 h-5", isActive ? "text-primary-foreground" : "text-foreground")} />
                 {item.label}
               </div>
 
@@ -124,7 +125,7 @@ export function Sidebar() {
         {(!atendente || atendente.perm_config) && (
           <Link
             to="/configuracoes"
-            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-foreground hover:bg-muted hover:text-foreground transition-colors"
           >
             <Settings className="w-5 h-5" />
             Configurações

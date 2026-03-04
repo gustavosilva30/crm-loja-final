@@ -103,11 +103,11 @@ export function Fiscal() {
         <div className="p-6 space-y-6 animate-in fade-in duration-500">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
-                    <h1 className="text-3xl font-black uppercase tracking-tighter">Módulo <span className="text-primary">Fiscal</span></h1>
+                    <h1 className="text-3xl font-black uppercase tracking-tighter text-foreground">Módulo <span className="text-primary-foreground bg-primary px-2 rounded-lg">Fiscal</span></h1>
                     <p className="text-muted-foreground">Gestão de notas fiscais (NFe/NFce) e arquivos XML.</p>
                 </div>
                 <Button
-                    className="font-bold bg-primary hover:bg-primary/90 shadow-[0_0_20px_rgba(0,255,157,0.3)]"
+                    className="font-bold bg-primary text-primary-foreground shadow-sm"
                     onClick={() => {
                         fetchVendasConcluidas()
                         setIsEmitModalOpen(true)
@@ -132,10 +132,10 @@ export function Fiscal() {
                 </Button>
             </div>
 
-            <Card className="border-primary/10 bg-card/50 backdrop-blur-sm shadow-xl">
+            <Card className="border-border bg-card shadow-sm">
                 <CardHeader>
-                    <CardTitle className="text-xl font-bold flex items-center gap-2">
-                        <FileText className="w-5 h-5 text-primary" />
+                    <CardTitle className="text-xl font-bold flex items-center gap-2 text-foreground">
+                        <FileText className="w-5 h-5 text-muted-foreground" />
                         Histórico de Emissões
                     </CardTitle>
                 </CardHeader>
@@ -179,7 +179,7 @@ export function Fiscal() {
                                         <TableCell className="font-medium text-sm">
                                             {nota.clientes?.nome || "Consumidor"}
                                         </TableCell>
-                                        <TableCell className="font-mono font-bold text-primary">
+                                        <TableCell className="font-mono font-bold text-foreground">
                                             R$ {nota.valor_total?.toFixed(2)}
                                         </TableCell>
                                         <TableCell>
@@ -234,11 +234,11 @@ export function Fiscal() {
 
                         {selectedVendaId && (
                             <div className="p-4 rounded-xl bg-primary/5 border border-primary/10 space-y-3 animate-in fade-in slide-in-from-top-2">
-                                <div className="flex items-center gap-2 pb-2 border-b border-primary/10">
-                                    <div className="p-1.5 rounded-lg bg-primary/10">
-                                        <CheckCircle2 className="w-4 h-4 text-primary" />
+                                <div className="flex items-center gap-2 pb-2 border-b border-border">
+                                    <div className="p-1.5 rounded-lg bg-muted">
+                                        <CheckCircle2 className="w-4 h-4 text-foreground" />
                                     </div>
-                                    <p className="text-xs font-black uppercase text-primary tracking-widest">Resumo da Emissão</p>
+                                    <p className="text-xs font-black uppercase text-foreground tracking-widest">Resumo da Emissão</p>
                                 </div>
                                 <div className="grid grid-cols-2 gap-y-3 text-xs">
                                     <span className="text-muted-foreground">Modelo de Nota:</span>
@@ -248,7 +248,7 @@ export function Fiscal() {
                                     <span className="text-muted-foreground">Série da Nota:</span>
                                     <span className="font-bold text-right">001</span>
                                     <span className="text-muted-foreground">Previsão de Valor:</span>
-                                    <span className="font-bold text-right font-mono text-primary">
+                                    <span className="font-bold text-right font-mono text-foreground">
                                         R$ {vendasConcluidas.find(v => v.id === selectedVendaId)?.total?.toFixed(2)}
                                     </span>
                                 </div>

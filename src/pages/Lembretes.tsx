@@ -186,7 +186,7 @@ export function Lembretes() {
                     <h1 className="text-3xl font-black tracking-tight uppercase flex items-center gap-3">
                         <Bell className="w-8 h-8 text-primary" /> Central de Tarefas & Lembretes
                     </h1>
-                    <p className="text-muted-foreground mt-1 font-medium italic">Gestão inteligente de follow-ups e automações para vendas e financeiro.</p>
+                    <p className="text-foreground mt-1 font-medium italic">Gestão inteligente de follow-ups e automações para vendas e financeiro.</p>
                 </div>
                 <Button className="gap-2 shadow-lg shadow-primary/20" onClick={() => {
                     setEditingLembrete(null)
@@ -217,7 +217,7 @@ export function Lembretes() {
                         </CardHeader>
                         <CardContent>
                             <div className="text-3xl font-black">{lembretes.filter(l => l.status === 'Concluído').length}</div>
-                            <p className="text-[10px] text-muted-foreground uppercase font-bold">Tarefas concluídas hoje</p>
+                            <p className="text-[10px] text-foreground uppercase font-bold">Tarefas concluídas hoje</p>
                             <div className="mt-4 h-1.5 w-full bg-muted rounded-full overflow-hidden">
                                 <div className="h-full bg-primary" style={{ width: `${(lembretes.filter(l => l.status === 'Concluído').length / (lembretes.length || 1)) * 100}%` }}></div>
                             </div>
@@ -319,12 +319,12 @@ export function Lembretes() {
                                     <Card className="border-t-4 border-t-slate-300 shadow-lg overflow-hidden bg-slate-50/50">
                                         <CardHeader className="bg-slate-200/30 py-4">
                                             <div className="flex items-center justify-between">
-                                                <CardTitle className="text-lg font-black uppercase flex items-center gap-2 text-slate-500">
+                                                <CardTitle className="text-lg font-black uppercase flex items-center gap-2 text-muted-foreground">
                                                     <Bell className="w-5 h-5" /> Tarefas Gerais
                                                 </CardTitle>
                                                 <Badge variant="outline" className="font-bold">{lembretes.filter(l => !l.atendente_id && l.status === 'Pendente').length} Pendentes</Badge>
                                             </div>
-                                            <CardDescription className="text-[10px] font-bold uppercase text-slate-400">Sem atendente definido</CardDescription>
+                                            <CardDescription className="text-[10px] font-bold uppercase text-muted-foreground">Sem atendente definido</CardDescription>
                                         </CardHeader>
                                         <CardContent className="p-0">
                                             <div className="divide-y divide-border">

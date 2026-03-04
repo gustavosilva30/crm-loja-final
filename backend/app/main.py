@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api import auth, estoque, vendas
+from app.api import auctions
 from app.api.integrations import ml_auth, ml_webhooks
 
 app = FastAPI(
@@ -24,6 +25,7 @@ app.include_router(estoque.router, prefix="/api/estoque", tags=["Estoque"])
 app.include_router(vendas.router, prefix="/api/vendas", tags=["Vendas"])
 app.include_router(ml_auth.router, prefix="/api/integrations/ml", tags=["Mercado Livre Auth"])
 app.include_router(ml_webhooks.router, prefix="/api/webhooks/ml", tags=["Mercado Livre Webhooks"])
+app.include_router(auctions.router, prefix="/api/auctions", tags=["Leilões"])
 
 @app.get("/")
 def read_root():

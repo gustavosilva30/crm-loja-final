@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Select } from "@/components/ui/select"
 import { Modal } from "@/components/ui/modal"
 import { Search, Filter, Trash2, Printer, Plus, X, UserPlus, PackagePlus, DollarSign, ShoppingCart, Truck, Import, Package, Pencil } from "lucide-react"
 import { supabase } from "@/lib/supabase"
@@ -22,6 +23,7 @@ interface Venda {
     data_venda: string
     forma_pagamento?: string
     atendente_id?: string
+    vendedor_id?: string
     clientes?: { id: string, nome: string, documento?: string, email?: string, telefone?: string, endereco?: string }
     atendentes?: { id: string, nome: string }
     vendedor?: { id: string, nome: string }
@@ -45,6 +47,13 @@ export function Vendas() {
     const { atendente } = useAuthStore()
     const [printAfterSave, setPrintAfterSave] = useState(false)
     const [selectedIds, setSelectedIds] = useState<string[]>([])
+
+    // Filtros Profissionais
+    const [startDate, setStartDate] = useState("")
+    const [endDate, setEndDate] = useState("")
+    const [filterStatus, setFilterStatus] = useState<string>("all")
+    const [filterClienteId, setFilterClienteId] = useState<string>("all")
+    const [filterVendedorId, setFilterVendedorId] = useState<string>("all")
 
     const toggleSelect = (id: string) => {
         setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id])
@@ -104,11 +113,48 @@ export function Vendas() {
         }
     }, [searchParams, vendas, loading])
 
+    // Efeito para carregar orçamento convertido (crm_venda_cart)
+    useEffect(() => {
+        const cartStr = localStorage.getItem('crm_venda_cart')
+        if (cartStr) {
+            try {
+                const cartData = JSON.parse(cartStr)
+                if (cartData.items && Array.isArray(cartData.items)) {
+                    // Preencher itens
+                    const importedItems = cartData.items.map((item: any) => ({
+                        produto_id: item.produto_id,
+                        quantidade: item.quantidade,
+                        preco_unitario: item.preco_unitario,
+                        subtotal: item.quantidade * item.preco_unitario,
+                        _search: item.nome || ''
+                    }))
+                    setVendaItems(importedItems)
+
+                    // Preencher cabeçalho
+                    setVendaForm(prev => ({
+                        ...prev,
+                        cliente_id: cartData.cliente_id || '',
+                        atendente_id: cartData.atendente_id || atendente?.id || '',
+                    }))
+
+                    // Abrir modal se flag estiver ativa
+                    if (cartData.autoOpenCheckout) {
+                        setIsNovoPedidoModalOpen(true)
+                    }
+                }
+            } catch (e) {
+                console.error("Erro ao carregar dados do orçamento no checkout:", e)
+            } finally {
+                // Limpa apenas após abrir o modal para garantir que os dados fiquem visíveis 
+                // Se fecharmos sem salvar, o dado some.
+            }
+        }
+    }, [isNovoPedidoModalOpen === false]) // Executa quando o modal não está aberto e detectamos a carga
+
     // resources for new sale
     const [clientes, setClientes] = useState<any[]>([])
     const [atendentes, setAtendentes] = useState<any[]>([])
     const [produtos, setProdutos] = useState<any[]>([])
-    const [filterStatus, setFilterStatus] = useState<string>("Pendente")
 
     // Quick Creation Modals State
     const [isNovoClienteModalOpen, setIsNovoClienteModalOpen] = useState(false)
@@ -147,6 +193,11 @@ export function Vendas() {
         setVendaItems([{ produto_id: '', quantidade: 1, preco_unitario: 0, subtotal: 0 }])
         setShowDeliveryForm(false)
         setIsNovoPedidoModalOpen(true)
+    }
+
+    const handleCloseNovoPedido = () => {
+        setIsNovoPedidoModalOpen(false)
+        localStorage.removeItem('crm_venda_cart') // Limpa carga de orçamento ao fechar
     }
 
     const [showDeliveryForm, setShowDeliveryForm] = useState(false)
@@ -476,6 +527,7 @@ export function Vendas() {
                 handleOpenReceipt(vendaId)
                 setPrintAfterSave(false)
             }
+            localStorage.removeItem('crm_venda_cart') // Limpa carga de orçamento ao salvar com sucesso
         } catch (err: any) {
             alert('Erro ao criar venda: ' + err.message)
             setPrintAfterSave(false)
@@ -614,10 +666,18 @@ export function Vendas() {
             String(v.numero_pedido).includes(termLower) ||
             v.vendas_itens?.some(i => (i.produtos?.nome || '').toLowerCase().includes(termLower));
 
-        const statusLower = String(v.status).toLowerCase();
-        // Mostra pedidos que não estão finalizados
-        const matchesStatus = !['pago', 'entregue', 'cancelado'].includes(statusLower);
-        return matchesSearch && matchesStatus;
+        const matchesStatus = filterStatus === 'all'
+            ? !['pago', 'entregue', 'cancelado'].includes(String(v.status).toLowerCase()) // Padrão da página "Pendentes"
+            : v.status === filterStatus;
+
+        const dateVenda = v.data_venda ? new Date(v.data_venda).getTime() : 0;
+        const matchesStartDate = !startDate || dateVenda >= new Date(startDate + 'T00:00:00').getTime();
+        const matchesEndDate = !endDate || dateVenda <= new Date(endDate + 'T23:59:59').getTime();
+
+        const matchesCliente = filterClienteId === 'all' || v.cliente_id === filterClienteId;
+        const matchesVendedor = filterVendedorId === 'all' || v.atendente_id === filterVendedorId || v.vendedor_id === filterVendedorId;
+
+        return matchesSearch && matchesStatus && matchesStartDate && matchesEndDate && matchesCliente && matchesVendedor;
     })
 
     const formatNumPedido = (num?: number) => num ? String(num) : '------'
@@ -650,11 +710,53 @@ export function Vendas() {
                                     </Button>
                                 </div>
                             )}
-                            <Button variant="outline" className="gap-2" onClick={() => setIsFilterOpen(!isFilterOpen)}>
+                            <Button variant={isFilterOpen ? "secondary" : "outline"} className="gap-2" onClick={() => setIsFilterOpen(!isFilterOpen)}>
                                 <Filter className="w-4 h-4" /> Filtros
                             </Button>
                         </div>
                     </div>
+
+                    {isFilterOpen && (
+                        <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mt-4 p-4 bg-muted/30 rounded-lg border animate-in fade-in slide-in-from-top-2">
+                            <div className="space-y-1">
+                                <Label className="text-[10px] uppercase font-bold text-muted-foreground">Início</Label>
+                                <Input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="h-9 text-xs" />
+                            </div>
+                            <div className="space-y-1">
+                                <Label className="text-[10px] uppercase font-bold text-muted-foreground">Fim</Label>
+                                <Input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="h-9 text-xs" />
+                            </div>
+                            <div className="space-y-1">
+                                <Label className="text-[10px] uppercase font-bold text-muted-foreground">Status</Label>
+                                <Select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
+                                    <option value="all">Todos os Status</option>
+                                    <option value="Pendente">Pendentes</option>
+                                    <option value="Pago">Pagos</option>
+                                    <option value="Enviado">Enviados</option>
+                                    <option value="Entregue">Entregues</option>
+                                    <option value="Cancelado">Cancelados</option>
+                                </Select>
+                            </div>
+                            <div className="space-y-1">
+                                <Label className="text-[10px] uppercase font-bold text-muted-foreground">Cliente</Label>
+                                <Select value={filterClienteId} onChange={e => setFilterClienteId(e.target.value)}>
+                                    <option value="all">Todos os Clientes</option>
+                                    {clientes.map(c => (
+                                        <option key={c.id} value={c.id}>{c.nome}</option>
+                                    ))}
+                                </Select>
+                            </div>
+                            <div className="space-y-1">
+                                <Label className="text-[10px] uppercase font-bold text-muted-foreground">Vendedor</Label>
+                                <Select value={filterVendedorId} onChange={e => setFilterVendedorId(e.target.value)}>
+                                    <option value="all">Todos os Vendedores</option>
+                                    {atendentes.map(a => (
+                                        <option key={a.id} value={a.id}>{a.nome}</option>
+                                    ))}
+                                </Select>
+                            </div>
+                        </div>
+                    )}
                 </CardHeader>
                 <CardContent>
                     <Table>
@@ -716,7 +818,12 @@ export function Vendas() {
             </Card>
 
             {/* MODAL NOVA VENDA */}
-            <Modal isOpen={isNovoPedidoModalOpen} onClose={() => setIsNovoPedidoModalOpen(false)} title="Nova Venda" className="max-w-4xl">
+            <Modal
+                isOpen={isNovoPedidoModalOpen}
+                onClose={handleCloseNovoPedido}
+                title={editingVendaId ? "Editar Pedido" : "Novo Pedido de Venda"}
+                className="max-w-4xl"
+            >
                 <form onSubmit={handleCreateVenda} className="space-y-6">
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div className="space-y-2">
@@ -984,7 +1091,7 @@ export function Vendas() {
                     <div className="flex items-center justify-between pt-4 border-t">
                         <div className="text-2xl font-black">TOTAL: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(calculateTotal())}</div>
                         <div className="flex gap-3">
-                            <Button type="button" variant="outline" onClick={() => setIsNovoPedidoModalOpen(false)}>Cancelar</Button>
+                            <Button type="button" variant="outline" onClick={handleCloseNovoPedido}>Cancelar</Button>
                             <Button type="submit" variant="outline" onClick={() => setPrintAfterSave(true)} className="gap-2 border-primary text-primary hover:bg-primary hover:text-white">
                                 <Printer className="w-4 h-4" /> Salvar e Imprimir
                             </Button>
@@ -1457,7 +1564,7 @@ export function Vendas() {
                         </div>
                         <div className="flex justify-between text-lg pt-2 border-t">
                             <span className="font-black">TOTAL:</span>
-                            <span className="font-black text-primary">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(vendaParaFinalizar?.total || 0)}</span>
+                            <span className="font-black text-foreground">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(vendaParaFinalizar?.total || 0)}</span>
                         </div>
                     </div>
 

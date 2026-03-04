@@ -17,6 +17,7 @@ import { Relatorios } from "./pages/Relatorios"
 import { Caixa } from "./pages/Caixa"
 import { Fiscal } from "./pages/Fiscal"
 import { Atendimento } from "./pages/Atendimento"
+import { Leiloes } from "./pages/Leiloes"
 import { ThemeProvider } from "./components/ThemeProvider"
 import { supabase } from "./lib/supabase"
 import { useAuthStore } from "./store/authStore"
@@ -65,6 +66,7 @@ export default function App() {
                 <Route path="caixa" element={<Caixa />} />
                 <Route path="fiscal" element={<Fiscal />} />
                 <Route path="atendimento" element={<Atendimento />} />
+                <Route path="leiloes" element={<Leiloes />} />
               </Route>
             </>
           )}

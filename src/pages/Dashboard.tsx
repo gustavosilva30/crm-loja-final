@@ -55,36 +55,36 @@ export function Dashboard() {
     <div className="space-y-8">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-        <p className="text-muted-foreground mt-1">Visão geral do seu negócio hoje.</p>
+        <p className="text-foreground mt-1">Visão geral do seu negócio hoje.</p>
       </div>
 
       {/* KPIs */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card className="border-primary/20 bg-primary/5">
+        <Card className="border-border bg-card shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Receita Total</CardTitle>
-            <DollarSign className="h-4 w-4 text-primary" />
+            <CardTitle className="text-sm font-medium text-foreground">Receita Total</CardTitle>
+            <DollarSign className="h-4 w-4 text-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-primary">
+            <div className="text-2xl font-bold text-foreground">
               {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(stats.faturamento)}
             </div>
-            <p className="text-xs text-muted-foreground flex items-center mt-1">
-              <ArrowUpRight className="h-3 w-3 text-primary mr-1" />
-              Baseado no histórico do Supabase
+            <p className="text-xs text-foreground flex items-center mt-1">
+              <ArrowUpRight className="h-3 w-3 text-emerald-500 mr-1" />
+              Sincronizado com Supabase
             </p>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="border-border bg-card shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Vendas Realizadas</CardTitle>
-            <ShoppingBag className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium text-foreground">Vendas Realizadas</CardTitle>
+            <ShoppingBag className="h-4 w-4 text-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.vendasCont}</div>
-            <p className="text-xs text-muted-foreground flex items-center mt-1">
-              <span className="text-primary font-medium">Total de pedidos</span>
+            <p className="text-xs text-foreground flex items-center mt-1">
+              <span className="text-foreground font-medium">Total de pedidos</span>
             </p>
           </CardContent>
         </Card>
@@ -96,25 +96,25 @@ export function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-destructive">{stats.estoqueBaixo} itens</div>
-            <p className="text-xs text-muted-foreground flex items-center mt-1">
+            <p className="text-xs text-foreground flex items-center mt-1">
               <ArrowDownRight className="h-3 w-3 text-destructive mr-1" />
               Requer atenção imediata
             </p>
           </CardContent>
         </Card>
 
-        <Card className="border-accent/20 bg-accent/5">
+        <Card className="border-border bg-card shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Mercado Livre</CardTitle>
-            <TrendingUp className="h-4 w-4 text-accent" />
+            <CardTitle className="text-sm font-medium text-foreground">Mercado Livre</CardTitle>
+            <TrendingUp className="h-4 w-4 text-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-accent">
+            <div className="text-2xl font-bold text-foreground">
               {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(stats.mlFaturamento)}
             </div>
-            <p className="text-xs text-muted-foreground flex items-center mt-1">
-              <ArrowUpRight className="h-3 w-3 text-accent mr-1" />
-              <span className="text-accent">Vendas integradas</span>
+            <p className="text-xs text-foreground flex items-center mt-1">
+              <ArrowUpRight className="h-3 w-3 text-sky-500 mr-1" />
+              <span className="text-foreground">Vendas integradas</span>
             </p>
           </CardContent>
         </Card>
@@ -132,18 +132,18 @@ export function Dashboard() {
                 <AreaChart data={salesData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                   <defs>
                     <linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#00ff9d" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="#00ff9d" stopOpacity={0} />
+                      <stop offset="5%" stopColor="#94a3b8" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="#94a3b8" stopOpacity={0} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} />
-                  <XAxis dataKey="name" stroke="#a1a1aa" fontSize={12} tickLine={false} axisLine={false} />
-                  <YAxis stroke="#a1a1aa" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => `R$${value / 1000}k`} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+                  <XAxis dataKey="name" stroke="#64748b" fontSize={12} tickLine={false} axisLine={false} />
+                  <YAxis stroke="#64748b" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => `R$${value / 1000}k`} />
                   <Tooltip
-                    contentStyle={{ backgroundColor: '#09090b', borderColor: '#27272a', borderRadius: '8px' }}
-                    itemStyle={{ color: '#00ff9d' }}
+                    contentStyle={{ backgroundColor: '#ffffff', borderColor: '#e2e8f0', borderRadius: '8px' }}
+                    itemStyle={{ color: '#475569' }}
                   />
-                  <Area type="monotone" dataKey="total" stroke="#00ff9d" strokeWidth={2} fillOpacity={1} fill="url(#colorTotal)" />
+                  <Area type="monotone" dataKey="total" stroke="#64748b" strokeWidth={2} fillOpacity={1} fill="url(#colorTotal)" />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
@@ -166,7 +166,7 @@ export function Dashboard() {
                       {order.clientes?.nome || "Consumidor"}
                       {order.origem_ml && <Badge variant="ml" className="text-[10px] px-1.5 py-0">ML</Badge>}
                     </div>
-                    <p className="text-xs text-muted-foreground font-mono">
+                    <p className="text-xs text-foreground font-mono">
                       #{order.id.slice(0, 8)}
                     </p>
                   </div>

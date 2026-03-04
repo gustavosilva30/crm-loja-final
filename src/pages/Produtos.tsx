@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select } from "@/components/ui/select"
 import { Modal } from "@/components/ui/modal"
-import { Plus, Search, Filter, LayoutGrid, List, Package, Trash2, Pencil, ShoppingCart, FileText, Camera, Upload, X, Shield, Activity, Box, Tag, Ruler, Truck, Info, Settings, Maximize2 } from "lucide-react"
+import { Plus, Search, Filter, LayoutGrid, List, Package, Trash2, Pencil, ShoppingCart, FileText, Camera, Upload, X, Shield, Activity, Box, Tag, Ruler, Truck, Info, Settings, Maximize2, ChevronLeft, ChevronRight } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { supabase } from "@/lib/supabase"
 import { useAuthStore } from "@/store/authStore"
@@ -26,6 +26,7 @@ interface Produto {
   preco_prazo?: number
   categoria_id: string | null
   imagem_url: string | null
+  imagem_urls: string[]
   status?: string
   quantidade_orcamento?: number
   compatibilidade?: string | null
@@ -77,12 +78,13 @@ export function Produtos() {
   const [submitting, setSubmitting] = useState(false)
   const [isCompatModalOpen, setIsCompatModalOpen] = useState(false)
   const [selectedCompat, setSelectedCompat] = useState<string | null>(null)
-  const [selectedFile, setSelectedFile] = useState<File | null>(null)
-  const [imagePreview, setImagePreview] = useState<string | null>(null)
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([])
+  const [imagePreviews, setImagePreviews] = useState<string[]>([])
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false)
 
   // Image Viewer State
-  const [selectedImage, setSelectedImage] = useState<string | null>(null)
+  const [selectedImages, setSelectedImages] = useState<string[]>([])
+  const [initialViewerIndex, setInitialViewerIndex] = useState(0)
   const [isViewerOpen, setIsViewerOpen] = useState(false)
   const [newCat, setNewCat] = useState({
     nome: '',
@@ -92,6 +94,7 @@ export function Produtos() {
     peso_padrao: 0
   })
   const [editingCatId, setEditingCatId] = useState<string | null>(null)
+  const [productImageIndexes, setProductImageIndexes] = useState<Record<string, number>>({})
   const { atendente } = useAuthStore()
 
   // Pagination State
@@ -115,6 +118,7 @@ export function Produtos() {
     preco_prazo: 0,
     categoria_id: '',
     imagem_url: '',
+    imagem_urls: [],
     compatibilidade: '',
     ativo: true,
     imobilizado: false,
@@ -150,6 +154,7 @@ export function Produtos() {
   const [newCompat, setNewCompat] = useState<Compatibilidade>({ marca: '', modelo: '', ano: '', versao: '' })
 
   const fetchProdutos = async () => {
+    setLoading(true)
     try {
       const { data, error } = await supabase
         .from('produtos')
@@ -189,36 +194,57 @@ export function Produtos() {
     if (viewMode === "list" && ![30, 60].includes(pageSize)) setPageSize(30)
   }, [viewMode, searchTerm])
 
+  useEffect(() => {
+    if (!isModalOpen && !editingProduto) {
+      setImagePreviews([])
+      setSelectedFiles([])
+    }
+  }, [isModalOpen, editingProduto])
+
   const handleAddProduto = async (e: React.FormEvent) => {
     e.preventDefault()
     setSubmitting(true)
     try {
-      let finalImageUrl = newProduto.imagem_url
+      const uploadedUrls: string[] = [...newProduto.imagem_urls]
 
-      // 1. Upload imagem se houver arquivo selecionado
-      if (selectedFile) {
-        const fileExt = selectedFile.name.split('.').pop()
-        const fileName = `${Math.random()}.${fileExt}`
-        const filePath = `product-images/${fileName}`
+      // 1. Upload imagens se houver arquivos selecionados
+      if (selectedFiles.length > 0) {
+        for (const file of selectedFiles) {
+          const fileExt = file.name.split('.').pop()
+          const fileName = `${Math.random()}.${fileExt}`
+          const filePath = `product-images/${fileName}`
 
-        const { error: uploadError } = await supabase.storage
-          .from('produtos')
-          .upload(filePath, selectedFile)
+          const { error: uploadError } = await supabase.storage
+            .from('produtos')
+            .upload(filePath, file)
 
-        if (uploadError) throw new Error(`Erro no upload: ${uploadError.message}`)
+          if (uploadError) throw new Error(`Erro no upload: ${uploadError.message}`)
 
-        const { data: { publicUrl } } = supabase.storage
-          .from('produtos')
-          .getPublicUrl(filePath)
+          const { data: { publicUrl } } = supabase.storage
+            .from('produtos')
+            .getPublicUrl(filePath)
 
-        finalImageUrl = publicUrl
+          uploadedUrls.push(publicUrl)
+        }
       }
 
       const { localizacao, ...productData } = newProduto
+      const finalImageUrl = uploadedUrls.length > 0 ? uploadedUrls[0] : null
+
+      // Clean up UUID fields to avoid "invalid input syntax for type uuid: ''"
+      const sanitizedData = {
+        ...productData,
+        imagem_url: finalImageUrl,
+        imagem_urls: uploadedUrls,
+        categoria_id: productData.categoria_id || null,
+        localizacao_id: productData.localizacao_id || null,
+        meli_id: productData.meli_id || null,
+        atendente_id: editingProduto ? productData.atendente_id : atendente?.id
+      }
 
       const { data: savedProd, error: prodError } = editingProduto
-        ? await supabase.from('produtos').update({ ...productData, imagem_url: finalImageUrl, categoria_id: productData.categoria_id || null }).eq('id', editingProduto.id).select().single()
-        : await supabase.from('produtos').insert([{ ...productData, imagem_url: finalImageUrl, categoria_id: productData.categoria_id || null, atendente_id: atendente?.id }]).select().single()
+        ? await supabase.from('produtos').update(sanitizedData).eq('id', editingProduto.id).select().single()
+        : await supabase.from('produtos').insert([sanitizedData]).select().single()
 
       if (prodError) throw prodError
 
@@ -280,8 +306,8 @@ export function Produtos() {
         comprimento_cm: 0,
         informacoes_adicionais: ''
       })
-      setSelectedFile(null)
-      setImagePreview(null)
+      setSelectedFiles([])
+      setImagePreviews([])
       fetchProdutos()
       setIsModalOpen(false)
     } catch (err: any) {
@@ -347,9 +373,24 @@ export function Produtos() {
     if (data) setCompatList(data)
     else setCompatList([])
 
-    setImagePreview(produto.imagem_url || null)
-    setSelectedFile(null)
+    setImagePreviews(produto.imagem_urls || (produto.imagem_url ? [produto.imagem_url] : []))
+    setSelectedFiles([])
     setIsModalOpen(true)
+  }
+
+  const removeImage = (index: number) => {
+    // Se for uma imagem já salva
+    const currentUrls = [...newProduto.imagem_urls]
+    if (index < currentUrls.length) {
+      const removed = currentUrls.splice(index, 1)
+      setNewProduto({ ...newProduto, imagem_urls: currentUrls })
+      setImagePreviews(prev => prev.filter((_, i) => i !== index))
+    } else {
+      // Se for uma imagem nova (ainda não salva)
+      const fileIndex = index - currentUrls.length
+      setSelectedFiles(prev => prev.filter((_, i) => i !== fileIndex))
+      setImagePreviews(prev => prev.filter((_, i) => i !== index))
+    }
   }
 
   const filteredProdutos = produtos.filter(p =>
@@ -577,24 +618,23 @@ export function Produtos() {
             preco_prazo: 0,
             categoria_id: '',
             imagem_url: '',
+            imagem_urls: [],
             compatibilidade: '',
             ativo: true,
             imobilizado: false,
             item_seguranca: false,
             rastreavel: false,
-            codigo_etiqueta: '',
-            part_number: '',
-            localizacao: '',
+            meli_id: '',
             marca: '',
             modelo: '',
             ano: new Date().getFullYear(),
             versao: '',
-            cst: '',
-            cfop: '',
             adicional_venda_percentual: 0,
-            unidade_medida: 'UN',
             ncm: '',
             cest: '',
+            cfop: '',
+            cst: '',
+            unidade_medida: 'UN',
             outros_custos: 0,
             qualidade: 'A',
             origem: '',
@@ -606,8 +646,8 @@ export function Produtos() {
             informacoes_adicionais: ''
           })
           setCompatList([])
-          setImagePreview(null)
-          setSelectedFile(null)
+          setImagePreviews([])
+          setSelectedFiles([])
           setIsModalOpen(true)
         }}>
           <Plus className="w-4 h-4" />
@@ -717,15 +757,17 @@ export function Produtos() {
                         <div
                           className="w-10 h-10 rounded border bg-muted overflow-hidden flex items-center justify-center shrink-0 cursor-zoom-in group/img relative"
                           onClick={() => {
-                            if (produto.imagem_url) {
-                              setSelectedImage(produto.imagem_url)
+                            const imgs = produto.imagem_urls && produto.imagem_urls.length > 0 ? produto.imagem_urls : (produto.imagem_url ? [produto.imagem_url] : [])
+                            if (imgs.length > 0) {
+                              setSelectedImages(imgs)
+                              setInitialViewerIndex(0)
                               setIsViewerOpen(true)
                             }
                           }}
                         >
                           {produto.imagem_url ? (
                             <>
-                              <img src={produto.imagem_url} alt={produto.nome} className="w-full h-full object-cover transition-transform group-hover/img:scale-110" />
+                              <img src={produto.imagem_url} alt={produto.nome} className="w-full h-full object-contain transition-transform group-hover/img:scale-110" />
                               <div className="absolute inset-0 bg-black/20 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center">
                                 <Maximize2 className="w-4 h-4 text-white" />
                               </div>
@@ -792,22 +834,59 @@ export function Produtos() {
                   <div
                     className="h-40 bg-muted/30 flex items-center justify-center border-b border-border/10 relative overflow-hidden cursor-zoom-in group/img"
                     onClick={() => {
-                      if (produto.imagem_url) {
-                        setSelectedImage(produto.imagem_url)
+                      const imgs = produto.imagem_urls && produto.imagem_urls.length > 0 ? produto.imagem_urls : (produto.imagem_url ? [produto.imagem_url] : [])
+                      if (imgs.length > 0) {
+                        setSelectedImages(imgs)
+                        setInitialViewerIndex(productImageIndexes[produto.id] || 0)
                         setIsViewerOpen(true)
                       }
                     }}
                   >
-                    {produto.imagem_url ? (
-                      <>
-                        <img src={produto.imagem_url} alt={produto.nome} className="w-full h-full object-cover transition-transform group-hover/img:scale-110 duration-500" />
-                        <div className="absolute inset-0 bg-black/20 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-[2px]">
-                          <div className="bg-white/20 p-2 rounded-full backdrop-blur-md">
-                            <Maximize2 className="w-6 h-6 text-white" />
+                    {(() => {
+                      const imgs = produto.imagem_urls && produto.imagem_urls.length > 0 ? produto.imagem_urls : (produto.imagem_url ? [produto.imagem_url] : [])
+                      const currentIndex = productImageIndexes[produto.id] || 0
+                      const currentImg = imgs[currentIndex]
+
+                      if (!currentImg) return <Package className="w-12 h-12 text-muted-foreground/20" />
+
+                      return (
+                        <>
+                          <img src={currentImg} alt={produto.nome} className="w-full h-full object-contain transition-transform group-hover/img:scale-105 duration-500" />
+                          <div className="absolute inset-0 bg-black/20 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-[1px]">
+                            <div className="bg-white/20 p-2 rounded-full backdrop-blur-md">
+                              <Maximize2 className="w-6 h-6 text-white" />
+                            </div>
                           </div>
-                        </div>
-                      </>
-                    ) : <Package className="w-12 h-12 text-muted-foreground/20" />}
+                          {imgs.length > 1 && (
+                            <>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setProductImageIndexes(prev => ({ ...prev, [produto.id]: (currentIndex - 1 + imgs.length) % imgs.length }))
+                                }}
+                                className="absolute left-2 top-1/2 -translate-y-1/2 p-1.5 bg-black/30 hover:bg-black/50 text-white rounded-full transition-opacity opacity-0 group-hover/img:opacity-100"
+                              >
+                                <ChevronLeft className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setProductImageIndexes(prev => ({ ...prev, [produto.id]: (currentIndex + 1) % imgs.length }))
+                                }}
+                                className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 bg-black/30 hover:bg-black/50 text-white rounded-full transition-opacity opacity-0 group-hover/img:opacity-100"
+                              >
+                                <ChevronRight className="w-4 h-4" />
+                              </button>
+                              <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1">
+                                {imgs.map((_, i) => (
+                                  <div key={i} className={`w-1 h-1 rounded-full ${i === currentIndex ? "bg-white scale-125" : "bg-white/40"}`} />
+                                ))}
+                              </div>
+                            </>
+                          )}
+                        </>
+                      )
+                    })()}
                     <div className="absolute top-2 right-2 flex flex-col gap-1 items-end pointer-events-none">
                       {!!produto.meli_id && <Badge variant="secondary" className="text-[10px] shadow-sm bg-yellow-500/20 text-yellow-700 border-yellow-500/20">MELI</Badge>}
                       {!!(produto.quantidade_orcamento && produto.quantidade_orcamento > 0) && (
@@ -824,8 +903,8 @@ export function Produtos() {
                       </div>
                     </div>
                     <h3 className="font-bold text-sm line-clamp-2 mb-1 h-10 tracking-tight">{produto.nome}</h3>
-                    <Button variant="outline" size="sm" className="w-full text-[10px] h-7 mb-3 border-primary/20 text-primary hover:bg-primary/5" onClick={() => { setSelectedCompat(produto.compatibilidade || "Nenhuma compatibilidade cadastrada"); setIsCompatModalOpen(true); }}>Mostrar Compatibilidades</Button>
-                    <div className="flex items-center justify-between mb-3"><span className="font-black text-lg text-primary">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(produto.preco)}</span></div>
+                    <Button variant="outline" size="sm" className="w-full text-[10px] h-7 mb-3 border-primary/20 text-foreground hover:bg-primary/5" onClick={() => { setSelectedCompat(produto.compatibilidade || "Nenhuma compatibilidade cadastrada"); setIsCompatModalOpen(true); }}>Mostrar Compatibilidades</Button>
+                    <div className="flex items-center justify-between mb-3"><span className="font-black text-lg text-foreground">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(produto.preco)}</span></div>
                     <div className="flex items-center justify-between pt-3 border-t border-border/10">
                       <div className="flex gap-2">
                         <button onClick={() => handleAddToCart(produto, 'orcamento')} title="Enviar para Orçamento" className="p-1.5 text-blue-500 hover:text-white transition-colors hover:bg-blue-500 rounded"><FileText className="w-4 h-4" /></button>
@@ -975,39 +1054,70 @@ export function Produtos() {
               </div>
 
               <div className="p-4 border border-dashed rounded-lg bg-muted/10">
-                <Label className="mb-2 block">Imagens do Produto</Label>
-                <div className="flex items-center gap-4">
-                  <div
-                    className="relative w-24 h-24 rounded border flex items-center justify-center bg-background overflow-hidden group cursor-zoom-in"
-                    onClick={() => {
-                      if (imagePreview) {
-                        setSelectedImage(imagePreview)
-                        setIsViewerOpen(true)
-                      }
-                    }}
-                  >
-                    {imagePreview ? (
-                      <>
-                        <img src={imagePreview} className="w-full h-full object-cover transition-transform group-hover:scale-110" />
-                        <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                          <Maximize2 className="w-4 h-4 text-white" />
-                        </div>
-                      </>
-                    ) : (
-                      <Camera className="w-8 h-8 text-muted-foreground/30" />
-                    )}
-                  </div>
-                  <Button type="button" variant="outline" size="sm" onClick={() => document.getElementById('img-up')?.click()}><Upload className="w-4 h-4 mr-2" /> Carregar Imagem</Button>
-                  <input id="img-up" type="file" className="hidden" accept="image/*" onChange={(e) => {
-                    const file = e.target.files?.[0]
-                    if (file) {
-                      setSelectedFile(file)
-                      const reader = new FileReader();
-                      reader.onloadend = () => setImagePreview(reader.result as string)
-                      reader.readAsDataURL(file)
-                    }
-                  }} />
+                <div className="flex items-center justify-between mb-2">
+                  <Label>Imagens do Produto ({imagePreviews.length})</Label>
+                  <Button type="button" variant="link" className="h-auto p-0 text-xs font-bold uppercase gap-1" onClick={() => document.getElementById('img-up')?.click()}>
+                    <Plus className="w-3 h-3" /> Adicionar Fotos
+                  </Button>
                 </div>
+
+                <div className="grid grid-cols-4 md:grid-cols-6 gap-2">
+                  {imagePreviews.map((preview, index) => (
+                    <div key={index} className="relative aspect-square rounded border bg-background overflow-hidden group">
+                      <img
+                        src={preview}
+                        className="w-full h-full object-contain transition-transform group-hover:scale-110"
+                        onClick={() => {
+                          setSelectedImages(imagePreviews)
+                          setInitialViewerIndex(index)
+                          setIsViewerOpen(true)
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeImage(index)}
+                        className="absolute top-1 right-1 p-1 bg-destructive text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                      <div className="absolute bottom-0 left-0 right-0 bg-black/40 text-[8px] text-white text-center py-0.5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                        {index === 0 ? "Principal" : `Foto ${index + 1}`}
+                      </div>
+                    </div>
+                  ))}
+
+                  <button
+                    type="button"
+                    onClick={() => document.getElementById('img-up')?.click()}
+                    className="aspect-square rounded border-2 border-dashed flex flex-col items-center justify-center bg-background/50 hover:bg-background transition-colors text-muted-foreground/40 hover:text-primary/40"
+                  >
+                    <Plus className="w-6 h-6" />
+                    <span className="text-[8px] font-bold uppercase mt-1">Add</span>
+                  </button>
+                </div>
+
+                <input
+                  id="img-up"
+                  type="file"
+                  className="hidden"
+                  accept="image/*"
+                  multiple
+                  onChange={(e) => {
+                    const files = Array.from(e.target.files || [])
+                    if (files.length > 0) {
+                      setSelectedFiles(prev => [...prev, ...files])
+
+                      files.forEach(file => {
+                        const reader = new FileReader();
+                        reader.onloadend = () => {
+                          setImagePreviews(prev => [...prev, reader.result as string])
+                        }
+                        reader.readAsDataURL(file)
+                      })
+                    }
+                  }}
+                />
+                <p className="text-[9px] text-muted-foreground mt-2 uppercase tracking-tighter">A primeira imagem será o ícone principal no catálogo.</p>
               </div>
             </TabsContent>
 
@@ -1209,7 +1319,8 @@ export function Produtos() {
       </Modal>
 
       <ImageViewer
-        src={selectedImage}
+        images={selectedImages}
+        initialIndex={initialViewerIndex}
         isOpen={isViewerOpen}
         onClose={() => setIsViewerOpen(false)}
       />

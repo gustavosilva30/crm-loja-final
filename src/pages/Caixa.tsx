@@ -203,7 +203,7 @@ export function Caixa() {
                         <Button variant="outline" className="gap-2 border-rose-500/50 text-rose-500 hover:bg-rose-500/10" onClick={() => { setTipoMovimento('Sangria'); setIsMovimentoModalOpen(true); }}>
                             <ArrowDownRight className="w-4 h-4" /> Sangria
                         </Button>
-                        <Button variant="destructive" className="gap-2" onClick={() => {
+                        <Button variant="destructive" className="gap-2 shadow-sm font-bold active:scale-95 transition-all" onClick={() => {
                             setValorFechamento(saldoAtual.toString())
                             setIsFechamentoModalOpen(true)
                         }}>
@@ -219,13 +219,13 @@ export function Caixa() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                <Card className="bg-primary/5 border-primary/20 shadow-[0_0_15px_rgba(0,255,157,0.05)]">
+                <Card className="bg-muted border-border shadow-sm">
                     <CardHeader className="flex flex-row items-center justify-between pb-2">
-                        <CardTitle className="text-sm font-medium">Saldo Atual</CardTitle>
-                        <Wallet className="w-4 h-4 text-primary" />
+                        <CardTitle className="text-sm font-medium text-foreground">Saldo Atual</CardTitle>
+                        <Wallet className="w-4 h-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">
+                        <div className="text-2xl font-bold text-foreground">
                             {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(saldoAtual)}
                         </div>
                         <p className="text-xs text-muted-foreground mt-1">
@@ -320,7 +320,7 @@ export function Caixa() {
                                             <TableCell className="text-rose-500 font-medium">
                                                 {reg.valor_fechamento ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(reg.valor_fechamento) : "-"}
                                             </TableCell>
-                                            <TableCell className={diferenca !== null ? (diferenca >= 0 ? "text-primary font-bold" : "text-rose-500 font-bold") : ""}>
+                                            <TableCell className={diferenca !== null ? (diferenca >= 0 ? "text-foreground font-bold" : "text-rose-500 font-bold") : ""}>
                                                 {diferenca !== null ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(diferenca) : "-"}
                                             </TableCell>
                                             <TableCell>
@@ -448,8 +448,8 @@ export function Caixa() {
                 title="Fechamento de Caixa"
             >
                 <form onSubmit={handleFecharCaixa} className="space-y-4">
-                    <div className="p-3 bg-primary/10 border border-primary/20 rounded-lg flex gap-3 text-primary text-sm">
-                        <AlertCircle className="w-5 h-5 shrink-0" />
+                    <div className="p-3 bg-muted border border-border rounded-lg flex gap-3 text-foreground text-sm">
+                        <AlertCircle className="w-5 h-5 shrink-0 text-muted-foreground" />
                         <p>O valor de abertura hoje foi <strong>{hoje ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(hoje.valor_abertura) : ""}</strong>. Informe o valor total final.</p>
                     </div>
 

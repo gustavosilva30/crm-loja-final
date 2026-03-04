@@ -140,11 +140,11 @@ export function Atendimento() {
                 </div>
                 <div className="overflow-y-auto flex-1 divide-y divide-border/50">
                     {loadingConv ? (
-                        <div className="p-8 text-center text-muted-foreground text-xs">
+                        <div className="p-8 text-center text-foreground text-xs">
                             <Loader2 className="animate-spin inline mr-2 w-3 h-3" /> Carregando...
                         </div>
                     ) : conversas.length === 0 ? (
-                        <div className="p-8 text-center text-muted-foreground text-xs italic">Nenhuma conversa ativa</div>
+                        <div className="p-8 text-center text-foreground text-xs italic">Nenhuma conversa ativa</div>
                     ) : conversas.map(conv => (
                         <div
                             key={conv.id}
@@ -153,11 +153,11 @@ export function Atendimento() {
                         >
                             <div className="flex items-center gap-3">
                                 <div className={`w-10 h-10 rounded-full flex items-center justify-center border-2 ${selectedConversa?.id === conv.id ? 'border-primary/50 bg-primary/10' : 'border-muted bg-muted/30'}`}>
-                                    <User className={`w-5 h-5 ${selectedConversa?.id === conv.id ? 'text-primary' : 'text-muted-foreground'}`} />
+                                    <User className={`w-5 h-5 ${selectedConversa?.id === conv.id ? 'text-primary' : 'text-foreground'}`} />
                                 </div>
                                 <div className="flex-1 overflow-hidden">
                                     <div className="font-bold text-sm truncate">{conv.cliente_nome}</div>
-                                    <div className="text-[10px] text-muted-foreground font-mono">{conv.telefone}</div>
+                                    <div className="text-[10px] text-foreground font-mono">{conv.telefone}</div>
                                 </div>
                             </div>
                         </div>
@@ -190,11 +190,11 @@ export function Atendimento() {
                             style={{ backgroundImage: 'radial-gradient(#ffffff05 1px, transparent 0)', backgroundSize: '20px 20px' }}
                         >
                             {loadingMsg ? (
-                                <div className="flex items-center justify-center h-full text-muted-foreground text-xs">
+                                <div className="flex items-center justify-center h-full text-foreground text-xs">
                                     <Loader2 className="animate-spin mr-2 w-4 h-4" /> Carregando histórico...
                                 </div>
                             ) : mensagens.length === 0 ? (
-                                <div className="flex items-center justify-center h-full text-muted-foreground text-xs italic">
+                                <div className="flex items-center justify-center h-full text-foreground text-xs italic">
                                     Inicie a conversa enviando uma mensagem.
                                 </div>
                             ) : (
@@ -227,7 +227,7 @@ export function Atendimento() {
                         </form>
                     </>
                 ) : (
-                    <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground p-10 text-center">
+                    <div className="flex-1 flex flex-col items-center justify-center text-foreground p-10 text-center">
                         <div className="w-20 h-20 rounded-full bg-muted/30 flex items-center justify-center mb-6">
                             <MessageCircle className="w-10 h-10 opacity-20" />
                         </div>
@@ -257,11 +257,11 @@ export function Atendimento() {
                             <Button size="icon" className="h-8 w-8 shrink-0" onClick={searchProducts}><Search className="w-3 h-3" /></Button>
                         </div>
                         <div className="space-y-2 max-h-[250px] overflow-y-auto pr-1 custom-scrollbar">
-                            {products.length === 0 && productSearch && <div className="text-[10px] text-center text-muted-foreground py-2">Nenhum resultado</div>}
+                            {products.length === 0 && productSearch && <div className="text-[10px] text-center text-foreground py-2">Nenhum resultado</div>}
                             {products.map(p => (
                                 <div key={p.id} className="p-2 border border-border/50 rounded-lg bg-background/50 text-[11px] group hover:border-primary/50 transition-colors">
                                     <div className="font-bold truncate group-hover:text-primary transition-colors">{p.nome}</div>
-                                    <div className="flex justify-between mt-1 text-muted-foreground">
+                                    <div className="flex justify-between mt-1 text-foreground">
                                         <span className={p.estoque_atual <= p.estoque_minimo ? "text-rose-500 font-bold" : ""}>Disp: {p.estoque_atual}</span>
                                         <span className="text-foreground font-black">R${p.preco.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                                     </div>

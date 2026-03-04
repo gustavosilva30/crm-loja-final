@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select } from "@/components/ui/select"
 import { Modal } from "@/components/ui/modal"
-import { Plus, Search, Filter, MoreHorizontal, ArrowUpCircle, ArrowDownCircle, AlertTriangle, TrendingUp, BarChart3, List } from "lucide-react"
+import { Plus, Search, Filter, MoreHorizontal, ArrowUpCircle, ArrowDownCircle, AlertTriangle, TrendingUp, BarChart3, List, Pencil, Trash2 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { useAuthStore } from "@/store/authStore"
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from "recharts"
@@ -33,6 +33,15 @@ export function Financeiro() {
     const [loading, setLoading] = useState(true)
     const [isModalOpen, setIsModalOpen] = useState(false)
     const [submitting, setSubmitting] = useState(false)
+    const [isFilterOpen, setIsFilterOpen] = useState(false)
+    const [editingEntry, setEditingEntry] = useState<FinanceiroLancamento | null>(null)
+
+    // Filtros Profissionais
+    const [startDate, setStartDate] = useState("")
+    const [endDate, setEndDate] = useState("")
+    const [filterStatus, setFilterStatus] = useState<string>("all")
+    const [filterTipo, setFilterTipo] = useState<string>("all")
+    const [filterCategoria, setFilterCategoria] = useState<string>("all")
 
     // Form State
     const [newEntry, setNewEntry] = useState({
@@ -72,17 +81,27 @@ export function Financeiro() {
         e.preventDefault()
         setSubmitting(true)
         try {
-            const { error } = await supabase
-                .from('financeiro_lancamentos')
-                .insert([{
-                    ...newEntry,
-                    atendente_id: atendente?.id,
-                    valor: parseFloat(newEntry.valor)
-                }])
+            const payload = {
+                ...newEntry,
+                atendente_id: atendente?.id,
+                valor: parseFloat(newEntry.valor)
+            }
 
-            if (error) throw error
+            if (editingEntry) {
+                const { error } = await supabase
+                    .from('financeiro_lancamentos')
+                    .update(payload)
+                    .eq('id', editingEntry.id)
+                if (error) throw error
+            } else {
+                const { error } = await supabase
+                    .from('financeiro_lancamentos')
+                    .insert([payload])
+                if (error) throw error
+            }
 
             setIsModalOpen(false)
+            setEditingEntry(null)
             setNewEntry({
                 tipo: 'Receita',
                 valor: '',
@@ -94,23 +113,95 @@ export function Financeiro() {
             })
             fetchLancamentos()
         } catch (err) {
-            console.error('Error adding entry:', err)
-            alert('Erro ao adicionar lançamento')
+            console.error('Error saving entry:', err)
+            alert('Erro ao salvar lançamento')
         } finally {
             setSubmitting(false)
         }
     }
 
-    const filteredLancamentos = lancamentos.filter(l =>
-        l.descricao?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        l.categoria_financeira?.toLowerCase().includes(searchTerm.toLowerCase())
-    )
+    const handleDelete = async (id: string) => {
+        if (!confirm('Tem certeza que deseja excluir este lançamento?')) return
+        try {
+            const { error } = await supabase.from('financeiro_lancamentos').delete().eq('id', id)
+            if (error) throw error
+            fetchLancamentos()
+        } catch (err) {
+            console.error('Error deleting:', err)
+            alert('Erro ao excluir')
+        }
+    }
 
-    const receitasTotal = lancamentos
+    const handleDuplicate = async (lancamento: FinanceiroLancamento) => {
+        try {
+            const { id, created_at, ...duplicateData } = lancamento
+            const { error } = await supabase.from('financeiro_lancamentos').insert([{
+                ...duplicateData,
+                status: 'Pendente',
+                data_pagamento: null,
+                descricao: `${duplicateData.descricao} (Cópia)`
+            }])
+            if (error) throw error
+            fetchLancamentos()
+        } catch (err) {
+            console.error('Error duplicating:', err)
+            alert('Erro ao duplicar')
+        }
+    }
+
+    const handleToggleStatus = async (lancamento: FinanceiroLancamento) => {
+        const isPaying = lancamento.status !== 'Pago'
+        try {
+            const { error } = await supabase
+                .from('financeiro_lancamentos')
+                .update({
+                    status: isPaying ? 'Pago' : 'Pendente',
+                    data_pagamento: isPaying ? new Date().toISOString().split('T')[0] : null
+                })
+                .eq('id', lancamento.id)
+            if (error) throw error
+            fetchLancamentos()
+        } catch (err) {
+            console.error('Error toggling status:', err)
+        }
+    }
+
+    const handleEdit = (lancamento: FinanceiroLancamento) => {
+        setEditingEntry(lancamento)
+        setNewEntry({
+            tipo: lancamento.tipo,
+            valor: String(lancamento.valor),
+            data_vencimento: lancamento.data_vencimento,
+            categoria_financeira: lancamento.categoria_financeira || 'Geral',
+            status: lancamento.status,
+            forma_pagamento: lancamento.forma_pagamento || 'Dinheiro',
+            descricao: lancamento.descricao || ''
+        })
+        setIsModalOpen(true)
+    }
+
+    const filteredLancamentos = lancamentos.filter(l => {
+        const termLower = searchTerm.toLowerCase().trim();
+        const matchesSearch = !searchTerm ||
+            l.descricao?.toLowerCase().includes(termLower) ||
+            l.categoria_financeira?.toLowerCase().includes(termLower);
+
+        const matchesStatus = filterStatus === 'all' || l.status === filterStatus;
+        const matchesTipo = filterTipo === 'all' || l.tipo === filterTipo;
+        const matchesCategoria = filterCategoria === 'all' || l.categoria_financeira === filterCategoria;
+
+        const dateVenc = new Date(l.data_vencimento).getTime();
+        const matchesStartDate = !startDate || dateVenc >= new Date(startDate + 'T00:00:00').getTime();
+        const matchesEndDate = !endDate || dateVenc <= new Date(endDate + 'T23:59:59').getTime();
+
+        return matchesSearch && matchesStatus && matchesTipo && matchesCategoria && matchesStartDate && matchesEndDate;
+    })
+
+    const receitasTotal = filteredLancamentos
         .filter(l => l.tipo === 'Receita')
         .reduce((acc, l) => acc + (l.valor || 0), 0)
 
-    const despesasTotal = lancamentos
+    const despesasTotal = filteredLancamentos
         .filter(l => l.tipo === 'Despesa')
         .reduce((acc, l) => acc + (l.valor || 0), 0)
 
@@ -139,7 +230,7 @@ export function Financeiro() {
             <div className="flex items-center justify-between">
                 <div>
                     <h1 className="text-3xl font-bold tracking-tight">Financeiro</h1>
-                    <p className="text-muted-foreground mt-1">Gerencie suas contas a pagar, receber e fluxo de caixa.</p>
+                    <p className="text-foreground mt-1">Gerencie suas contas a pagar, receber e fluxo de caixa.</p>
                 </div>
                 <div className="flex items-center gap-3">
                     <div className="flex items-center border border-border rounded-lg p-1 bg-muted/50">
@@ -213,7 +304,7 @@ export function Financeiro() {
                     <CardHeader className="pb-4">
                         <div className="flex items-center justify-between">
                             <div className="relative w-72">
-                                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-foreground" />
                                 <Input
                                     placeholder="Buscar por descrição, categoria..."
                                     className="pl-9 bg-background"
@@ -221,11 +312,52 @@ export function Financeiro() {
                                     onChange={(e) => setSearchTerm(e.target.value)}
                                 />
                             </div>
-                            <Button variant="outline" className="gap-2">
-                                <Filter className="w-4 h-4" />
-                                Filtros
-                            </Button>
+                            <div className="flex items-center gap-2">
+                                <Button variant={isFilterOpen ? "secondary" : "outline"} className="gap-2" onClick={() => setIsFilterOpen(!isFilterOpen)}>
+                                    <Filter className="w-4 h-4" />
+                                    Filtros
+                                </Button>
+                            </div>
                         </div>
+
+                        {isFilterOpen && (
+                            <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mt-4 p-4 bg-muted/30 rounded-lg border animate-in fade-in slide-in-from-top-2">
+                                <div className="space-y-1">
+                                    <Label className="text-[10px] uppercase font-bold text-muted-foreground">Início</Label>
+                                    <Input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="h-9 text-xs" />
+                                </div>
+                                <div className="space-y-1">
+                                    <Label className="text-[10px] uppercase font-bold text-muted-foreground">Fim</Label>
+                                    <Input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="h-9 text-xs" />
+                                </div>
+                                <div className="space-y-1">
+                                    <Label className="text-[10px] uppercase font-bold text-muted-foreground">Tipo</Label>
+                                    <Select value={filterTipo} onChange={e => setFilterTipo(e.target.value)}>
+                                        <option value="all">Receitas e Despesas</option>
+                                        <option value="Receita">Apenas Receitas</option>
+                                        <option value="Despesa">Apenas Despesas</option>
+                                    </Select>
+                                </div>
+                                <div className="space-y-1">
+                                    <Label className="text-[10px] uppercase font-bold text-muted-foreground">Status</Label>
+                                    <Select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
+                                        <option value="all">Todos os Status</option>
+                                        <option value="Pago">Pago / Recebido</option>
+                                        <option value="Pendente">Aguardando</option>
+                                        <option value="Atrasado">Em Atraso</option>
+                                    </Select>
+                                </div>
+                                <div className="space-y-1">
+                                    <Label className="text-[10px] uppercase font-bold text-muted-foreground">Categoria</Label>
+                                    <Select value={filterCategoria} onChange={e => setFilterCategoria(e.target.value)}>
+                                        <option value="all">Todas as Categorias</option>
+                                        {Array.from(new Set(lancamentos.map(l => l.categoria_financeira || "Geral"))).map(cat => (
+                                            <option key={cat} value={cat}>{cat}</option>
+                                        ))}
+                                    </Select>
+                                </div>
+                            </div>
+                        )}
                     </CardHeader>
                     <CardContent>
                         {loading ? (
@@ -300,9 +432,26 @@ export function Financeiro() {
                                                 </Badge>
                                             </TableCell>
                                             <TableCell className="text-right">
-                                                <Button variant="ghost" size="icon">
-                                                    <MoreHorizontal className="w-4 h-4" />
-                                                </Button>
+                                                <div className="flex items-center justify-end gap-1">
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        className={`h-8 px-2 text-xs gap-1 ${lancamento.status === 'Pago' ? 'text-blue-500 hover:text-blue-600' : 'text-emerald-500 hover:text-emerald-600'}`}
+                                                        onClick={() => handleToggleStatus(lancamento)}
+                                                        title={lancamento.status === 'Pago' ? "Reverter" : "Dar Baixa"}
+                                                    >
+                                                        {lancamento.status === 'Pago' ? 'Reverter' : 'Baixar'}
+                                                    </Button>
+                                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-foreground" onClick={() => handleDuplicate(lancamento)} title="Duplicar">
+                                                        <Plus className="w-4 h-4" />
+                                                    </Button>
+                                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-500" onClick={() => handleEdit(lancamento)} title="Editar">
+                                                        <Pencil className="w-4 h-4" />
+                                                    </Button>
+                                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleDelete(lancamento.id)} title="Excluir">
+                                                        <Trash2 className="w-4 h-4" />
+                                                    </Button>
+                                                </div>
                                             </TableCell>
                                         </TableRow>
                                     ))}
@@ -353,13 +502,26 @@ export function Financeiro() {
                         </CardContent>
                     </Card>
                 </div>
-            )}
+            )
+            }
 
             {/* NEW ENTRY MODAL */}
             <Modal
                 isOpen={isModalOpen}
-                onClose={() => setIsModalOpen(false)}
-                title="Novo Lançamento Financeiro"
+                onClose={() => {
+                    setIsModalOpen(false)
+                    setEditingEntry(null)
+                    setNewEntry({
+                        tipo: 'Receita',
+                        valor: '',
+                        data_vencimento: new Date().toISOString().split('T')[0],
+                        categoria_financeira: 'Geral',
+                        status: 'Pendente',
+                        forma_pagamento: 'Dinheiro',
+                        descricao: ''
+                    })
+                }}
+                title={editingEntry ? "Editar Lançamento" : "Novo Lançamento Financeiro"}
             >
                 <form onSubmit={handleAddEntry} className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
@@ -451,6 +613,6 @@ export function Financeiro() {
                     </div>
                 </form>
             </Modal>
-        </div>
+        </div >
     )
 }

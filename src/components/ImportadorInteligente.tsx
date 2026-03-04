@@ -445,7 +445,7 @@ export function ImportadorInteligente() {
             </Card>
 
             <ImageViewer
-                src={selectedImage}
+                images={selectedImage ? [selectedImage] : []}
                 isOpen={isViewerOpen}
                 onClose={() => setIsViewerOpen(false)}
             />

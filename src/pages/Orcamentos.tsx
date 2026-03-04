@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select } from "@/components/ui/select"
 import { Modal } from "@/components/ui/modal"
-import { Plus, Search, Filter, MoreHorizontal, FileText, User, Trash2, Pencil, ShoppingCart, CheckCircle2, UserPlus, PackagePlus } from "lucide-react"
+import { Plus, Search, Filter, MoreHorizontal, FileText, User, Trash2, Pencil, ShoppingCart, CheckCircle2, UserPlus, PackagePlus, Printer, Package, X } from "lucide-react"
 import { useNavigate } from "react-router-dom"
 import { supabase } from "@/lib/supabase"
 
@@ -41,6 +41,12 @@ export function Orcamentos() {
   const [createdOrcamentoId, setCreatedOrcamentoId] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const navigate = useNavigate()
+  const [printAfterSave, setPrintAfterSave] = useState(false)
+  const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false)
+  const [selectedOrcamentoForReceipt, setSelectedOrcamentoForReceipt] = useState<any>(null)
+  const [printFormat, setPrintFormat] = useState<'a4' | 'a5' | 'cupom' | 'cupom58'>('a4')
+  const [company, setCompany] = useState<any>(null)
+
 
   // Resources for Form
   const [clientes, setClientes] = useState<{ id: string, nome: string }[]>([])
@@ -147,7 +153,22 @@ export function Orcamentos() {
         }
       } catch (e) { }
     }
+    supabase.from('configuracoes_empresa').select('*').maybeSingle().then(({ data }) => setCompany(data))
   }, [])
+
+  const handleOpenReceipt = async (orcId: string) => {
+    setLoading(true)
+    try {
+      const { data: orc } = await supabase.from('orcamentos').select(`*, clientes(*), atendentes:vendedor_id(nome)`).eq('id', orcId).single()
+      const { data: itens } = await supabase.from('orcamentos_itens').select(`*, produtos(nome, sku)`).eq('orcamento_id', orcId)
+      setSelectedOrcamentoForReceipt({ ...orc, itens: itens || [] })
+      setIsReceiptModalOpen(true)
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const addItem = () => {
     setItems([...items, { produto_id: '', quantidade: 1, preco_unitario: 0 }])
@@ -194,7 +215,16 @@ export function Orcamentos() {
           total: total
         }).eq('id', createdOrcamentoId);
 
-        if (updErr) throw updErr;
+        if (updErr) {
+          // Fallback update without new columns
+          const { error: updErr2 } = await supabase.from('orcamentos').update({
+            cliente_id: formData.cliente_id || null,
+            validade: formData.validade,
+            status: formData.status,
+            total: total
+          }).eq('id', createdOrcamentoId);
+          if (updErr2) throw updErr2;
+        }
 
         await supabase.from('orcamentos_itens').delete().eq('orcamento_id', createdOrcamentoId);
         const itemsToInsert = items.map(item => ({
@@ -231,10 +261,7 @@ export function Orcamentos() {
         .select()
         .single()
 
-      orcData = d1
-      orcError = e1
-
-      if (orcError) {
+      if (e1) {
         // Fallback without new columns
         const { data: orcData2, error: orcError2 } = await supabase
           .from('orcamentos')
@@ -246,11 +273,12 @@ export function Orcamentos() {
           }])
           .select()
           .single()
+
         if (orcError2) throw orcError2
         orcData = orcData2
+      } else {
+        orcData = d1
       }
-
-      if (orcError) throw orcError
 
       // 2. Insert Items
       const itemsToInsert = items.map(item => ({
@@ -278,9 +306,14 @@ export function Orcamentos() {
         status: 'Aberto'
       })
       fetchOrcamentos()
+      if (printAfterSave) {
+        handleOpenReceipt(orcData.id)
+        setPrintAfterSave(false)
+      }
     } catch (err) {
       console.error('Error creating quote:', err)
       alert('Erro ao criar orçamento')
+      setPrintAfterSave(false)
     } finally {
       setSubmitting(false)
     }
@@ -342,7 +375,14 @@ export function Orcamentos() {
         sku: i.produtos?.sku || ''
       }));
 
-      localStorage.setItem('crm_venda_cart', JSON.stringify(cartItems));
+      const payload = {
+        items: cartItems,
+        cliente_id: orc.cliente_id,
+        atendente_id: orc.vendedor_id,
+        autoOpenCheckout: true
+      };
+
+      localStorage.setItem('crm_venda_cart', JSON.stringify(payload));
 
       // Mark as Aprovado
       await supabase.from('orcamentos').update({ status: 'Aprovado' }).eq('id', orc.id);
@@ -367,7 +407,7 @@ export function Orcamentos() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Orçamentos</h1>
-          <p className="text-muted-foreground mt-1">Gerencie propostas comerciais e converta em vendas.</p>
+          <p className="text-foreground mt-1">Gerencie propostas comerciais e converta em vendas.</p>
         </div>
         <Button className="gap-2" onClick={() => {
           const savedCart = localStorage.getItem('crm_orcamento_items')
@@ -450,7 +490,7 @@ export function Orcamentos() {
                     <TableCell>
                       <div className="flex flex-col gap-1 max-w-[320px]">
                         {orcamento.orcamentos_itens?.map((item: any, idx: number) => (
-                          <div key={idx} className="text-[13px] font-bold text-slate-700 flex items-center gap-1">
+                          <div key={idx} className="text-[13px] font-bold text-foreground flex items-center gap-1">
                             <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0" />
                             {item.produtos?.nome}
                           </div>
@@ -464,7 +504,7 @@ export function Orcamentos() {
                         {orcamento.clientes?.nome || "Consumidor Final"}
                       </div>
                     </TableCell>
-                    <TableCell className="text-xs italic text-muted-foreground">
+                    <TableCell className="text-xs italic text-foreground">
                       {orcamento.atendentes?.nome || "-"}
                     </TableCell>
                     <TableCell className="text-xs">
@@ -492,6 +532,9 @@ export function Orcamentos() {
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1">
+                        <Button variant="ghost" size="icon" title="Imprimir" onClick={() => handleOpenReceipt(orcamento.id)}>
+                          <Printer className="w-4 h-4 text-primary" />
+                        </Button>
                         {orcamento.status !== 'Aprovado' && (
                           <Button variant="ghost" size="icon" title="Converter em Venda (Aprovar)" onClick={() => handleConvertOrcamento(orcamento)}>
                             <ShoppingCart className="w-4 h-4 text-emerald-500" />
@@ -579,7 +622,7 @@ export function Orcamentos() {
 
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+              <h3 className="text-sm font-bold uppercase tracking-wider text-foreground flex items-center gap-2">
                 <FileText className="w-4 h-4" /> Itens do Orçamento
               </h3>
               <div className="flex gap-2">
@@ -644,15 +687,17 @@ export function Orcamentos() {
           </div>
 
           <div className="flex items-center justify-between p-4 border-t border-border mt-4">
-            <div className="text-sm text-muted-foreground font-medium">
+            <div className="text-sm text-foreground font-medium">
               Total do Orçamento: <span className="text-xl font-bold text-foreground ml-2">
                 {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(calculateTotal())}
               </span>
             </div>
             <div className="flex gap-3">
-              <Button variant="outline" type="button" onClick={() => setIsModalOpen(false)}>Cancelar</Button>
+              <Button type="submit" variant="outline" onClick={() => setPrintAfterSave(true)} className="gap-2 border-primary text-primary hover:bg-primary hover:text-white">
+                <Printer className="w-4 h-4" /> Salvar e Imprimir
+              </Button>
               <Button type="submit" disabled={submitting}>
-                {submitting ? "Gerando..." : "Finalizar Orçamento"}
+                {submitting ? "Salvando..." : "Salvar"}
               </Button>
             </div>
           </div>
@@ -730,6 +775,178 @@ export function Orcamentos() {
           </div>
         </form>
       </Modal>
-    </div>
+      {/* MODAL IMPRESSÃO ORÇAMENTO */}
+      <Modal isOpen={isReceiptModalOpen} onClose={() => setIsReceiptModalOpen(false)} title="Impressão de Orçamento" className="max-w-4xl">
+        {selectedOrcamentoForReceipt && (
+          <div className="space-y-4">
+            <div className="flex justify-between items-center bg-muted/50 p-2 rounded-lg no-print">
+              <div className="flex gap-2">
+                {(['a4', 'a5', 'cupom', 'cupom58'] as const).map(f => (
+                  <Button
+                    key={f}
+                    variant={printFormat === f ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setPrintFormat(f)}
+                    className="h-8 capitalize"
+                  >
+                    {f === 'cupom' ? 'Cupom 80mm' : f === 'cupom58' ? 'Cupom 58mm' : `Papel ${f.toUpperCase()}`}
+                  </Button>
+                ))}
+              </div>
+              <Button onClick={() => window.print()} className="bg-primary hover:bg-primary/90">
+                <Printer className="w-4 h-4 mr-2" /> Imprimir Agora
+              </Button>
+            </div>
+
+            <div className="bg-slate-100 p-8 overflow-auto max-h-[70vh] rounded-lg border border-slate-200">
+              <style>{`
+                @import url('https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap');
+                .print-preview-container { 
+                  background-color: #ffffff !important; 
+                  color: #000000 !important;
+                  margin: 0 auto;
+                  box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+                }
+                @media print {
+                  @page { margin: 0; size: auto; }
+                  body * { visibility: hidden !important; }
+                  .print-preview-container, .print-preview-container * { visibility: visible !important; }
+                  .print-preview-container { 
+                    position: fixed !important; left: 0 !important; top: 0 !important; width: 100% !important; margin: 0 !important; padding: 0 !important; z-index: 99999 !important;
+                  }
+                  .no-print { display: none !important; }
+                }
+                .a4 { width: 210mm; min-height: 297mm; padding: 15mm; font-size: 11pt; --base-font: 11pt; }
+                .a5 { width: 148mm; min-height: 210mm; padding: 8mm; font-size: 9pt; --base-font: 9pt; }
+                .cupom { width: 80mm; padding: 4mm; font-size: 10pt; --base-font: 10pt; font-family: 'Courier Prime', monospace; }
+                .cupom58 { width: 58mm; padding: 2mm; font-size: 8pt; --base-font: 8pt; font-family: 'Courier Prime', monospace; }
+                .formal-header { border: 1px solid #000; padding: 10px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; }
+                .formal-table { width: 100%; border-collapse: collapse; margin-top: 10px; table-layout: fixed; }
+                .formal-table th { text-align: left; font-size: calc(var(--base-font) * 0.85); border-bottom: 2px solid #000; padding: 5px 2px; }
+                .formal-table td { padding: 6px 2px; font-size: var(--base-font); border-bottom: 1px dotted #ccc; }
+                .formal-section { border-top: 2px solid #000; margin-top: 15px; padding-top: 5px; }
+                .formal-label { font-size: calc(var(--base-font) * 0.75); font-weight: bold; text-transform: uppercase; }
+              `}</style>
+
+              <div className={`print-preview-container ${printFormat} text-black`}>
+                {printFormat.includes('cupom') ? (
+                  <div className="ticket-content">
+                    <div className="text-center mb-4">
+                      <p className="font-bold text-lg">{company?.nome_fantasia || 'LOJA'}</p>
+                      <p className="text-[10px]">CNPJ: {company?.cnpj || '00.000.000/0000-00'}</p>
+                      <p className="text-[10px]">{company?.logradouro}, {company?.numero}</p>
+                      <p className="text-[10px] TEL:">{company?.telefone || '(00) 0000-0000'}</p>
+                    </div>
+                    <div className="border-y-2 border-black py-1 font-bold text-center uppercase my-2">ORÇAMENTO Nº {formatNumPedido(selectedOrcamentoForReceipt.numero_pedido)}</div>
+                    <div className="text-[11px] space-y-1 mb-2">
+                      <p>Data: {new Date(selectedOrcamentoForReceipt.data_inicio || selectedOrcamentoForReceipt.created_at).toLocaleDateString()}</p>
+                      <p className="font-bold text-destructive">Validade: {new Date(selectedOrcamentoForReceipt.validade).toLocaleDateString()}</p>
+                      <p>Cliente: {selectedOrcamentoForReceipt.clientes?.nome || 'CONSUMIDOR'}</p>
+                      <p>Vendedor: {selectedOrcamentoForReceipt.atendentes?.nome || 'N/A'}</p>
+                    </div>
+                    <div className="border-b border-black text-center font-bold text-[10px] mb-1">PRODUTOS</div>
+                    <table className="w-full text-[10px]">
+                      <thead>
+                        <tr className="border-b border-black">
+                          <th className="text-left">Item</th>
+                          <th className="text-right">Qtd</th>
+                          <th className="text-right">Total</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {selectedOrcamentoForReceipt.itens?.map((i: any, idx: number) => (
+                          <tr key={idx}>
+                            <td className="py-1">{i.produtos?.nome}</td>
+                            <td className="text-right">{i.quantidade}</td>
+                            <td className="text-right">{i.subtotal.toFixed(2)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    <div className="border-t-2 border-black mt-2 pt-1 flex justify-between font-bold text-lg">
+                      <span>TOTAL:</span>
+                      <span>R$ {selectedOrcamentoForReceipt.total.toFixed(2)}</span>
+                    </div>
+                    <div className="mt-4 text-[10px] text-center italic">
+                      <p>Válido por 10 dias a partir da data de emissão.</p>
+                      <p>Este documento não é nota fiscal.</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="formal-content">
+                    <div className="formal-header">
+                      <div className="flex items-center gap-3">
+                        <Package className="w-10 h-10" />
+                        <div>
+                          <p className="font-black text-xl leading-none">{company?.nome_fantasia || 'SUA EMPRESA'}</p>
+                          <p className="text-[10px] italic">Orçamento de Venda</p>
+                        </div>
+                      </div>
+                      <div className="text-right text-[10px]">
+                        <p className="text-lg font-black italic">ORÇAMENTO #{formatNumPedido(selectedOrcamentoForReceipt.numero_pedido)}</p>
+                        <p>{new Date().toLocaleDateString('pt-BR')} {new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4 border border-black p-3 text-[11px] mb-4">
+                      <div>
+                        <p className="formal-label">Dados do Cliente</p>
+                        <p className="font-bold text-sm">{selectedOrcamentoForReceipt.clientes?.nome || 'CONSUMIDOR FINAL'}</p>
+                        <p>CPF/CNPJ: {selectedOrcamentoForReceipt.clientes?.documento || '---'}</p>
+                        <p>Tel: {selectedOrcamentoForReceipt.clientes?.telefone || '---'}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="formal-label">Informações</p>
+                        <p>Data Emissão: {new Date(selectedOrcamentoForReceipt.data_inicio || selectedOrcamentoForReceipt.created_at).toLocaleDateString('pt-BR')}</p>
+                        <p className="text-destructive font-bold">Vencimento: {new Date(selectedOrcamentoForReceipt.validade).toLocaleDateString('pt-BR')}</p>
+                        <p>Vendedor: {selectedOrcamentoForReceipt.atendentes?.nome || 'N/A'}</p>
+                      </div>
+                    </div>
+
+                    <table className="formal-table">
+                      <thead>
+                        <tr>
+                          <th style={{ width: '50%' }}>Item / Descrição</th>
+                          <th style={{ width: '15%' }}>SKU</th>
+                          <th style={{ width: '10%' }} className="text-center">Qtd</th>
+                          <th style={{ width: '10%' }} className="text-right">Unit</th>
+                          <th style={{ width: '15%' }} className="text-right">Subtotal</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {selectedOrcamentoForReceipt.itens?.map((i: any, idx: number) => (
+                          <tr key={idx}>
+                            <td>{i.produtos?.nome}</td>
+                            <td className="font-mono text-[9px]">{i.produtos?.sku}</td>
+                            <td className="text-center">{i.quantidade}</td>
+                            <td className="text-right">{new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2 }).format(i.preco_unitario)}</td>
+                            <td className="text-right font-bold">{new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2 }).format(i.subtotal)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+
+                    <div className="flex justify-end mt-6">
+                      <div className="w-64 border-t-2 border-black pt-2 space-y-1 text-right">
+                        <div className="flex justify-between text-base font-black">
+                          <span>TOTAL:</span>
+                          <span>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(selectedOrcamentoForReceipt.total)}</span>
+                        </div>
+                        <p className="text-[10px] italic mt-4">Condição de Pagamento: {selectedOrcamentoForReceipt.condicao_pagamento || 'À Vista'}</p>
+                        <p className="text-[10px] text-destructive font-bold uppercase mt-4 text-center border-2 border-destructive p-1">Este orçamento é válido por 10 dias.</p>
+                      </div>
+                    </div>
+
+                    <div className="mt-20 text-center border-t border-black pt-2 w-1/2 mx-auto">
+                      <p className="text-[10px] uppercase font-bold">{company?.nome_fantasia}</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+      </Modal>
+    </div >
   )
 }
