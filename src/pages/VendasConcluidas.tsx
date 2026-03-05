@@ -84,40 +84,74 @@ export function VendasConcluidas() {
     }
 
     const fetchVendas = async () => {
+        setLoading(true)
         try {
-            const { data, error } = await supabase
+            // Step 1: Fetch raw vendas
+            const { data: vData, error: vError } = await supabase
                 .from('vendas')
-                .select(`
-                    *,
-                    clientes ( id, nome, documento, email, telefone, endereco ),
-                    vendas_itens ( produto_id, quantidade, preco_unitario, subtotal, produtos ( nome ) )
-                `)
+                .select('*')
                 .order('data_venda', { ascending: false })
 
-            if (error) throw error
+            if (vError) throw vError
+            const rows = vData || []
 
-            const rows = data || []
-            const atendenteIds = [...new Set([
-                ...rows.map((v: any) => v.atendente_id),
-                ...rows.map((v: any) => v.vendedor_id)
-            ].filter(Boolean))]
-
-            let atMap: Record<string, string> = {}
-            if (atendenteIds.length > 0) {
-                const { data: ats } = await supabase
-                    .from('atendentes')
-                    .select('id, nome')
-                    .in('id', atendenteIds)
-                if (ats) ats.forEach((a: any) => { atMap[a.id] = a.nome })
+            if (rows.length === 0) {
+                setVendas([])
+                setLoading(false)
+                return
             }
 
-            setVendas(rows.map((v: any) => ({
+            // Step 2: Fetch related data
+            const clienteIds = [...new Set(rows.map(v => v.cliente_id).filter(Boolean))]
+            const atendenteIds = [...new Set([
+                ...rows.map(v => v.atendente_id),
+                ...rows.map(v => v.vendedor_id)
+            ].filter(Boolean))]
+            const vendaIds = rows.map(v => v.id)
+
+            const [clientesRes, atendentesRes, itemsRes] = await Promise.all([
+                clienteIds.length > 0 ? supabase.from('clientes').select('id, nome, documento, email, telefone, endereco').in('id', clienteIds) : Promise.resolve({ data: [] }),
+                atendenteIds.length > 0 ? supabase.from('atendentes').select('id, nome').in('id', atendenteIds) : Promise.resolve({ data: [] }),
+                supabase.from('vendas_itens').select('venda_id, produto_id, quantidade, preco_unitario, subtotal').in('venda_id', vendaIds)
+            ])
+
+            // Step 3: Fetch products
+            const itemRows = itemsRes.data || []
+            const produtoIds = [...new Set(itemRows.map(i => i.produto_id).filter(Boolean))]
+            const { data: pData } = produtoIds.length > 0
+                ? await supabase.from('produtos').select('id, nome').in('id', produtoIds)
+                : { data: [] }
+
+            const cMap: Record<string, any> = {}
+            clientesRes.data?.forEach(c => cMap[c.id] = c)
+
+            const aMap: Record<string, any> = {}
+            atendentesRes.data?.forEach(a => aMap[a.id] = a)
+
+            const pMap: Record<string, any> = {}
+            pData?.forEach(p => pMap[p.id] = p)
+
+            const itemsMap: Record<string, any[]> = {}
+            itemRows.forEach(i => {
+                if (!itemsMap[i.venda_id]) itemsMap[i.venda_id] = []
+                itemsMap[i.venda_id].push({
+                    ...i,
+                    produtos: pMap[i.produto_id] || { nome: 'Produto não encontrado' }
+                })
+            })
+
+            // Step 4: Stitch
+            setVendas(rows.map(v => ({
                 ...v,
-                atendentes: v.atendente_id ? { nome: atMap[v.atendente_id] || '' } : null,
-                vendedor: v.vendedor_id ? { nome: atMap[v.vendedor_id] || '' } : null,
+                clientes: v.cliente_id ? cMap[v.cliente_id] : null,
+                atendentes: v.atendente_id ? { nome: aMap[v.atendente_id]?.nome || '' } : null,
+                vendedor: v.vendedor_id ? { nome: aMap[v.vendedor_id]?.nome || '' } : null,
+                vendas_itens: itemsMap[v.id] || []
             })))
-        } catch (err) {
+
+        } catch (err: any) {
             console.error('Error fetching vendas:', err)
+            alert('Erro ao carregar histórico: ' + err.message)
             setVendas([])
         } finally {
             setLoading(false)

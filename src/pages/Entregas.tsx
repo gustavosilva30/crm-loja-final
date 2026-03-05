@@ -50,22 +50,62 @@ export function Entregas() {
     const navigate = useNavigate()
 
     const fetchEntregas = async () => {
+        setLoading(true)
         try {
+            // Step 1: Fetch raw deliveries
             const { data, error } = await supabase
                 .from('entregas')
-                .select(`
-                    *, 
-                    vendas ( id, clientes ( nome ) )
-                `)
+                .select('*')
                 .order('created_at', { ascending: false })
 
-            if (error) {
-                console.error('Error fetching entregas:', error)
-            } else {
-                setEntregas(data || [])
+            if (error) throw error
+
+            const rows = data || []
+            if (rows.length === 0) {
+                setEntregas([])
+                return
             }
-        } catch (err) {
-            console.error('Unexpected error:', err)
+
+            // Step 2: Fetch associated Vendas
+            const vendaIds = [...new Set(rows.map(e => e.venda_id).filter(Boolean))]
+            let vendaMap: Record<string, any> = {}
+
+            if (vendaIds.length > 0) {
+                const { data: vData } = await supabase
+                    .from('vendas')
+                    .select('id, cliente_id')
+                    .in('id', vendaIds)
+
+                if (vData) {
+                    // Step 3: Fetch associated Clientes for those Vendas
+                    const clienteIds = [...new Set(vData.map(v => v.cliente_id).filter(Boolean))]
+                    let clienteMap: Record<string, string> = {}
+
+                    if (clienteIds.length > 0) {
+                        const { data: cData } = await supabase
+                            .from('clientes')
+                            .select('id, nome')
+                            .in('id', clienteIds)
+                        if (cData) cData.forEach(c => clienteMap[c.id] = c.nome)
+                    }
+
+                    vData.forEach(v => {
+                        vendaMap[v.id] = {
+                            id: v.id,
+                            clientes: v.cliente_id ? { nome: clienteMap[v.cliente_id] || '' } : null
+                        }
+                    })
+                }
+            }
+
+            // Step 4: Stitch data together
+            setEntregas(rows.map(e => ({
+                ...e,
+                vendas: e.venda_id ? vendaMap[e.venda_id] : null
+            })))
+        } catch (err: any) {
+            console.error('Error fetching entregas:', err)
+            alert('Erro ao carregar entregas: ' + err.message)
         } finally {
             setLoading(false)
         }
