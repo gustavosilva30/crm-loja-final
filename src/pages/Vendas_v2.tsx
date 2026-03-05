@@ -232,37 +232,42 @@ export function Vendas() {
     const fetchVendas = async () => {
         setLoading(true)
         try {
-            // Tenta buscar com atendentes. Se falhar (ex: ambiguidade), usa o fallback
+            // Step 1: fetch vendas with safe joins (no FK ambiguity)
             const { data, error } = await supabase
                 .from('vendas')
                 .select(`
                     *,
                     clientes ( id, nome, documento, email, telefone, endereco ),
-                    atendentes:atendente_id ( id, nome ),
-                    vendedor:vendedor_id ( id, nome ),
-                    vendas_itens ( produtos ( id, nome, sku ) )
+                    vendas_itens ( produto_id, quantidade, preco_unitario, subtotal, produtos ( id, nome, sku ) )
                 `)
                 .order('data_venda', { ascending: false })
 
-            if (error) {
-                console.error('Initial fetch error, trying fallback:', error)
-                // Fallback sem atendentes se a relação nomeada falhar
-                const { data: fallbackData, error: fallbackError } = await supabase
-                    .from('vendas')
-                    .select(`
-                        *,
-                        clientes ( id, nome, documento, email, telefone, endereco ),
-                        vendas_itens ( produtos ( id, nome, sku ) )
-                    `)
-                    .order('data_venda', { ascending: false })
+            if (error) throw error
 
-                if (fallbackError) throw fallbackError
-                setVendas(fallbackData || [])
-            } else {
-                setVendas(data || [])
+            // Step 2: enrich with atendente names to avoid ambiguous FK join
+            const rows = data || []
+            const atendenteIds = [...new Set([
+                ...rows.map((v: any) => v.atendente_id),
+                ...rows.map((v: any) => v.vendedor_id)
+            ].filter(Boolean))]
+
+            let atMap: Record<string, string> = {}
+            if (atendenteIds.length > 0) {
+                const { data: ats } = await supabase
+                    .from('atendentes')
+                    .select('id, nome')
+                    .in('id', atendenteIds)
+                if (ats) ats.forEach((a: any) => { atMap[a.id] = a.nome })
             }
+
+            setVendas(rows.map((v: any) => ({
+                ...v,
+                atendentes: v.atendente_id ? { id: v.atendente_id, nome: atMap[v.atendente_id] || '' } : null,
+                vendedor: v.vendedor_id ? { id: v.vendedor_id, nome: atMap[v.vendedor_id] || '' } : null,
+            })))
         } catch (err) {
             console.error('Error fetching vendas:', err)
+            setVendas([])
         } finally {
             setLoading(false)
         }

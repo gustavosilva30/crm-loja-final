@@ -88,30 +88,37 @@ export function VendasConcluidas() {
             const { data, error } = await supabase
                 .from('vendas')
                 .select(`
-                    *, 
+                    *,
                     clientes ( id, nome, documento, email, telefone, endereco ),
-                    atendentes:atendente_id ( nome ),
-                    vendedor:vendedor_id ( nome ),
-                    vendas_itens ( produtos ( nome ) )
+                    vendas_itens ( produto_id, quantidade, preco_unitario, subtotal, produtos ( nome ) )
                 `)
                 .order('data_venda', { ascending: false })
 
-            if (error) {
-                const { data: fallbackData, error: fallbackError } = await supabase
-                    .from('vendas')
-                    .select(`
-                        *,
-                        clientes ( id, nome, documento, email, telefone, endereco ),
-                        vendas_itens ( produtos ( nome ) )
-                    `)
-                    .order('data_venda', { ascending: false })
-                if (fallbackError) throw fallbackError
-                setVendas(fallbackData || [])
-            } else {
-                setVendas(data || [])
+            if (error) throw error
+
+            const rows = data || []
+            const atendenteIds = [...new Set([
+                ...rows.map((v: any) => v.atendente_id),
+                ...rows.map((v: any) => v.vendedor_id)
+            ].filter(Boolean))]
+
+            let atMap: Record<string, string> = {}
+            if (atendenteIds.length > 0) {
+                const { data: ats } = await supabase
+                    .from('atendentes')
+                    .select('id, nome')
+                    .in('id', atendenteIds)
+                if (ats) ats.forEach((a: any) => { atMap[a.id] = a.nome })
             }
+
+            setVendas(rows.map((v: any) => ({
+                ...v,
+                atendentes: v.atendente_id ? { nome: atMap[v.atendente_id] || '' } : null,
+                vendedor: v.vendedor_id ? { nome: atMap[v.vendedor_id] || '' } : null,
+            })))
         } catch (err) {
             console.error('Error fetching vendas:', err)
+            setVendas([])
         } finally {
             setLoading(false)
         }
