@@ -51,7 +51,7 @@ export function Vendas() {
     // Filtros Profissionais
     const [startDate, setStartDate] = useState("")
     const [endDate, setEndDate] = useState("")
-    const [filterStatus, setFilterStatus] = useState<string>("Pendente")
+    const [filterStatus, setFilterStatus] = useState<string>("all")
     const [filterClienteId, setFilterClienteId] = useState<string>("all")
     const [filterVendedorId, setFilterVendedorId] = useState<string>("all")
 
@@ -453,7 +453,7 @@ export function Vendas() {
         } catch (err: any) {
             alert("Erro ao importar: " + err.message)
         } finally {
-            setLoading(true)
+            setLoading(false)
             fetchVendas()
         }
     }
@@ -723,7 +723,9 @@ export function Vendas() {
                         {filterStatus === 'all' ? 'Todas as Vendas' : filterStatus === 'Pendente' ? 'Vendas Pendentes' : `Vendas — ${filterStatus}`}
                         <span className="text-xl text-muted-foreground ml-2">({filteredVendas.length})</span>
                     </h1>
-                    <p className="text-muted-foreground mt-1">{filterStatus === 'Pendente' ? 'Gerencie suas vendas em aberto.' : 'Use o filtro de status para alternar a visualização.'}</p>
+                    <p className="text-muted-foreground mt-1">
+                        {filterStatus === 'all' ? 'Todas as vendas. Use o filtro para ver apenas Pendentes, Pagas, etc.' : filterStatus === 'Pendente' ? 'Gerencie suas vendas em aberto.' : 'Use o filtro de status para alternar a visualização.'}
+                    </p>
                 </div>
                 <Button onClick={handleOpenNovoPedido} className="gap-2 bg-primary hover:bg-primary/90">
                     <Plus className="w-4 h-4" /> Nova Venda
