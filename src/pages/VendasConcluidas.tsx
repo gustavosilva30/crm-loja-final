@@ -11,6 +11,24 @@ import { Modal } from "@/components/ui/modal"
 import { Search, Filter, MoreHorizontal, ShoppingCart, TrendingUp, Trash2, Printer, Truck, Pencil, Package, DollarSign } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 
+const fmtDate = (d: any) => {
+    if (!d) return '---'
+    try {
+        const date = new Date(d)
+        if (isNaN(date.getTime())) return '---'
+        return new Intl.DateTimeFormat('pt-BR').format(date)
+    } catch { return '---' }
+}
+
+const fmtDateTime = (d: any) => {
+    if (!d) return '---'
+    try {
+        const date = new Date(d)
+        if (isNaN(date.getTime())) return '---'
+        return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(date)
+    } catch { return '---' }
+}
+
 interface Venda {
     id: string
     numero_pedido?: number
@@ -218,6 +236,21 @@ export function VendasConcluidas() {
         }
     }
 
+    const handleExcluirVenda = async (id: string) => {
+        if (!confirm('ATENÇÃO: Deseja EXCLUIR definitivamente este registro do banco de dados? Esta ação não pode ser desfeita. Tudo relacionado será apagado.')) return;
+        setSubmitting(true);
+        try {
+            const { error } = await supabase.from('vendas').delete().eq('id', id);
+            if (error) throw error;
+            fetchVendas();
+            alert('Venda excluída definitivamente do histórico.');
+        } catch (e: any) {
+            alert('Erro ao excluir: ' + e.message);
+        } finally {
+            setSubmitting(false);
+        }
+    }
+
     const handleOpenReceipt = async (vendaId: string) => {
         if (!vendaId) return
         setLoading(true)
@@ -399,12 +432,13 @@ export function VendasConcluidas() {
                                     </TableCell>
                                     <TableCell className="font-bold">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(venda.total)}</TableCell>
                                     <TableCell><Badge variant={venda.status === 'Cancelado' ? 'destructive' : 'default'}>{venda.status}</Badge></TableCell>
-                                    <TableCell className="text-right space-x-1">
+                                    <TableCell className="text-right space-x-1 whitespace-nowrap">
                                         <Button variant="ghost" size="icon" onClick={() => handleOpenReceipt(venda.id)} title="Imprimir"><Printer className="w-4 h-4" /></Button>
                                         <Button variant="ghost" size="icon" className="text-blue-500" onClick={() => navigate(`/vendas?edit=${venda.id}`)} title="Editar"><Pencil className="w-4 h-4" /></Button>
                                         {venda.status !== 'Cancelado' && (
-                                            <Button variant="ghost" size="icon" className="text-destructive" onClick={() => handleCancelVenda(venda.id)} title="Cancelar"><TrendingUp className="w-4 h-4 rotate-180" /></Button>
+                                            <Button variant="ghost" size="icon" className="text-amber-500" onClick={() => handleCancelVenda(venda.id)} title="Cancelar Venda"><TrendingUp className="w-4 h-4 rotate-180" /></Button>
                                         )}
+                                        <Button variant="ghost" size="icon" className="text-destructive" onClick={() => handleExcluirVenda(venda.id)} title="Excluir Definitivo"><Trash2 className="w-4 h-4" /></Button>
                                     </TableCell>
                                 </TableRow>
                             ))}
@@ -595,12 +629,14 @@ export function VendasConcluidas() {
 
                                             {selectedVendaForReceipt.entrega && (
                                                 <div className="mt-2 pt-1 border-t border-black" style={{ backgroundColor: '#f9f9f9' }}>
-                                                    <p className="font-bold text-center underline mb-1">ENTREGA</p>
+                                                    <p className="font-black text-center underline mb-1">DADOS PARA ENTREGA</p>
+                                                    <p className="text-black"><span className="font-bold">Recebedor:</span> {selectedVendaForReceipt.entrega.recebedor_nome || selectedVendaForReceipt.clientes?.nome || 'N/A'}</p>
+                                                    <p className="text-black"><span className="font-bold">Telefone:</span> {selectedVendaForReceipt.entrega.cliente_contato || selectedVendaForReceipt.clientes?.telefone || 'N/A'}</p>
                                                     <p className="text-black"><span className="font-bold">End:</span> {selectedVendaForReceipt.entrega.rua}, {selectedVendaForReceipt.entrega.numero}</p>
                                                     <p className="text-black"><span className="font-bold">Bairro:</span> {selectedVendaForReceipt.entrega.bairro}</p>
                                                     <p className="text-black"><span className="font-bold">Cidade:</span> {selectedVendaForReceipt.entrega.cidade}</p>
                                                     <p className="font-bold text-center mt-1 border border-black uppercase text-[12px] bg-white text-black">
-                                                        {selectedVendaForReceipt.status === 'Pago' || selectedVendaForReceipt.status === 'Entregue' ? '✅ JÁ ESTÁ PAGO' : '💰 COBRAR NA ENTREGA'}
+                                                        {selectedVendaForReceipt.status === 'Pago' || selectedVendaForReceipt.status === 'Entregue' ? '✅ PAGO / CONFERIDO' : '💰 RECEBER NO ATO'}
                                                     </p>
                                                 </div>
                                             )}
@@ -624,8 +660,8 @@ export function VendasConcluidas() {
                                                     <tr key={idx}>
                                                         <td className="py-1">{i.produtos?.nome}</td>
                                                         <td className="text-right">{i.quantidade}</td>
-                                                        <td className="text-right">{(i.preco_unitario || (i.subtotal / i.quantidade)).toFixed(2)}</td>
-                                                        <td className="text-right font-bold">{i.subtotal.toFixed(2)}</td>
+                                                        <td className="text-right">{Number(i.preco_unitario || (i.subtotal / (i.quantidade || 1)) || 0).toFixed(2)}</td>
+                                                        <td className="text-right font-bold">{Number(i.subtotal || 0).toFixed(2)}</td>
                                                     </tr>
                                                 ))}
                                             </tbody>
@@ -637,12 +673,12 @@ export function VendasConcluidas() {
 
                                         <div className="flex justify-between font-bold text-lg py-1">
                                             <span>Total da Venda:</span>
-                                            <span>R$ {selectedVendaForReceipt.total.toFixed(2)}</span>
+                                            <span>R$ {Number(selectedVendaForReceipt.total || 0).toFixed(2)}</span>
                                         </div>
 
                                         <div className="ticket-line" />
                                         <div className="grid grid-cols-2 text-[10px]">
-                                            <div><span className="font-bold">Data</span><br />{new Intl.DateTimeFormat('pt-BR').format(new Date(selectedVendaForReceipt.data_venda))}</div>
+                                            <div><span className="font-bold">Data</span><br />{fmtDate(selectedVendaForReceipt.data_venda)}</div>
                                             <div><span className="font-bold">Forma</span><br />{selectedVendaForReceipt.forma_pagamento}</div>
                                         </div>
 
@@ -670,12 +706,12 @@ export function VendasConcluidas() {
                                             </div>
                                             <div className="text-right text-[10px] space-y-0.5 text-black">
                                                 <p>Página 1 de 1</p>
-                                                <p>{new Date().toLocaleDateString('pt-BR')} {new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</p>
+                                                <p>{fmtDateTime(new Date())}</p>
                                             </div>
                                         </div>
 
                                         <div className="text-right text-[11px] font-bold mb-2">
-                                            Emissão {new Date(selectedVendaForReceipt.data_venda).toLocaleDateString('pt-BR')}
+                                            Emissão {fmtDate(selectedVendaForReceipt.data_venda)}
                                         </div>
 
                                         <div className="border border-black p-3 space-y-1 text-black">
@@ -695,15 +731,17 @@ export function VendasConcluidas() {
                                                     <div className="flex justify-between items-center mb-1">
                                                         <p className="font-black text-xs underline">DADOS COMPLETOS PARA ENTREGA</p>
                                                         <p className={`font-black px-2 py-0.5 border-2 border-black ${selectedVendaForReceipt.status === 'Pago' || selectedVendaForReceipt.status === 'Entregue' ? 'bg-white' : 'bg-black text-white'}`}>
-                                                            {selectedVendaForReceipt.status === 'Pago' || selectedVendaForReceipt.status === 'Entregue' ? 'CONFERIDO / PAGO' : 'COBRAR NO ATO'}
+                                                            {selectedVendaForReceipt.status === 'Pago' || selectedVendaForReceipt.status === 'Entregue' ? 'PAGO / CONFERIDO' : 'RECEBER NO ATO'}
                                                         </p>
                                                     </div>
                                                     <div className="grid grid-cols-2 text-[11px] gap-x-4">
+                                                        <p><span className="font-bold">Recebedor:</span> {selectedVendaForReceipt.entrega.recebedor_nome || selectedVendaForReceipt.clientes?.nome || 'N/A'}</p>
+                                                        <p><span className="font-bold">Telefone:</span> {selectedVendaForReceipt.entrega.cliente_contato || selectedVendaForReceipt.clientes?.telefone || 'N/A'}</p>
                                                         <p><span className="font-bold">Rua:</span> {selectedVendaForReceipt.entrega.rua}, {selectedVendaForReceipt.entrega.numero}</p>
                                                         <p><span className="font-bold">Bairro:</span> {selectedVendaForReceipt.entrega.bairro}</p>
                                                         <p><span className="font-bold">Cidade:</span> {selectedVendaForReceipt.entrega.cidade}/{selectedVendaForReceipt.entrega.estado}</p>
                                                         <p><span className="font-bold">CEP:</span> {selectedVendaForReceipt.entrega.cep}</p>
-                                                        <p className="col-span-2 mt-1"><span className="font-bold">Contato Adicional:</span> {selectedVendaForReceipt.entrega.contato || 'N/A'}</p>
+                                                        <p className="col-span-2 mt-1"><span className="font-bold">Contato/Obs Adicional:</span> {selectedVendaForReceipt.entrega.contato || 'N/A'}</p>
                                                     </div>
                                                 </div>
                                             )}
@@ -753,19 +791,21 @@ export function VendasConcluidas() {
                                                     <p className="text-sm font-bold">Forma de pagamento: {selectedVendaForReceipt.forma_pagamento}</p>
                                                     <p className="text-[10px]">Status: {selectedVendaForReceipt.status}</p>
                                                 </div>
-                                                <div className="formal-section">
-                                                    <p className="formal-label">Status Financeiro</p>
-                                                    <p className={`text-sm font-black mt-1 p-1 border border-black text-center ${selectedVendaForReceipt.status === 'Pago' || selectedVendaForReceipt.status === 'Entregue' ? 'bg-white' : 'bg-black text-white'}`}>
-                                                        {selectedVendaForReceipt.status === 'Pago' || selectedVendaForReceipt.status === 'Entregue' ? '✅ PEDIDO PAGO' : '⚠️ AGUARDANDO PAGAMENTO'}
-                                                    </p>
-                                                </div>
+                                                {(selectedVendaForReceipt.status === 'Pago' || selectedVendaForReceipt.status === 'Entregue') && (
+                                                    <div className="formal-section">
+                                                        <p className="formal-label">Status Financeiro</p>
+                                                        <p className="text-sm font-black mt-1 p-1 border border-black text-center bg-white">
+                                                            ✅ PEDIDO PAGO
+                                                        </p>
+                                                    </div>
+                                                )}
                                             </div>
                                             <div className="space-y-1">
                                                 <div className="formal-section text-right">
                                                     <p className="formal-label">Totais</p>
                                                     <div className="flex justify-between text-sm py-1 text-black">
                                                         <span>Subtotal dos produtos</span>
-                                                        <span>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(selectedVendaForReceipt.total)}</span>
+                                                        <span>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(selectedVendaForReceipt.total || 0))}</span>
                                                     </div>
                                                     <div className="flex justify-between text-sm py-1 text-black">
                                                         <span>Frete / Outros</span>
@@ -773,7 +813,7 @@ export function VendasConcluidas() {
                                                     </div>
                                                     <div className="flex justify-between text-lg font-black border-t-2 border-black pt-2 mt-2 text-black">
                                                         <span>VALOR TOTAL</span>
-                                                        <span>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(selectedVendaForReceipt.total)}</span>
+                                                        <span>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(selectedVendaForReceipt.total || 0))}</span>
                                                     </div>
                                                 </div>
                                             </div>

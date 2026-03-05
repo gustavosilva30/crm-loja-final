@@ -1034,11 +1034,30 @@ export function Configuracoes() {
                                     <select
                                         className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                                         value={newAtendente.cargo}
-                                        onChange={e => setNewAtendente({ ...newAtendente, cargo: e.target.value })}
+                                        onChange={e => {
+                                            const role = e.target.value;
+                                            let perms = { ...newAtendente, cargo: role };
+
+                                            // Presets de Permissão por Cargo
+                                            if (role === 'Administrador') {
+                                                perms = { ...perms, perm_vendas: true, perm_produtos: true, perm_financeiro: true, perm_fiscal: true, perm_caixa: true, perm_config: true };
+                                            } else if (role === 'Gerente') {
+                                                perms = { ...perms, perm_vendas: true, perm_produtos: true, perm_financeiro: true, perm_fiscal: true, perm_caixa: true, perm_config: false };
+                                            } else if (role === 'Vendedor') {
+                                                perms = { ...perms, perm_vendas: true, perm_produtos: true, perm_financeiro: false, perm_fiscal: false, perm_caixa: false, perm_config: false };
+                                            } else if (role === 'Caixa') {
+                                                perms = { ...perms, perm_vendas: false, perm_produtos: false, perm_financeiro: true, perm_fiscal: false, perm_caixa: true, perm_config: false };
+                                            } else if (role === 'Cadastrador') {
+                                                perms = { ...perms, perm_vendas: false, perm_produtos: true, perm_financeiro: false, perm_fiscal: false, perm_caixa: false, perm_config: false };
+                                            }
+
+                                            setNewAtendente(perms);
+                                        }}
                                     >
                                         <option value="Vendedor">Vendedor</option>
-                                        <option value="Cadastrador">Cadastrador</option>
-                                        <option value="Financeiro">Financeiro</option>
+                                        <option value="Cadastrador">Cadastrador / Estoquista</option>
+                                        <option value="Caixa">Operador de Caixa</option>
+                                        <option value="Gerente">Gerente</option>
                                         <option value="Administrador">Administrador</option>
                                     </select>
                                 </div>

@@ -22,11 +22,33 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         const { data: { session } } = await supabase.auth.getSession()
 
         if (session) {
-            const { data: atendente } = await supabase
+            // 1. Tentar buscar por auth_user_id primeiro (vínculo já existente)
+            let { data: atendente, error: fetchErr } = await supabase
                 .from('atendentes')
                 .select('*')
                 .eq('auth_user_id', session.user.id)
-                .single()
+                .maybeSingle()
+
+            // 2. Se não achou, tentar por e-mail (vínculo inicial)
+            if (!atendente && session.user.email) {
+                const { data: foundByEmail } = await supabase
+                    .from('atendentes')
+                    .select('*')
+                    .eq('email', session.user.email)
+                    .maybeSingle()
+
+                if (foundByEmail) {
+                    // Atualiza o atendente com o ID do usuário de auth do Supabase
+                    const { data: updated } = await supabase
+                        .from('atendentes')
+                        .update({ auth_user_id: session.user.id })
+                        .eq('id', foundByEmail.id)
+                        .select()
+                        .single()
+
+                    atendente = updated
+                }
+            }
 
             set({ user: session.user, atendente, loading: false, initialized: true })
         } else {

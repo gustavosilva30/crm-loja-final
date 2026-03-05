@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom"
-import { LayoutDashboard, Package, ShoppingCart, DollarSign, Users, Truck, Settings, LogOut, FileText, Bell, BarChart, Wallet, MessageCircle, CheckCircle2, Gavel, CalendarDays, Target, RotateCcw, Users2, QrCode, Car } from "lucide-react"
+import { LayoutDashboard, Package, ShoppingCart, ShoppingBag, DollarSign, Users, Truck, Settings, LogOut, FileText, Bell, BarChart, Wallet, MessageCircle, CheckCircle2, Gavel, CalendarDays, Target, RotateCcw, Users2, QrCode, Car } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { ModeToggle } from "./ModeToggle"
 import { supabase } from "@/lib/supabase"
@@ -12,7 +12,7 @@ const navItems = [
   { icon: Bell, label: "Lembretes", href: "/lembretes" },
   { icon: Package, label: "Estoque", href: "/produtos" },
   { icon: QrCode, label: "QR Code", href: "/qrcode" },
-  { icon: ShoppingCart, label: "Vendas", href: "/vendas" },
+  { icon: ShoppingBag, label: "Vendas", href: "/vendas" },
   { icon: CheckCircle2, label: "Vendas Concluídas", href: "/vendas-concluidas" },
   { icon: FileText, label: "Orçamentos", href: "/orcamentos" },
   { icon: Wallet, label: "Controle de Caixa", href: "/caixa" },
@@ -31,7 +31,7 @@ const navItems = [
 
 export function Sidebar() {
   const location = useLocation()
-  const [counts, setCounts] = useState({ lembretes: 0, entregas: 0 })
+  const [counts, setCounts] = useState({ lembretes: 0, entregas: 0, carrinho: 0 })
   const { atendente, signOut } = useAuthStore()
 
   const handleLogout = async () => {
@@ -54,9 +54,19 @@ export function Sidebar() {
         .select('*', { count: 'exact', head: true })
         .neq('status', 'Entregue')
 
+      let cartItems = 0;
+      if (atendente) {
+        const { data } = await supabase
+          .from('carrinho_itens')
+          .select('quantidade')
+          .eq('atendente_id', atendente.id);
+        cartItems = data?.reduce((acc, curr) => acc + curr.quantidade, 0) || 0;
+      }
+
       setCounts({
         lembretes: overdueReminders || 0,
-        entregas: pendingDeliveries || 0
+        entregas: pendingDeliveries || 0,
+        carrinho: cartItems
       })
     } catch (err) {
       console.error('Error fetching counts:', err)
@@ -70,12 +80,38 @@ export function Sidebar() {
   }, [])
 
   const filteredNavItems = navItems.filter(item => {
-    if (!atendente) return true // Se não tiver perfil vinculado (ex: admin supremo sem auth_user_id), mostra tudo
-    if (item.label === "Vendas" && !atendente.perm_vendas) return false
-    if (item.label === "Estoque" && !atendente.perm_produtos) return false
-    if (item.label === "Financeiro" && !atendente.perm_financeiro) return false
-    if (item.label === "Controle de Caixa" && !atendente.perm_caixa) return false
-    if (item.label === "Fiscal" && !atendente.perm_fiscal) return false
+    if (!atendente) return true
+
+    // ADMIN/GERENTE
+    if (atendente.perm_config) return true
+
+    const label = item.label
+
+    // Módulos de Vendas
+    if (["Vendas", "Vendas Concluídas", "Orçamentos", "Devoluções", "Clientes", "Entregas", "Indicações"].includes(label)) {
+      return atendente.perm_vendas
+    }
+
+    // Módulos de Produto/Estoque
+    if (["Estoque", "QR Code", "Sucatas"].includes(label)) {
+      return atendente.perm_produtos
+    }
+
+    // Módulos Financeiros
+    if (["Financeiro", "Relatórios", "Metas", "Agenda"].includes(label)) {
+      return atendente.perm_financeiro
+    }
+
+    // Caixa
+    if (label === "Controle de Caixa") return atendente.perm_caixa
+
+    // Fiscal
+    if (label === "Fiscal") return atendente.perm_fiscal
+
+    // Leilões (Geralmente restrito a quem tem config ou financeiro)
+    if (label === "Leilões") return atendente.perm_config || atendente.perm_financeiro
+
+    // Dashboard, Atendimento, Lembretes são públicos para qualquer logado
     return true
   })
 
@@ -96,7 +132,10 @@ export function Sidebar() {
 
       <nav className="flex-1 px-4 space-y-2 overflow-y-auto mt-4">
         {filteredNavItems.map((item) => {
-          const isActive = location.pathname === item.href || (item.href !== "/" && (location.pathname === item.href || location.pathname.startsWith(`${item.href}/`)))
+          const pathWithoutSearch = location.pathname;
+          // Exact match for base URL and query params
+          const currentUrl = `${location.pathname}${location.search}`;
+          const isActive = currentUrl === item.href || (item.href !== "/" && !item.href.includes('?') && (pathWithoutSearch === item.href || pathWithoutSearch.startsWith(`${item.href}/`)))
           return (
             <Link
               key={item.href}

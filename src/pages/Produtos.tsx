@@ -119,6 +119,7 @@ export function Produtos() {
   // Resources
   const [categorias, setCategorias] = useState<any[]>([])
   const [locais, setLocais] = useState<{ id: string, nome: string, sigla?: string, parent_id: string | null }[]>([])
+  const [cartCount, setCartCount] = useState(0)
 
   // Form State
   const [newProduto, setNewProduto] = useState<any>({
@@ -194,10 +195,17 @@ export function Produtos() {
     if (data) setLocais(data)
   }
 
+  const fetchCartCount = async () => {
+    if (!atendente) return;
+    const { count } = await supabase.from('carrinho_itens').select('*', { count: 'exact', head: true }).eq('atendente_id', atendente.id)
+    setCartCount(count || 0)
+  }
+
   useEffect(() => {
     fetchProdutos()
     fetchCategorias()
     fetchLocais()
+    fetchCartCount()
   }, [])
 
   useEffect(() => {
@@ -565,6 +573,7 @@ export function Produtos() {
 
     setSelectedIds([]);
     await fetchProdutos();
+    await fetchCartCount();
     setLoading(false);
     alert(`${successCount} produtos adicionados ao ${tipo === 'venda' ? 'carrinho' : 'orçamento'}!`);
   }
@@ -743,63 +752,74 @@ export function Produtos() {
           <h1 className="text-3xl font-bold tracking-tight">Estoque & Produtos</h1>
           <p className="text-muted-foreground mt-1">Gerencie seu catálogo e sincronização com Mercado Livre.</p>
         </div>
-        <Button className="gap-2" onClick={() => {
-          setEditingProduto(null)
 
-          // Buscar maior SKU numérico para sugestão (Fallback se o banco não for chamado via RPC)
-          const numericSkus = produtos.map(p => parseInt(p.sku, 10)).filter(n => !isNaN(n));
-          let nextSkuNum = 25010;
-          if (numericSkus.length > 0) {
-            const maxSku = Math.max(...numericSkus);
-            nextSkuNum = maxSku >= 25010 ? maxSku + 1 : 25010;
-          }
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="icon" className="relative cursor-pointer" onClick={() => window.location.href = '/vendas?cart=true'} title="Ir para o Carrinho">
+            <ShoppingCart className="w-5 h-5" />
+            {cartCount > 0 && (
+              <span className="absolute -top-2 -right-2 bg-emerald-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full animate-in zoom-in">
+                {cartCount}
+              </span>
+            )}
+          </Button>
+          <Button className="gap-2" onClick={() => {
+            setEditingProduto(null)
 
-          setNewProduto({
-            sku: nextSkuNum.toString(),
-            nome: '',
-            descricao: '',
-            estoque_atual: 0,
-            estoque_minimo: 5,
-            custo: 0,
-            preco: 0,
-            preco_prazo: 0,
-            categoria_id: '',
-            imagem_url: '',
-            imagem_urls: [],
-            compatibilidade: '',
-            ativo: true,
-            imobilizado: false,
-            item_seguranca: false,
-            rastreavel: false,
-            meli_id: '',
-            marca: '',
-            modelo: '',
-            ano: new Date().getFullYear(),
-            versao: '',
-            adicional_venda_percentual: 0,
-            ncm: '',
-            cest: '',
-            cfop: '',
-            cst: '',
-            unidade_medida: 'UN',
-            outros_custos: 0,
-            qualidade: 'A',
-            origem: '',
-            codigo_barras: '',
-            peso_g: 0,
-            altura_cm: 0,
-            largura_cm: 0,
-            comprimento_cm: 0,
-            informacoes_adicionais: ''
-          })
-          setCompatList([])
-          setImagePreviews([])
-          setSelectedFiles([])
-          setIsModalOpen(true)
-        }}>
-          <Plus className="w-4 h-4" />
-          Novo Produto
-        </Button>
+            // Buscar maior SKU numérico para sugestão (Fallback se o banco não for chamado via RPC)
+            const numericSkus = produtos.map(p => parseInt(p.sku, 10)).filter(n => !isNaN(n));
+            let nextSkuNum = 25010;
+            if (numericSkus.length > 0) {
+              const maxSku = Math.max(...numericSkus);
+              nextSkuNum = maxSku >= 25010 ? maxSku + 1 : 25010;
+            }
+
+            setNewProduto({
+              sku: nextSkuNum.toString(),
+              nome: '',
+              descricao: '',
+              estoque_atual: 0,
+              estoque_minimo: 5,
+              custo: 0,
+              preco: 0,
+              preco_prazo: 0,
+              categoria_id: '',
+              imagem_url: '',
+              imagem_urls: [],
+              compatibilidade: '',
+              ativo: true,
+              imobilizado: false,
+              item_seguranca: false,
+              rastreavel: false,
+              meli_id: '',
+              marca: '',
+              modelo: '',
+              ano: new Date().getFullYear(),
+              versao: '',
+              adicional_venda_percentual: 0,
+              ncm: '',
+              cest: '',
+              cfop: '',
+              cst: '',
+              unidade_medida: 'UN',
+              outros_custos: 0,
+              qualidade: 'A',
+              origem: '',
+              codigo_barras: '',
+              peso_g: 0,
+              altura_cm: 0,
+              largura_cm: 0,
+              comprimento_cm: 0,
+              informacoes_adicionais: ''
+            })
+            setCompatList([])
+            setImagePreviews([])
+            setSelectedFiles([])
+            setIsModalOpen(true)
+          }}>
+            <Plus className="w-4 h-4" />
+            Novo Produto
+          </Button>
+        </div>
       </div>
 
       <Card>

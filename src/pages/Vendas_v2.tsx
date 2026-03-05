@@ -12,6 +12,24 @@ import { Search, Filter, Trash2, Printer, Plus, X, UserPlus, PackagePlus, Dollar
 import { supabase } from "@/lib/supabase"
 import { useAuthStore } from "@/store/authStore"
 
+const fmtDate = (d: any) => {
+    if (!d) return '---'
+    try {
+        const date = new Date(d)
+        if (isNaN(date.getTime())) return '---'
+        return new Intl.DateTimeFormat('pt-BR').format(date)
+    } catch { return '---' }
+}
+
+const fmtDateTime = (d: any) => {
+    if (!d) return '---'
+    try {
+        const date = new Date(d)
+        if (isNaN(date.getTime())) return '---'
+        return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(date)
+    } catch { return '---' }
+}
+
 interface Venda {
     id: string
     numero_pedido?: number
@@ -47,11 +65,12 @@ export function Vendas() {
     const { atendente } = useAuthStore()
     const [printAfterSave, setPrintAfterSave] = useState(false)
     const [selectedIds, setSelectedIds] = useState<string[]>([])
+    const [cartCount, setCartCount] = useState(0)
 
     // Filtros Profissionais
     const [startDate, setStartDate] = useState("")
     const [endDate, setEndDate] = useState("")
-    const [filterStatus, setFilterStatus] = useState<string>("all")
+    const [filterStatus, setFilterStatus] = useState<string>("Pendente")
     const [filterClienteId, setFilterClienteId] = useState<string>("all")
     const [filterVendedorId, setFilterVendedorId] = useState<string>("all")
 
@@ -112,6 +131,22 @@ export function Vendas() {
             }
         }
     }, [searchParams, vendas, loading])
+
+    // Efeito para carregar carrinho via URL param
+    useEffect(() => {
+        if (searchParams.get('cart') === 'true' && atendente && !loading) {
+            handleOpenNovoPedido();
+
+            // Allow modal to open first before triggering import
+            setTimeout(() => {
+                handleImportFromCart();
+            }, 300);
+
+            const newParams = new URLSearchParams(searchParams)
+            newParams.delete('cart')
+            window.history.replaceState({}, '', `/vendas?${newParams.toString()}`)
+        }
+    }, [searchParams, atendente, loading])
 
     // Efeito para carregar orçamento convertido (crm_venda_cart)
     useEffect(() => {
@@ -212,6 +247,7 @@ export function Vendas() {
     const [showDeliveryForm, setShowDeliveryForm] = useState(false)
     const [vendaDelivery, setVendaDelivery] = useState({
         contato: '',
+        recebedor_nome: '',
         rua: '',
         numero: '',
         bairro: '',
@@ -226,8 +262,14 @@ export function Vendas() {
         forma_pagamento: 'Dinheiro',
         status: 'Pago' as const,
         criar_entrega: false,
-        entrega: { rua: '', numero: '', bairro: '', contato: '', cidade: '', estado: '', cep: '' }
+        entrega: { rua: '', numero: '', bairro: '', contato: '', recebedor_nome: '', cidade: '', estado: '', cep: '' }
     })
+
+    const fetchCartCount = async () => {
+        if (!atendente) return
+        const { count } = await supabase.from('carrinho_itens').select('*', { count: 'exact', head: true }).eq('atendente_id', atendente.id)
+        setCartCount(count || 0)
+    }
 
     const fetchVendas = async () => {
         setLoading(true)
@@ -317,6 +359,7 @@ export function Vendas() {
     useEffect(() => {
         fetchVendas()
         fetchResources()
+        fetchCartCount()
         supabase.from('configuracoes_empresa').select('*').maybeSingle().then(({ data }) => {
             setCompany(data)
             setConfigEmpresa(data)
@@ -360,9 +403,24 @@ export function Vendas() {
             if (error) throw error;
 
             fetchVendas();
-            alert('Venda cancelada e valores estornados com sucesso.');
+            alert('Venda cancelada e valores estornados com sucesso. Ela foi movida para Vendas Concluídas.');
         } catch (e: any) {
             alert('Erro ao cancelar: ' + e.message);
+        } finally {
+            setSubmitting(false);
+        }
+    }
+
+    const handleExcluirVenda = async (id: string) => {
+        if (!confirm('ATENÇÃO: Deseja EXCLUIR definitivamente este registro do banco de dados? Esta ação não pode ser desfeita. (Use Cancelar se quiser apenas anular a venda).')) return;
+        setSubmitting(true);
+        try {
+            const { error } = await supabase.from('vendas').delete().eq('id', id);
+            if (error) throw error;
+            fetchVendas();
+            alert('Venda excluída definitivamente.');
+        } catch (e: any) {
+            alert('Erro ao excluir: ' + e.message);
         } finally {
             setSubmitting(false);
         }
@@ -396,6 +454,7 @@ export function Vendas() {
             setShowDeliveryForm(true)
             setVendaDelivery({
                 contato: entrega.cliente_contato || '',
+                recebedor_nome: entrega.recebedor_nome || '',
                 rua: entrega.rua || '',
                 numero: entrega.numero || '',
                 bairro: entrega.bairro || '',
@@ -405,7 +464,7 @@ export function Vendas() {
             })
         } else {
             setShowDeliveryForm(false)
-            setVendaDelivery({ contato: '', rua: '', numero: '', bairro: '', cidade: '', estado: '', cep: '' })
+            setVendaDelivery({ contato: '', recebedor_nome: '', rua: '', numero: '', bairro: '', cidade: '', estado: '', cep: '' })
         }
 
         setIsNovoPedidoModalOpen(true)
@@ -423,6 +482,7 @@ export function Vendas() {
             criar_entrega: !!entregaExt,
             entrega: {
                 contato: entregaExt?.cliente_contato || venda.clientes?.telefone || '',
+                recebedor_nome: entregaExt?.recebedor_nome || venda.clientes?.nome || '',
                 rua: entregaExt?.rua || venda.clientes?.endereco?.split(',')[0] || '',
                 numero: entregaExt?.numero || '',
                 bairro: entregaExt?.bairro || '',
@@ -589,7 +649,7 @@ export function Vendas() {
             setIsNovoPedidoModalOpen(false)
             setEditingVendaId(null)
             setShowDeliveryForm(false)
-            setVendaDelivery({ contato: '', rua: '', numero: '', bairro: '', cidade: '', estado: '', cep: '' })
+            setVendaDelivery({ contato: '', recebedor_nome: '', rua: '', numero: '', bairro: '', cidade: '', estado: '', cep: '' })
             setVendaItems([{ produto_id: '', quantidade: 1, preco_unitario: 0, subtotal: 0, _search: '' }])
             fetchVendas()
 
@@ -682,6 +742,7 @@ export function Vendas() {
                     venda_id: vendaParaFinalizar.id,
                     cliente_nome: vendaParaFinalizar.clientes?.nome || 'Cliente',
                     cliente_contato: finalizarForm.entrega.contato,
+                    recebedor_nome: finalizarForm.entrega.recebedor_nome,
                     rua: finalizarForm.entrega.rua,
                     bairro: finalizarForm.entrega.bairro,
                     numero: finalizarForm.entrega.numero,
@@ -761,12 +822,28 @@ export function Vendas() {
                         <span className="text-xl text-muted-foreground ml-2">({filteredVendas.length})</span>
                     </h1>
                     <p className="text-muted-foreground mt-1">
-                        {filterStatus === 'all' ? 'Todas as vendas. Use o filtro para ver apenas Pendentes, Pagas, etc.' : filterStatus === 'Pendente' ? 'Gerencie suas vendas em aberto.' : 'Use o filtro de status para alternar a visualização.'}
+                        {filterStatus === 'all' ? 'Todas as vendas. Use o filtro para ver apenas Pendentes, Pagas, etc.' : filterStatus === 'Pendente' ? 'Vendas em andamento. Feche, cancele ou edite.' : 'Use o filtro de status para alternar a visualização.'}
                     </p>
                 </div>
-                <Button onClick={handleOpenNovoPedido} className="gap-2 bg-primary hover:bg-primary/90">
-                    <Plus className="w-4 h-4" /> Nova Venda
-                </Button>
+                <div className="flex items-center gap-2">
+                    <Button
+                        variant="outline"
+                        size="icon"
+                        className="relative"
+                        onClick={async () => { await fetchCartCount(); handleOpenNovoPedido(); setTimeout(() => handleImportFromCart(), 300) }}
+                        title="Abrir Carrinho"
+                    >
+                        <ShoppingCart className="w-5 h-5" />
+                        {cartCount > 0 && (
+                            <span className="absolute -top-2 -right-2 bg-emerald-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                                {cartCount}
+                            </span>
+                        )}
+                    </Button>
+                    <Button onClick={handleOpenNovoPedido} className="gap-2 bg-primary hover:bg-primary/90">
+                        <Plus className="w-4 h-4" /> Nova Venda
+                    </Button>
+                </div>
             </div>
 
             <Card>
@@ -884,11 +961,16 @@ export function Vendas() {
                                     </TableCell>
                                     <TableCell className="font-bold">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(venda.total)}</TableCell>
                                     <TableCell><Badge variant="outline">{venda.status}</Badge></TableCell>
-                                    <TableCell className="text-right space-x-1">
+                                    <TableCell className="text-right space-x-1 whitespace-nowrap">
                                         <Button variant="ghost" size="icon" onClick={() => handleOpenReceipt(venda.id)} title="Imprimir"><Printer className="w-4 h-4" /></Button>
                                         <Button variant="ghost" size="icon" className="text-blue-500" onClick={() => startEditVenda(venda)} title="Editar"><Pencil className="w-4 h-4" /></Button>
-                                        <Button variant="outline" size="sm" className="h-8 gap-1 bg-emerald-500/10 text-emerald-500 border-emerald-500/20 hover:bg-emerald-500/20" onClick={() => startFinalizarVenda(venda)}><DollarSign className="w-3 h-3" /> Fechar</Button>
-                                        <Button variant="ghost" size="icon" className="text-destructive" onClick={() => handleCancelVenda(venda.id)} title="Cancelar"><X className="w-4 h-4" /></Button>
+                                        {venda.status === 'Pendente' && (
+                                            <Button variant="outline" size="sm" className="h-8 gap-1 bg-emerald-500/10 text-emerald-500 border-emerald-500/20 hover:bg-emerald-500/20" onClick={() => startFinalizarVenda(venda)}><DollarSign className="w-3 h-3" /> Fechar</Button>
+                                        )}
+                                        {venda.status === 'Pendente' && (
+                                            <Button variant="ghost" size="icon" className="text-amber-500" onClick={() => handleCancelVenda(venda.id)} title="Cancelar"><X className="w-4 h-4" /></Button>
+                                        )}
+                                        <Button variant="ghost" size="icon" className="text-destructive" onClick={() => handleExcluirVenda(venda.id)} title="Excluir (Deletar)"><Trash2 className="w-4 h-4" /></Button>
                                     </TableCell>
                                 </TableRow>
                             ))}
@@ -1204,6 +1286,14 @@ export function Vendas() {
                                     />
                                 </div>
                                 <div className="md:col-span-2 space-y-1">
+                                    <Label className="text-[10px] uppercase font-black">Nome do Recebedor</Label>
+                                    <Input
+                                        placeholder="Nome de quem recebe"
+                                        value={vendaDelivery.recebedor_nome}
+                                        onChange={e => setVendaDelivery({ ...vendaDelivery, recebedor_nome: e.target.value })}
+                                    />
+                                </div>
+                                <div className="md:col-span-2 space-y-1">
                                     <Label className="text-[10px] uppercase font-black">Logradouro (Rua/Av)</Label>
                                     <Input
                                         placeholder="Ex: Rua das Flores"
@@ -1446,6 +1536,8 @@ export function Vendas() {
                                             {selectedVendaForReceipt.entrega && (
                                                 <div className="mt-2 pt-1 border-t border-black" style={{ backgroundColor: '#f9f9f9' }}>
                                                     <p className="font-bold text-center underline mb-1">ENTREGA</p>
+                                                    <p className="text-black"><span className="font-bold">Recebedor:</span> {selectedVendaForReceipt.entrega.recebedor_nome || selectedVendaForReceipt.clientes?.nome || 'N/A'}</p>
+                                                    <p className="text-black"><span className="font-bold">Telefone:</span> {selectedVendaForReceipt.entrega.cliente_contato || selectedVendaForReceipt.clientes?.telefone || 'N/A'}</p>
                                                     <p className="text-black"><span className="font-bold">End:</span> {selectedVendaForReceipt.entrega.rua}, {selectedVendaForReceipt.entrega.numero}</p>
                                                     <p className="text-black"><span className="font-bold">Bairro:</span> {selectedVendaForReceipt.entrega.bairro}</p>
                                                     <p className="text-black"><span className="font-bold">Cidade:</span> {selectedVendaForReceipt.entrega.cidade}</p>
@@ -1477,8 +1569,8 @@ export function Vendas() {
                                                     <tr key={idx}>
                                                         <td className="py-1">{i.produtos?.nome}</td>
                                                         <td className="text-right">{i.quantidade}</td>
-                                                        <td className="text-right">{i.preco_unitario.toFixed(2)}</td>
-                                                        <td className="text-right font-bold">{i.subtotal.toFixed(2)}</td>
+                                                        <td className="text-right">{Number(i.preco_unitario || 0).toFixed(2)}</td>
+                                                        <td className="text-right font-bold">{Number(i.subtotal || 0).toFixed(2)}</td>
                                                     </tr>
                                                 ))}
                                             </tbody>
@@ -1490,13 +1582,13 @@ export function Vendas() {
 
                                         <div className="flex justify-between font-bold text-lg py-1">
                                             <span>Total do Pedido:</span>
-                                            <span>R$ {selectedVendaForReceipt.total.toFixed(2)}</span>
+                                            <span>R$ {Number(selectedVendaForReceipt.total || 0).toFixed(2)}</span>
                                         </div>
 
                                         <div className="ticket-line" />
                                         <div className="grid grid-cols-2 text-[10px]">
-                                            <div><span className="font-bold">Vencimento</span><br />{new Intl.DateTimeFormat('pt-BR').format(new Date())}</div>
-                                            <div><span className="font-bold">Forma</span><br />{selectedVendaForReceipt.forma_pagamento}</div>
+                                            <div><span className="font-bold">Emissão</span><br />{fmtDate(selectedVendaForReceipt.data_venda)}</div>
+                                            <div><span className="font-bold">Vencimento</span><br />{fmtDate(new Date())}</div>
                                         </div>
 
                                         <div className="mt-8 text-center text-[10px]">
@@ -1523,12 +1615,12 @@ export function Vendas() {
                                             </div>
                                             <div className="text-right text-[10px] space-y-0.5 text-black">
                                                 <p>Página 1 de 1</p>
-                                                <p>{new Date().toLocaleDateString('pt-BR')} {new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</p>
+                                                <p>{fmtDateTime(new Date())}</p>
                                             </div>
                                         </div>
 
                                         <div className="text-right text-[11px] font-bold mb-2">
-                                            Emissão {new Date(selectedVendaForReceipt.data_venda).toLocaleDateString('pt-BR')}
+                                            Emissão {fmtDate(selectedVendaForReceipt.data_venda)}
                                         </div>
 
                                         <div className="border border-black p-3 space-y-1 text-black">
@@ -1548,15 +1640,17 @@ export function Vendas() {
                                                     <div className="flex justify-between items-center mb-1">
                                                         <p className="font-black text-xs underline">DADOS COMPLETOS PARA ENTREGA</p>
                                                         <p className={`font-black px-2 py-0.5 border-2 border-black ${selectedVendaForReceipt.status === 'Pago' || selectedVendaForReceipt.status === 'Entregue' ? 'bg-white' : 'bg-black text-white'}`}>
-                                                            {selectedVendaForReceipt.status === 'Pago' || selectedVendaForReceipt.status === 'Entregue' ? 'CONFERIDO / PAGO' : 'COBRAR NO ATO'}
+                                                            {selectedVendaForReceipt.status === 'Pago' || selectedVendaForReceipt.status === 'Entregue' ? 'PAGO / CONFERIDO' : 'RECEBER NO ATO'}
                                                         </p>
                                                     </div>
                                                     <div className="grid grid-cols-2 text-[11px] gap-x-4">
+                                                        <p><span className="font-bold">Recebedor:</span> {selectedVendaForReceipt.entrega.recebedor_nome || selectedVendaForReceipt.clientes?.nome || 'N/A'}</p>
+                                                        <p><span className="font-bold">Telefone:</span> {selectedVendaForReceipt.entrega.cliente_contato || selectedVendaForReceipt.clientes?.telefone || 'N/A'}</p>
                                                         <p><span className="font-bold">Rua:</span> {selectedVendaForReceipt.entrega.rua}, {selectedVendaForReceipt.entrega.numero}</p>
                                                         <p><span className="font-bold">Bairro:</span> {selectedVendaForReceipt.entrega.bairro}</p>
                                                         <p><span className="font-bold">Cidade:</span> {selectedVendaForReceipt.entrega.cidade}/{selectedVendaForReceipt.entrega.estado}</p>
                                                         <p><span className="font-bold">CEP:</span> {selectedVendaForReceipt.entrega.cep}</p>
-                                                        <p className="col-span-2 mt-1"><span className="font-bold">Contato Adicional:</span> {selectedVendaForReceipt.entrega.contato || 'N/A'}</p>
+                                                        <p className="col-span-2 mt-1"><span className="font-bold">Contato/Obs Adicional:</span> {selectedVendaForReceipt.entrega.contato || 'N/A'}</p>
                                                     </div>
                                                 </div>
                                             )}
@@ -1606,38 +1700,23 @@ export function Vendas() {
                                                     <p className="text-sm font-bold">Forma de pagamento: {selectedVendaForReceipt.forma_pagamento}</p>
                                                     <p className="text-[10px]">Status: {selectedVendaForReceipt.status}</p>
                                                 </div>
-                                                <div className="formal-section">
-                                                    <p className="formal-label">Status Financeiro</p>
-                                                    <p className={`text-sm font-black mt-1 p-1 border border-black text-center ${selectedVendaForReceipt.status === 'Pago' || selectedVendaForReceipt.status === 'Entregue' ? 'bg-white' : 'bg-black text-white'}`}>
-                                                        {selectedVendaForReceipt.status === 'Pago' || selectedVendaForReceipt.status === 'Entregue' ? '✅ PEDIDO PAGO' : '⚠️ AGUARDANDO PAGAMENTO'}
-                                                    </p>
-                                                </div>
-
-                                                {selectedVendaForReceipt.entrega && (
+                                                {(selectedVendaForReceipt.status === 'Pago' || selectedVendaForReceipt.status === 'Entregue') && (
                                                     <div className="formal-section">
-                                                        <p className="formal-label">Informações de Entrega</p>
-                                                        <div className="mt-2 border border-black p-3 text-black" style={{ backgroundColor: '#f9f9f9' }}>
-                                                            <div className="grid grid-cols-2 text-[11px] gap-2">
-                                                                <p><span className="font-bold">Nome:</span> {selectedVendaForReceipt.clientes?.nome}</p>
-                                                                <p><span className="font-bold">Telefone:</span> {selectedVendaForReceipt.entrega.contato || selectedVendaForReceipt.clientes?.telefone}</p>
-                                                                <p className="col-span-2"><span className="font-bold">Endereço:</span> {selectedVendaForReceipt.entrega.rua}, {selectedVendaForReceipt.entrega.numero}</p>
-                                                                <p><span className="font-bold">Bairro:</span> {selectedVendaForReceipt.entrega.bairro}</p>
-                                                                <p><span className="font-bold">Cidade:</span> {selectedVendaForReceipt.entrega.cidade}/{selectedVendaForReceipt.entrega.estado}</p>
-                                                                <p><span className="font-bold">CEP:</span> {selectedVendaForReceipt.entrega.cep}</p>
-                                                                <p className="col-span-2 font-black border-t border-black pt-1 mt-1 text-center" style={{ fontSize: '12px' }}>
-                                                                    STATUS: {selectedVendaForReceipt.status === 'Pago' || selectedVendaForReceipt.status === 'Entregue' ? '✅ PAGAMENTO CONFIRMADO' : '💰 COBRAR VALOR TOTAL NA ENTREGA'}
-                                                                </p>
-                                                            </div>
-                                                        </div>
+                                                        <p className="formal-label">Status Financeiro</p>
+                                                        <p className="text-sm font-black mt-1 p-1 border border-black text-center bg-white">
+                                                            ✅ PEDIDO PAGO
+                                                        </p>
                                                     </div>
                                                 )}
+
+                                                {/* Seção inferior removida a pedido do usuário - mantida apenas a superior */}
                                             </div>
                                             <div className="space-y-1">
                                                 <div className="formal-section text-right">
                                                     <p className="formal-label">Totais</p>
                                                     <div className="flex justify-between text-sm py-1 text-black">
                                                         <span>Subtotal dos produtos</span>
-                                                        <span>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(selectedVendaForReceipt.total)}</span>
+                                                        <span>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(selectedVendaForReceipt.total || 0))}</span>
                                                     </div>
                                                     <div className="flex justify-between text-sm py-1 text-black">
                                                         <span>Frete / Outros</span>
@@ -1645,7 +1724,7 @@ export function Vendas() {
                                                     </div>
                                                     <div className="flex justify-between text-lg font-black border-t-2 border-black pt-2 mt-2 text-black">
                                                         <span>VALOR TOTAL</span>
-                                                        <span>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(selectedVendaForReceipt.total)}</span>
+                                                        <span>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(selectedVendaForReceipt.total || 0))}</span>
                                                     </div>
                                                 </div>
                                             </div>

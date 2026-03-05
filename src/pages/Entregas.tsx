@@ -16,6 +16,7 @@ interface Entrega {
     venda_id: string | null
     cliente_nome: string | null
     cliente_contato: string | null
+    recebedor_nome: string | null
     rua: string | null
     bairro: string | null
     numero: string | null
@@ -41,6 +42,7 @@ export function Entregas() {
     const [formData, setFormData] = useState({
         cliente_nome: '',
         cliente_contato: '',
+        recebedor_nome: '',
         rua: '',
         bairro: '',
         numero: '',
@@ -152,6 +154,7 @@ export function Entregas() {
             setFormData({
                 cliente_nome: '',
                 cliente_contato: '',
+                recebedor_nome: '',
                 rua: '',
                 bairro: '',
                 numero: '',
@@ -284,7 +287,10 @@ export function Entregas() {
                                             {entrega.venda_id ? `#${entrega.vendas?.id.slice(0, 8)}` : "MANUAL"}
                                         </TableCell>
                                         <TableCell>
-                                            <div className="font-medium text-sm">{entrega.vendas?.clientes?.nome || entrega.cliente_nome || "Cliente Eventual"}</div>
+                                            <div className="font-medium text-sm">{entrega.recebedor_nome || entrega.vendas?.clientes?.nome || entrega.cliente_nome || "Cliente Eventual"}</div>
+                                            {entrega.recebedor_nome && (entrega.vendas?.clientes?.nome || entrega.cliente_nome) && (
+                                                <div className="text-[10px] text-muted-foreground mr-1">Comprador: {entrega.vendas?.clientes?.nome || entrega.cliente_nome}</div>
+                                            )}
                                             {entrega.cliente_contato && <div className="text-[10px] text-muted-foreground">{entrega.cliente_contato}</div>}
                                         </TableCell>
                                         <TableCell>
@@ -349,8 +355,12 @@ export function Entregas() {
                         <Input required value={formData.cliente_nome} onChange={e => setFormData({ ...formData, cliente_nome: e.target.value })} />
                     </div>
                     <div className="space-y-2">
-                        <Label>Contato (Telefone/Email)</Label>
+                        <Label>Contato (Telefone/WhatsApp)</Label>
                         <Input value={formData.cliente_contato} onChange={e => setFormData({ ...formData, cliente_contato: e.target.value })} />
+                    </div>
+                    <div className="space-y-2">
+                        <Label>Nome de Quem Recebe</Label>
+                        <Input placeholder="Opcional" value={formData.recebedor_nome} onChange={e => setFormData({ ...formData, recebedor_nome: e.target.value })} />
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">

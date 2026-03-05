@@ -7,12 +7,12 @@ import { Label } from "@/components/ui/label"
 import { Select } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import { FileText, Download, Printer, TrendingUp, Users, ShoppingBag, Wallet, ArrowDownCircle, ArrowUpCircle, RefreshCw } from "lucide-react"
+import { FileText, Download, Printer, TrendingUp, Users, ShoppingBag, Wallet, ArrowDownCircle, ArrowUpCircle, RefreshCw, Box } from "lucide-react"
 
 const fmt = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v)
 const fmtDate = (d: string) => d ? new Date(d).toLocaleDateString('pt-BR') : '---'
 
-type ReportType = 'vendas' | 'vendas_por_vendedor' | 'contas' | 'clientes' | 'fluxo_caixa'
+type ReportType = 'vendas' | 'vendas_por_vendedor' | 'contas' | 'clientes' | 'fluxo_caixa' | 'pecas_por_usuario'
 
 export function Relatorios() {
     const [reportType, setReportType] = useState<ReportType>('vendas')
@@ -171,6 +171,32 @@ export function Relatorios() {
                     setTotals({ entradas, saidas, saldo: entradas - saidas })
                 }
             }
+
+            else if (reportType === 'pecas_por_usuario') {
+                let q = supabase
+                    .from('produtos')
+                    .select(`atendente_id, atendentes (nome), created_at`)
+
+                if (filterDataInicio) q = q.gte('created_at', filterDataInicio)
+                if (filterDataFim) q = q.lte('created_at', filterDataFim + 'T23:59:59')
+
+                const { data: rows, error } = await q
+                if (error) {
+                    console.error('Erro no relatório de peças por usuário:', error.message)
+                    setData([])
+                    setTotals({ total: 0 })
+                } else if (rows) {
+                    const grouped: Record<string, { nome: string, qtd: number }> = {}
+                    rows.forEach((p: any) => {
+                        const nome = p.atendentes?.nome || 'Sem usuário'
+                        if (!grouped[nome]) grouped[nome] = { nome, qtd: 0 }
+                        grouped[nome].qtd++
+                    })
+                    const sorted = Object.values(grouped).sort((a, b) => b.qtd - a.qtd)
+                    setData(sorted)
+                    setTotals({ total: sorted.reduce((a, v) => a + v.qtd, 0) })
+                }
+            }
         } catch (e) {
             console.error(e)
         } finally {
@@ -225,7 +251,8 @@ ${printContent.innerHTML}
         vendas_por_vendedor: 'Vendas por Vendedor',
         contas: 'Contas a Pagar / Receber',
         clientes: 'Cadastro de Clientes',
-        fluxo_caixa: 'Fluxo de Caixa'
+        fluxo_caixa: 'Fluxo de Caixa',
+        pecas_por_usuario: 'Peças por Usuário'
     }
 
     const reportIcons: Record<ReportType, React.ReactNode> = {
@@ -234,6 +261,7 @@ ${printContent.innerHTML}
         contas: <Wallet className="w-4 h-4" />,
         clientes: <Users className="w-4 h-4" />,
         fluxo_caixa: <ArrowUpCircle className="w-4 h-4" />,
+        pecas_por_usuario: <Box className="w-4 h-4" />,
     }
 
     return (
@@ -396,6 +424,12 @@ ${printContent.innerHTML}
                                 <div className="bg-red-500/10 border border-red-500/20 rounded-lg px-4 py-2 text-sm">
                                     <span className="text-xs text-muted-foreground flex gap-1 items-center"><ArrowUpCircle className="w-3 h-3 text-red-500" />Saídas:</span>
                                     <p className="font-black text-red-500">{fmt(totals.saidas)}</p>
+                                </div>
+                            )}
+                            {totals.total !== undefined && reportType === 'pecas_por_usuario' && (
+                                <div className="bg-primary/10 border border-primary/20 rounded-lg px-4 py-2 text-sm">
+                                    <span className="text-muted-foreground text-xs">Total de Peças:</span>
+                                    <p className="font-black text-primary">{totals.total}</p>
                                 </div>
                             )}
                         </div>
@@ -584,6 +618,33 @@ ${printContent.innerHTML}
                                             <TableCell className="text-right text-emerald-500">{fmt(totals.entradas || 0)}</TableCell>
                                             <TableCell className="text-right text-red-500">{fmt(totals.saidas || 0)}</TableCell>
                                             <TableCell className={`text-right ${(totals.saldo || 0) >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>{fmt(totals.saldo || 0)}</TableCell>
+                                        </TableRow>
+                                    </TableBody>
+                                </Table>
+                            ) : reportType === 'pecas_por_usuario' ? (
+                                /* ===== RELATÓRIO: PEÇAS POR USUARIO ===== */
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>Usuário / Atendente</TableHead>
+                                            <TableHead className="text-center">Qtd. Peças Cadastradas</TableHead>
+                                            <TableHead className="text-right">% do Total</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {data.map((u: any, i: number) => (
+                                            <TableRow key={i}>
+                                                <TableCell className="font-bold">{u.nome}</TableCell>
+                                                <TableCell className="text-center font-bold text-primary">{u.qtd}</TableCell>
+                                                <TableCell className="text-right text-muted-foreground">
+                                                    {((u.qtd / (totals.total || 1)) * 100).toFixed(1)}%
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                        <TableRow className="bg-primary/5 font-black">
+                                            <TableCell className="text-right">TOTAL GERAL</TableCell>
+                                            <TableCell className="text-center text-primary">{totals.total || 0}</TableCell>
+                                            <TableCell className="text-right">100%</TableCell>
                                         </TableRow>
                                     </TableBody>
                                 </Table>
