@@ -776,7 +776,7 @@ export function Vendas() {
     const handleOpenReceipt = async (vendaId: string) => {
         setLoading(true)
         try {
-            const { data: venda } = await supabase.from('vendas').select(`*, clientes(*), atendentes:atendente_id(nome), vendedor:vendedor_id(nome)`).eq('id', vendaId).single()
+            const { data: venda } = await supabase.from('vendas').select(`*, clientes!cliente_id(*), atendentes:atendente_id(nome), vendedor:vendedor_id(nome)`).eq('id', vendaId).single()
             const { data: itens } = await supabase.from('vendas_itens').select(`*, produtos(nome, sku)`).eq('venda_id', vendaId)
             const { data: entrega } = await supabase.from('entregas').select('*').eq('venda_id', vendaId).maybeSingle()
             setSelectedVendaForReceipt({ ...venda, itens: itens || [], entrega })

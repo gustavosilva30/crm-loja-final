@@ -83,7 +83,7 @@ export function Orcamentos() {
     try {
       const { data, error } = await supabase
         .from('orcamentos')
-        .select('*, clientes ( nome ), atendentes ( nome ), orcamentos_itens ( produtos ( nome ) )')
+        .select('*, clientes!cliente_id ( nome ), atendentes ( nome ), orcamentos_itens ( produtos ( nome ) )')
         .order('created_at', { ascending: false })
 
       setOrcamentos(data || [])
@@ -159,7 +159,7 @@ export function Orcamentos() {
   const handleOpenReceipt = async (orcId: string) => {
     setLoading(true)
     try {
-      const { data: orc } = await supabase.from('orcamentos').select(`*, clientes(*), atendentes:vendedor_id(nome)`).eq('id', orcId).single()
+      const { data: orc } = await supabase.from('orcamentos').select(`*, clientes!cliente_id(*), atendentes:vendedor_id(nome)`).eq('id', orcId).single()
       const { data: itens } = await supabase.from('orcamentos_itens').select(`*, produtos(nome, sku)`).eq('orcamento_id', orcId)
       setSelectedOrcamentoForReceipt({ ...orc, itens: itens || [] })
       setIsReceiptModalOpen(true)

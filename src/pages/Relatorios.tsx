@@ -46,8 +46,8 @@ export function Relatorios() {
                     .from('vendas')
                     .select(`
                         numero_pedido, data_venda, total, status, forma_pagamento,
-                        clientes (nome),
-                        atendentes (nome)
+                        clientes!cliente_id (nome),
+                        atendentes!atendente_id (nome)
                     `)
                     .order('data_venda', { ascending: false })
 
@@ -63,7 +63,7 @@ export function Relatorios() {
                         .from('vendas')
                         .select(`
                             numero_pedido, data_venda, total, status, forma_pagamento,
-                            clientes (nome)
+                            clientes!cliente_id (nome)
                         `)
                         .order('data_venda', { ascending: false })
 

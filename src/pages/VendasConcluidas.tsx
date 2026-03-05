@@ -258,14 +258,14 @@ export function VendasConcluidas() {
             let venda: any = null
             const { data: v1, error: e1 } = await supabase
                 .from('vendas')
-                .select(`*, clientes (id, nome, documento, email, telefone, endereco), atendentes:atendente_id (nome), vendedor:vendedor_id (nome)`)
+                .select(`*, clientes!cliente_id (id, nome, documento, email, telefone, endereco), atendentes:atendente_id (nome), vendedor:vendedor_id (nome)`)
                 .eq('id', vendaId)
                 .single()
 
             if (e1) {
                 const { data: v2, error: e2 } = await supabase
                     .from('vendas')
-                    .select(`*, clientes (id, nome, documento, email, telefone, endereco)`)
+                    .select(`*, clientes!cliente_id (id, nome, documento, email, telefone, endereco)`)
                     .eq('id', vendaId)
                     .single()
                 if (e2) throw e2
