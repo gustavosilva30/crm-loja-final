@@ -51,7 +51,7 @@ export function Vendas() {
     // Filtros Profissionais
     const [startDate, setStartDate] = useState("")
     const [endDate, setEndDate] = useState("")
-    const [filterStatus, setFilterStatus] = useState<string>("all")
+    const [filterStatus, setFilterStatus] = useState<string>("Pendente")
     const [filterClienteId, setFilterClienteId] = useState<string>("all")
     const [filterVendedorId, setFilterVendedorId] = useState<string>("all")
 
@@ -700,7 +700,7 @@ export function Vendas() {
             v.vendas_itens?.some(i => (i.produtos?.nome || '').toLowerCase().includes(termLower));
 
         const matchesStatus = filterStatus === 'all'
-            ? !['pago', 'entregue', 'cancelado'].includes(String(v.status).toLowerCase()) // Padrão da página "Pendentes"
+            ? true
             : v.status === filterStatus;
 
         const dateVenda = v.data_venda ? new Date(v.data_venda).getTime() : 0;
@@ -719,8 +719,11 @@ export function Vendas() {
         <div className="space-y-6">
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-3xl font-bold tracking-tight">Vendas Pendentes ({filteredVendas.length})</h1>
-                    <p className="text-muted-foreground mt-1">Gerencie suas vendas em aberto.</p>
+                    <h1 className="text-3xl font-bold tracking-tight">
+                        {filterStatus === 'all' ? 'Todas as Vendas' : filterStatus === 'Pendente' ? 'Vendas Pendentes' : `Vendas — ${filterStatus}`}
+                        <span className="text-xl text-muted-foreground ml-2">({filteredVendas.length})</span>
+                    </h1>
+                    <p className="text-muted-foreground mt-1">{filterStatus === 'Pendente' ? 'Gerencie suas vendas em aberto.' : 'Use o filtro de status para alternar a visualização.'}</p>
                 </div>
                 <Button onClick={handleOpenNovoPedido} className="gap-2 bg-primary hover:bg-primary/90">
                     <Plus className="w-4 h-4" /> Nova Venda
@@ -762,7 +765,7 @@ export function Vendas() {
                             <div className="space-y-1">
                                 <Label className="text-[10px] uppercase font-bold text-muted-foreground">Status</Label>
                                 <Select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
-                                    <option value="all">Todos os Status</option>
+                                    <option value="all">Todas as Vendas</option>
                                     <option value="Pendente">Pendentes</option>
                                     <option value="Pago">Pagos</option>
                                     <option value="Enviado">Enviados</option>

@@ -126,11 +126,15 @@ export function Entregas() {
         }
     }
 
-    const filteredEntregas = entregas.filter(e =>
-        e.vendas?.clientes?.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        e.codigo_rastreio?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        e.venda_id.toLowerCase().includes(searchTerm.toLowerCase())
-    )
+    const filteredEntregas = entregas.filter(e => {
+        if (!searchTerm.trim()) return true
+        const term = searchTerm.toLowerCase()
+        return (
+            (e.vendas?.clientes?.nome || e.cliente_nome || '').toLowerCase().includes(term) ||
+            (e.codigo_rastreio || '').toLowerCase().includes(term) ||
+            (e.venda_id || '').toLowerCase().includes(term)
+        )
+    })
 
     const entregasAtivas = entregas.filter(e => e.status !== 'Entregue' && e.status !== 'Cancelado').length
     const entregasAtrasadas = entregas.filter(e => e.status === 'Atrasado').length
