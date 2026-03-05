@@ -143,7 +143,7 @@ export function Dashboard() {
           ? supabase.from('vendas').select('id, total, status').gte('data_venda', prevStart).lte('data_venda', prevEnd + 'T23:59:59')
           : Promise.resolve({ data: [] }),
         supabase.from('produtos').select('id, nome, estoque_atual, estoque_minimo, preco_venda'),
-        supabase.from('venda_itens').select('produto_id, quantidade, preco_unitario, produtos(nome)').gte('created_at', start).lte('created_at', endDateTime),
+        supabase.from('vendas_itens').select('produto_id, quantidade, preco_unitario, produtos(nome)').gte('created_at', start).lte('created_at', endDateTime),
         supabase.from('financeiro_lancamentos').select('tipo, valor, status, data_vencimento').gte('data_vencimento', `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-01`).lte('data_vencimento', end),
         supabase.from('clientes').select('id, nome, created_at', { count: 'exact' }),
         supabase.from('financeiro_lancamentos').select('id, descricao, data_vencimento, valor, tipo, status').gte('data_vencimento', new Date().toISOString().split('T')[0]).lte('data_vencimento', (() => { const d = new Date(); d.setDate(d.getDate() + 5); return d.toISOString().split('T')[0]; })()).eq('status', 'Pendente')
