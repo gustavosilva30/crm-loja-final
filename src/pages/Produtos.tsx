@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select } from "@/components/ui/select"
 import { Modal } from "@/components/ui/modal"
-import { Plus, Search, Filter, LayoutGrid, List, Package, Trash2, Pencil, ShoppingCart, FileText, Camera, Upload, X, Shield, Activity, Box, Tag, Ruler, Truck, Info, Settings, Maximize2, ChevronLeft, ChevronRight, ChevronDown, RefreshCw } from "lucide-react"
+import { Plus, Search, Filter, LayoutGrid, List, Package, Trash2, Pencil, ShoppingCart, FileText, Camera, Upload, X, Shield, Activity, Box, Tag, Ruler, Truck, Info, Settings, Maximize2, ChevronLeft, ChevronRight, ChevronDown, RefreshCw, Car, ImagePlus } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { supabase } from "@/lib/supabase"
 import { useAuthStore } from "@/store/authStore"
@@ -120,6 +120,8 @@ export function Produtos() {
   const [categorias, setCategorias] = useState<any[]>([])
   const [locais, setLocais] = useState<{ id: string, nome: string, sigla?: string, parent_id: string | null }[]>([])
   const [cartCount, setCartCount] = useState(0)
+  const [marcasStandard, setMarcasStandard] = useState<any[]>([])
+  const [modelosStandard, setModelosStandard] = useState<any[]>([])
 
   // Form State
   const [newProduto, setNewProduto] = useState<any>({
@@ -165,6 +167,77 @@ export function Produtos() {
     meli_id: ''
   })
 
+  // Catalog Autocomplete State
+  const [catalogSuggestions, setCatalogSuggestions] = useState<any[]>([])
+  const [showCatalogSuggestions, setShowCatalogSuggestions] = useState(false)
+  const [zoomedImage, setZoomedImage] = useState<string | null>(null)
+  const [selectedCatalogPeca, setSelectedCatalogPeca] = useState<any | null>(null)
+
+  const searchCatalog = async (term: string) => {
+    if (term.length < 2) {
+      setCatalogSuggestions([])
+      setShowCatalogSuggestions(false)
+      return
+    }
+
+    const { data } = await supabase
+      .from('pecas_catalogo')
+      .select('*')
+      .ilike('nome', `%${term}%`)
+      .limit(5)
+
+    if (data && data.length > 0) {
+      setCatalogSuggestions(data)
+      setShowCatalogSuggestions(true)
+    } else {
+      setCatalogSuggestions([])
+      setShowCatalogSuggestions(false)
+    }
+  }
+
+  const selectFromCatalog = async (peca: any) => {
+    // Buscar dimensões da categoria se houver uma vinculada
+    const cat = peca.categoria_id ? categorias.find(c => c.id === peca.categoria_id) : null;
+
+    setNewProduto({
+      ...newProduto,
+      nome: peca.nome,
+      marca: peca.marca_veiculo || newProduto.marca,
+      modelo: peca.modelo_veiculo || newProduto.modelo,
+      ano: peca.ano_inicio || newProduto.ano,
+      preco: peca.preco_padrao || newProduto.preco,
+      custo: peca.custo_padrao || newProduto.custo,
+      categoria_id: peca.categoria_id || newProduto.categoria_id,
+      part_number: peca.part_number || newProduto.part_number,
+      descricao: peca.descricao || newProduto.descricao,
+      imagem_url: peca.imagem_url || newProduto.imagem_url,
+      estoque_atual: 1, // Automatizar para 1 na seleção do catálogo
+      largura_cm: cat?.largura_padrao || newProduto.largura_cm,
+      altura_cm: cat?.altura_padrao || newProduto.altura_cm,
+      comprimento_cm: cat?.comprimento_padrao || newProduto.comprimento_cm,
+      peso_g: cat?.peso_padrao ? (cat.peso_padrao * 1000) : newProduto.peso_g
+    })
+
+    if (peca.imagem_url) {
+      if (!imagePreviews.includes(peca.imagem_url)) {
+        setImagePreviews(prev => [peca.imagem_url, ...prev])
+      }
+    }
+    setSelectedCatalogPeca(peca)
+
+    // Fetch compatibilities from catalog
+    const { data: compats } = await supabase
+      .from('pecas_catalogo_compatibilidade')
+      .select('marca, modelo, ano, versao')
+      .eq('peca_id', peca.id)
+
+    if (compats && compats.length > 0) {
+      setCompatList(compats)
+    }
+
+    setShowCatalogSuggestions(false)
+  }
+
   const [compatList, setCompatList] = useState<Compatibilidade[]>([])
   const [newCompat, setNewCompat] = useState<Compatibilidade>({ marca: '', modelo: '', ano: '', versao: '' })
 
@@ -201,11 +274,23 @@ export function Produtos() {
     setCartCount(count || 0)
   }
 
+  const fetchMarcasStandard = async () => {
+    const { data } = await supabase.from('veiculos_marcas').select('*').order('nome')
+    if (data) setMarcasStandard(data)
+  }
+
+  const fetchModelosStandard = async () => {
+    const { data } = await supabase.from('veiculos_modelos').select('*').order('nome')
+    if (data) setModelosStandard(data)
+  }
+
   useEffect(() => {
     fetchProdutos()
     fetchCategorias()
     fetchLocais()
     fetchCartCount()
+    fetchMarcasStandard()
+    fetchModelosStandard()
   }, [])
 
   useEffect(() => {
@@ -358,8 +443,11 @@ export function Produtos() {
       })
       setSelectedFiles([])
       setImagePreviews([])
+      setCompatList([])
+      setSearchTerm('')
       fetchProdutos()
       setIsModalOpen(false)
+      alert("Produto salvo com sucesso! Se ele não aparecer imediatamente, verifique se não há filtros ativos (Categoria, Estoque, etc.) ou se o SKU é novo. Lembre-se que novos produtos começam com estoque ZERO.")
     } catch (err: any) {
       console.error('Error adding product:', err)
       if (err.code === '23505') {
@@ -1163,7 +1251,7 @@ export function Produtos() {
                       </div>
                     </div>
                     <h3 className="font-bold text-sm line-clamp-2 mb-1 h-10 tracking-tight">{produto.nome}</h3>
-                    <Button variant="outline" size="sm" className="w-full text-[10px] h-7 mb-3 border-primary/20 text-foreground hover:bg-primary/5" onClick={() => { setSelectedCompat(produto.compatibilidade || "Nenhuma compatibilidade cadastrada"); setIsCompatModalOpen(true); }}>Mostrar Compatibilidades</Button>
+                    <Button variant="outline" size="sm" className="w-full text-[10px] h-7 mb-3 border-primary/30 text-foreground hover:bg-primary/10" onClick={() => { setSelectedCompat(produto.compatibilidade || "Nenhuma compatibilidade cadastrada"); setIsCompatModalOpen(true); }}>Mostrar Compatibilidades</Button>
                     <div className="flex items-center justify-between mb-3"><span className="font-black text-lg text-foreground">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(produto.preco)}</span></div>
                     <div className="flex items-center justify-between pt-3 border-t border-border/10">
                       <div className="flex gap-2">
@@ -1184,7 +1272,7 @@ export function Produtos() {
             <div className="flex justify-center mt-8 pb-4">
               <Button
                 variant="outline"
-                className="gap-2 px-12 h-10 border-primary/20 text-primary hover:bg-primary/5 font-bold"
+                className="gap-2 px-12 h-10 border-primary/30 text-primary hover:bg-primary/10 font-bold"
                 onClick={() => setCurrentPage(prev => prev + 1)}
               >
                 Ver Mais Produtos
@@ -1233,9 +1321,64 @@ export function Produtos() {
                   <Label>Part Number</Label>
                   <Input placeholder="Código do fabricante" value={newProduto.part_number} onChange={e => setNewProduto({ ...newProduto, part_number: e.target.value })} />
                 </div>
-                <div className="md:col-span-4 space-y-2">
+                <div className="md:col-span-4 space-y-2 relative">
                   <Label>Título / Nome (Máx 60 car.)</Label>
-                  <Input required maxLength={60} placeholder="Ex: CABO PUXADOR CAPO UNO" value={newProduto.nome} onChange={e => setNewProduto({ ...newProduto, nome: e.target.value })} />
+                  <Input
+                    required
+                    maxLength={60}
+                    placeholder="Ex: CABO PUXADOR CAPO UNO"
+                    value={newProduto.nome}
+                    onChange={e => {
+                      setNewProduto({ ...newProduto, nome: e.target.value })
+                      searchCatalog(e.target.value)
+                    }}
+                    onBlur={() => setTimeout(() => setShowCatalogSuggestions(false), 200)}
+                  />
+                  {showCatalogSuggestions && (
+                    <div className="absolute z-50 w-full bg-card border border-border rounded-lg shadow-xl mt-1 overflow-hidden animate-in fade-in slide-in-from-top-2">
+                      <div className="p-2 border-b border-border bg-muted/50 text-[10px] font-black uppercase tracking-widest text-primary flex items-center gap-2">
+                        <Car className="w-3 h-3" /> Sugestões do Catálogo
+                      </div>
+                      {catalogSuggestions.map((peca) => (
+                        <button
+                          key={peca.id}
+                          type="button"
+                          className="w-full text-left p-3 hover:bg-primary/10 transition-colors border-b border-border last:border-0"
+                          onClick={() => selectFromCatalog(peca)}
+                        >
+                          <div className="flex items-center gap-3">
+                            {peca.imagem_url && (
+                              <div className="relative group/img">
+                                <img
+                                  src={peca.imagem_url}
+                                  alt={peca.nome}
+                                  className="w-12 h-12 rounded-lg object-cover border border-border shadow-sm group-hover/img:scale-105 transition-transform"
+                                />
+                                <button
+                                  type="button"
+                                  className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover/img:opacity-100 transition-opacity rounded-lg"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setZoomedImage(peca.imagem_url);
+                                  }}
+                                >
+                                  <Maximize2 className="w-4 h-4 text-white" />
+                                </button>
+                              </div>
+                            )}
+                            <div className="flex-1">
+                              <div className="font-bold text-sm tracking-tight">{peca.nome}</div>
+                              <div className="text-[10px] text-muted-foreground flex items-center gap-2 mt-1">
+                                <span className="bg-muted px-1.5 py-0.5 rounded-sm font-bold">{peca.marca_veiculo}</span>
+                                <span className="text-primary font-black">R$ {peca.preco_padrao.toLocaleString('pt-BR')}</span>
+                              </div>
+                            </div>
+                            <ChevronRight className="w-4 h-4 text-muted-foreground/30" />
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -1291,8 +1434,32 @@ export function Produtos() {
               </div>
 
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="space-y-2"><Label>Marca</Label><Input value={newProduto.marca} onChange={e => setNewProduto({ ...newProduto, marca: e.target.value })} /></div>
-                <div className="space-y-2"><Label>Modelo</Label><Input value={newProduto.modelo} onChange={e => setNewProduto({ ...newProduto, modelo: e.target.value })} /></div>
+                <div className="space-y-2">
+                  <Label>Marca</Label>
+                  <Input
+                    value={newProduto.marca}
+                    onChange={e => setNewProduto({ ...newProduto, marca: e.target.value, modelo: '' })}
+                    list="marcas-standard-list"
+                  />
+                  <datalist id="marcas-standard-list">
+                    {marcasStandard.map(m => <option key={m.id} value={m.nome} />)}
+                  </datalist>
+                </div>
+                <div className="space-y-2">
+                  <Label>Modelo</Label>
+                  <Input
+                    value={newProduto.modelo}
+                    onChange={e => setNewProduto({ ...newProduto, modelo: e.target.value })}
+                    disabled={!newProduto.marca}
+                    placeholder={!newProduto.marca ? "Selecione a marca..." : ""}
+                    list="modelos-standard-list"
+                  />
+                  <datalist id="modelos-standard-list">
+                    {modelosStandard
+                      .filter(m => !newProduto.marca || marcasStandard.find(brand => brand.nome === newProduto.marca)?.id === m.marca_id)
+                      .map(m => <option key={m.id} value={m.nome} />)}
+                  </datalist>
+                </div>
                 <div className="space-y-2"><Label>Ano</Label><Input type="number" value={newProduto.ano} onChange={e => setNewProduto({ ...newProduto, ano: parseInt(e.target.value) })} /></div>
                 <div className="space-y-2"><Label>Versão</Label><Input value={newProduto.versao} onChange={e => setNewProduto({ ...newProduto, versao: e.target.value })} /></div>
               </div>
@@ -1378,6 +1545,35 @@ export function Produtos() {
                   }}
                 />
                 <p className="text-[9px] text-muted-foreground mt-2 uppercase tracking-tighter">A primeira imagem será o ícone principal no catálogo.</p>
+
+                {selectedCatalogPeca?.imagem_url && (
+                  <div className="mt-4 p-3 bg-primary/5 border border-primary/20 rounded-xl flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-lg overflow-hidden border border-border bg-white">
+                        <img src={selectedCatalogPeca.imagem_url} alt="Template" className="w-full h-full object-cover" />
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold text-primary">Foto do Catálogo disponível</p>
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-tight">Template: {selectedCatalogPeca.nome}</p>
+                      </div>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="bg-primary/10 text-primary border-primary/30 hover:bg-primary hover:text-white font-bold text-[10px] gap-2"
+                      onClick={() => {
+                        if (!imagePreviews.includes(selectedCatalogPeca.imagem_url)) {
+                          setImagePreviews(prev => [selectedCatalogPeca.imagem_url, ...prev]);
+                        } else {
+                          alert("Esta foto já está na lista!");
+                        }
+                      }}
+                    >
+                      <ImagePlus className="w-3 h-3" /> Usar Foto do Catálogo
+                    </Button>
+                  </div>
+                )}
               </div>
             </TabsContent>
 
@@ -1439,8 +1635,30 @@ export function Produtos() {
               <div className="p-4 bg-muted/20 rounded-xl border border-border/50 space-y-4">
                 <h3 className="font-bold text-sm flex items-center gap-2"><Activity className="w-4 h-4 text-primary" /> Adicionar Modelo Compatível</h3>
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                  <div className="space-y-1"><Label className="text-[10px] uppercase">Marca</Label><Input bs-size="sm" value={newCompat.marca} onChange={e => setNewCompat({ ...newCompat, marca: e.target.value })} /></div>
-                  <div className="space-y-1"><Label className="text-[10px] uppercase">Modelo</Label><Input bs-size="sm" value={newCompat.modelo} onChange={e => setNewCompat({ ...newCompat, modelo: e.target.value })} /></div>
+                  <div className="space-y-1">
+                    <Label className="text-[10px] uppercase">Marca</Label>
+                    <Input
+                      bs-size="sm"
+                      value={newCompat.marca}
+                      onChange={e => setNewCompat({ ...newCompat, marca: e.target.value, modelo: '' })}
+                      list="marcas-standard-list"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-[10px] uppercase">Modelo</Label>
+                    <Input
+                      bs-size="sm"
+                      value={newCompat.modelo}
+                      onChange={e => setNewCompat({ ...newCompat, modelo: e.target.value })}
+                      disabled={!newCompat.marca}
+                      list="modelos-standard-compat-list"
+                    />
+                    <datalist id="modelos-standard-compat-list">
+                      {modelosStandard
+                        .filter(m => !newCompat.marca || marcasStandard.find(brand => brand.nome === newCompat.marca)?.id === m.marca_id)
+                        .map(m => <option key={m.id} value={m.nome} />)}
+                    </datalist>
+                  </div>
                   <div className="space-y-1"><Label className="text-[10px] uppercase">Ano</Label><Input bs-size="sm" value={newCompat.ano} onChange={e => setNewCompat({ ...newCompat, ano: e.target.value })} /></div>
                   <div className="space-y-1"><Label className="text-[10px] uppercase">Versão</Label><Input bs-size="sm" value={newCompat.versao} onChange={e => setNewCompat({ ...newCompat, versao: e.target.value })} /></div>
                 </div>
@@ -1578,6 +1796,22 @@ export function Produtos() {
         </div>
       </Modal>
 
+      {/* Modal de Zoom da Imagem do Catálogo */}
+      <Modal isOpen={!!zoomedImage} onClose={() => setZoomedImage(null)} title="Visualização da Imagem" className="max-w-3xl border-none bg-transparent shadow-none">
+        <div className="relative group overflow-hidden rounded-2xl bg-black/20 backdrop-blur-sm p-1">
+          <img
+            src={zoomedImage || ''}
+            alt="Catalog Zoom"
+            className="max-h-[80vh] w-auto mx-auto object-contain rounded-xl shadow-2xl animate-in zoom-in-95 duration-300"
+          />
+          <button
+            onClick={() => setZoomedImage(null)}
+            className="absolute top-4 right-4 p-2 bg-black/50 hover:bg-black/70 text-white rounded-full transition-colors"
+          >
+            <X className="w-6 h-6" />
+          </button>
+        </div>
+      </Modal>
       <ImageViewer
         images={selectedImages}
         initialIndex={initialViewerIndex}

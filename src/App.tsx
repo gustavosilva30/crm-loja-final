@@ -24,6 +24,7 @@ import { Devolucoes } from "./pages/Devolucoes"
 import { Indicacoes } from "./pages/Indicacoes"
 import { QrScanner } from "./pages/QrScanner"
 import { Sucatas } from "./pages/Sucatas"
+import { Catalogo } from "./pages/Catalogo"
 import { ThemeProvider } from "./components/ThemeProvider"
 import { supabase } from "./lib/supabase"
 import { useAuthStore } from "./store/authStore"
@@ -79,6 +80,7 @@ export default function App() {
                 <Route path="indicacoes" element={<Indicacoes />} />
                 <Route path="qrcode" element={<QrScanner />} />
                 <Route path="sucatas" element={<Sucatas />} />
+                <Route path="catalogo" element={<Catalogo />} />
               </Route>
             </>
           )}

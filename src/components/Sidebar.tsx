@@ -11,6 +11,7 @@ const navItems = [
   { icon: MessageCircle, label: "Atendimento", href: "/atendimento" },
   { icon: Bell, label: "Lembretes", href: "/lembretes" },
   { icon: Package, label: "Estoque", href: "/produtos" },
+  { icon: Car, label: "Catálogo", href: "/catalogo" },
   { icon: QrCode, label: "QR Code", href: "/qrcode" },
   { icon: ShoppingBag, label: "Vendas", href: "/vendas" },
   { icon: CheckCircle2, label: "Vendas Concluídas", href: "/vendas-concluidas" },
