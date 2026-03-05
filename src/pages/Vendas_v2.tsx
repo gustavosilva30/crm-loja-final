@@ -173,6 +173,12 @@ export function Vendas() {
         forma_pagamento: 'Dinheiro'
     })
 
+    // Indicação
+    const [hasIndicacao, setHasIndicacao] = useState(false)
+    const [indicadorId, setIndicadorId] = useState('')
+    const [indicadorSearch, setIndicadorSearch] = useState('')
+    const [configEmpresa, setConfigEmpresa] = useState<any>(null)
+
     const [editingVendaId, setEditingVendaId] = useState<string | null>(null)
 
     // Efeito para preencher vendedor logado por padrão
@@ -192,6 +198,9 @@ export function Vendas() {
         })
         setVendaItems([{ produto_id: '', quantidade: 1, preco_unitario: 0, subtotal: 0 }])
         setShowDeliveryForm(false)
+        setHasIndicacao(false)
+        setIndicadorId('')
+        setIndicadorSearch('')
         setIsNovoPedidoModalOpen(true)
     }
 
@@ -271,7 +280,10 @@ export function Vendas() {
     useEffect(() => {
         fetchVendas()
         fetchResources()
-        supabase.from('configuracoes_empresa').select('*').maybeSingle().then(({ data }) => setCompany(data))
+        supabase.from('configuracoes_empresa').select('*').maybeSingle().then(({ data }) => {
+            setCompany(data)
+            setConfigEmpresa(data)
+        })
     }, [])
 
     const handleCancelVenda = async (id: string) => {
@@ -513,6 +525,27 @@ export function Vendas() {
                 await supabase.from('entregas').upsert(deliveryObj, { onConflict: 'venda_id' })
             } else if (editingVendaId) {
                 await supabase.from('entregas').delete().eq('venda_id', editingVendaId)
+            }
+
+            // 4. Registrar indicação
+            if (!editingVendaId && hasIndicacao && indicadorId && vendaId) {
+                // Calcular recompensa conforme configuração
+                let recompensaValor = configEmpresa?.indicacao_valor_fixo || 20
+                if (configEmpresa?.indicacao_tipo_beneficio === 'percentual') {
+                    recompensaValor = total * ((configEmpresa?.indicacao_percentual || 0) / 100)
+                }
+                // Salvar indicador na venda
+                await supabase.from('vendas').update({ indicador_id: indicadorId }).eq('id', vendaId)
+                // Criar registro de indicação
+                await supabase.from('indicacoes').insert([{
+                    indicador_id: indicadorId,
+                    indicado_id: vendaForm.cliente_id || null,
+                    venda_id: vendaId,
+                    status: 'Pendente',
+                    valor_venda: total,
+                    recompensa_tipo: configEmpresa?.indicacao_tipo_beneficio || 'credito',
+                    recompensa_valor: recompensaValor
+                }])
             }
 
             alert(editingVendaId ? 'Venda atualizada com sucesso!' : 'Venda realizada com sucesso!')
@@ -795,7 +828,12 @@ export function Vendas() {
                                         />
                                     </TableCell>
                                     <TableCell className="font-mono">#{formatNumPedido(venda.numero_pedido)}</TableCell>
-                                    <TableCell>{venda.clientes?.nome || 'Consumidor Final'}</TableCell>
+                                    <TableCell>
+                                        <span>{venda.clientes?.nome || 'Consumidor Final'}</span>
+                                        {(venda as any).indicador_id && (
+                                            <span className="ml-2 text-[9px] bg-violet-500/20 text-violet-400 border border-violet-500/30 px-1.5 py-0.5 rounded-full font-bold">🤝 Indicação</span>
+                                        )}
+                                    </TableCell>
                                     <TableCell className="text-xs">
                                         {venda.atendentes?.nome || venda.vendedor?.nome || '-'}
                                     </TableCell>
@@ -884,6 +922,87 @@ export function Vendas() {
                             </select>
                         </div>
                     </div>
+
+                    {/* INDICAÇÃO */}
+                    {(configEmpresa?.indicacao_ativa !== false) && (
+                        <div className={`border rounded-xl p-4 transition-colors ${hasIndicacao ? 'border-violet-500/40 bg-violet-500/5' : 'border-border'}`}>
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <input
+                                        type="checkbox"
+                                        id="has_indicacao"
+                                        checked={hasIndicacao}
+                                        onChange={e => { setHasIndicacao(e.target.checked); if (!e.target.checked) { setIndicadorId(''); setIndicadorSearch('') } }}
+                                        className="h-4 w-4 rounded cursor-pointer accent-violet-500"
+                                    />
+                                    <label htmlFor="has_indicacao" className="text-sm font-medium cursor-pointer flex items-center gap-2">
+                                        🤝 Esta venda veio por indicação?
+                                    </label>
+                                </div>
+                                {hasIndicacao && indicadorId && (
+                                    <span className="text-xs bg-violet-500/20 text-violet-400 border border-violet-500/30 px-2 py-1 rounded-full font-medium">
+                                        {clientes.find(c => c.id === indicadorId)?.nome}
+                                    </span>
+                                )}
+                            </div>
+                            {hasIndicacao && (
+                                <div className="mt-3 space-y-2">
+                                    <Label className="text-xs text-muted-foreground">Quem indicou este cliente?</Label>
+                                    {!indicadorId ? (
+                                        <div className="relative">
+                                            <input
+                                                type="text"
+                                                placeholder="Digite o nome do cliente indicador..."
+                                                value={indicadorSearch}
+                                                onChange={e => setIndicadorSearch(e.target.value)}
+                                                className="w-full h-9 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/50"
+                                            />
+                                            {indicadorSearch.length >= 2 && (
+                                                <div className="absolute z-50 w-full mt-1 bg-background border rounded-lg shadow-xl max-h-48 overflow-y-auto">
+                                                    {clientes.filter(c =>
+                                                        c.nome.toLowerCase().includes(indicadorSearch.toLowerCase()) &&
+                                                        c.id !== vendaForm.cliente_id
+                                                    ).slice(0, 8).map(c => (
+                                                        <button
+                                                            key={c.id}
+                                                            type="button"
+                                                            className="w-full text-left px-4 py-2.5 text-sm hover:bg-violet-500/10 flex items-center gap-2 border-b last:border-0"
+                                                            onClick={() => { setIndicadorId(c.id); setIndicadorSearch('') }}
+                                                        >
+                                                            <span className="font-medium">{c.nome}</span>
+                                                            {c.telefone && <span className="text-xs text-muted-foreground ml-auto">{c.telefone}</span>}
+                                                        </button>
+                                                    ))}
+                                                    {clientes.filter(c => c.nome.toLowerCase().includes(indicadorSearch.toLowerCase()) && c.id !== vendaForm.cliente_id).length === 0 && (
+                                                        <p className="px-4 py-3 text-sm text-muted-foreground">Nenhum cliente encontrado.</p>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+                                    ) : (
+                                        <div className="flex items-center gap-2 p-2.5 border border-violet-500/30 rounded-lg bg-violet-500/5">
+                                            <span className="text-sm font-semibold text-violet-400 flex-1">
+                                                🤝 {clientes.find(c => c.id === indicadorId)?.nome}
+                                            </span>
+                                            <button
+                                                type="button"
+                                                onClick={() => { setIndicadorId(''); setIndicadorSearch('') }}
+                                                className="text-xs text-muted-foreground hover:text-foreground"
+                                            >✕</button>
+                                        </div>
+                                    )}
+                                    {indicadorId && configEmpresa && (
+                                        <p className="text-xs text-violet-400/80 mt-1">
+                                            {configEmpresa.indicacao_tipo_beneficio === 'credito'
+                                                ? `→ Recompensa: R$ ${configEmpresa.indicacao_valor_fixo?.toFixed(2)} de crédito para o indicador`
+                                                : `→ Recompensa: ${configEmpresa.indicacao_percentual}% do valor da venda`
+                                            }
+                                        </p>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    )}
 
                     <div className="space-y-4">
                         <div className="flex items-center justify-between">

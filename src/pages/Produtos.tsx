@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useState, useMemo } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select } from "@/components/ui/select"
 import { Modal } from "@/components/ui/modal"
-import { Plus, Search, Filter, LayoutGrid, List, Package, Trash2, Pencil, ShoppingCart, FileText, Camera, Upload, X, Shield, Activity, Box, Tag, Ruler, Truck, Info, Settings, Maximize2, ChevronLeft, ChevronRight } from "lucide-react"
+import { Plus, Search, Filter, LayoutGrid, List, Package, Trash2, Pencil, ShoppingCart, FileText, Camera, Upload, X, Shield, Activity, Box, Tag, Ruler, Truck, Info, Settings, Maximize2, ChevronLeft, ChevronRight, ChevronDown, RefreshCw } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { supabase } from "@/lib/supabase"
 import { useAuthStore } from "@/store/authStore"
@@ -70,7 +70,7 @@ interface Compatibilidade {
 
 export function Produtos() {
   const [searchTerm, setSearchTerm] = useState("")
-  const [viewMode, setViewMode] = useState<"list" | "grid">("list")
+  const [viewMode, setViewMode] = useState<"list" | "grid">("grid")
   const [produtos, setProdutos] = useState<Produto[]>([])
   const [loading, setLoading] = useState(true)
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -101,6 +101,20 @@ export function Produtos() {
   const [currentPage, setCurrentPage] = useState(1)
   const [pageSize, setPageSize] = useState(12) // Default for grid
   const [selectedIds, setSelectedIds] = useState<string[]>([])
+
+  // ─── Filtros ─────────────────────────────────────────────
+  const [isFilterOpen, setIsFilterOpen] = useState(false)
+  const [filterCategoria, setFilterCategoria] = useState('')
+  const [filterEstoque, setFilterEstoque] = useState<'todos' | 'ok' | 'baixo' | 'zerado'>('todos')
+  const [filterAtivo, setFilterAtivo] = useState<'todos' | 'ativo' | 'inativo'>('todos')
+  const [filterPrecoMin, setFilterPrecoMin] = useState('')
+  const [filterPrecoMax, setFilterPrecoMax] = useState('')
+  const [filterCustoMin, setFilterCustoMin] = useState('')
+  const [filterCustoMax, setFilterCustoMax] = useState('')
+  const [filterLocalizacao, setFilterLocalizacao] = useState('')
+  const [filterMarca, setFilterMarca] = useState('')
+  const [sortBy, setSortBy] = useState<'nome' | 'preco' | 'estoque_atual' | 'custo'>('nome')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
 
   // Resources
   const [categorias, setCategorias] = useState<any[]>([])
@@ -192,7 +206,35 @@ export function Produtos() {
     // Only set default pageSize if it was not manually changed or is invalid for the new mode
     if (viewMode === "grid" && ![12, 30, 90].includes(pageSize)) setPageSize(12)
     if (viewMode === "list" && ![30, 60].includes(pageSize)) setPageSize(30)
-  }, [viewMode, searchTerm])
+  }, [viewMode, searchTerm, filterCategoria, filterEstoque, filterAtivo, filterPrecoMin, filterPrecoMax, filterCustoMin, filterCustoMax, filterLocalizacao, filterMarca])
+
+  const clearFilters = () => {
+    setSearchTerm('')
+    setFilterCategoria('')
+    setFilterEstoque('todos')
+    setFilterAtivo('todos')
+    setFilterPrecoMin('')
+    setFilterPrecoMax('')
+    setFilterCustoMin('')
+    setFilterCustoMax('')
+    setFilterLocalizacao('')
+    setFilterMarca('')
+    setSortBy('nome')
+    setSortDir('asc')
+  }
+
+  const activeFilterCount = [
+    searchTerm,
+    filterCategoria,
+    filterEstoque !== 'todos' ? '1' : '',
+    filterAtivo !== 'todos' ? '1' : '',
+    filterPrecoMin, filterPrecoMax,
+    filterCustoMin, filterCustoMax,
+    filterLocalizacao, filterMarca,
+  ].filter(Boolean).length
+
+  // Marcas únicas disponíveis
+  const marcasDisponiveis = useMemo(() => [...new Set(produtos.map(p => p.marca).filter(Boolean))].sort(), [produtos])
 
   useEffect(() => {
     if (!isModalOpen && !editingProduto) {
@@ -393,10 +435,52 @@ export function Produtos() {
     }
   }
 
-  const filteredProdutos = produtos.filter(p =>
-    p.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    p.sku.toLowerCase().includes(searchTerm.toLowerCase())
-  )
+  const filteredProdutos = useMemo(() => {
+    let result = produtos.filter(p => {
+      const term = searchTerm.toLowerCase()
+      const matchSearch = !searchTerm ||
+        p.nome.toLowerCase().includes(term) ||
+        p.sku.toLowerCase().includes(term) ||
+        (p.marca || '').toLowerCase().includes(term) ||
+        (p.part_number || '').toLowerCase().includes(term) ||
+        (p.codigo_barras || '').includes(searchTerm)
+
+      const matchCat = !filterCategoria || p.categoria_id === filterCategoria
+
+      const matchEst =
+        filterEstoque === 'todos' ||
+        (filterEstoque === 'zerado' && p.estoque_atual <= 0) ||
+        (filterEstoque === 'baixo' && p.estoque_atual > 0 && p.estoque_atual <= p.estoque_minimo) ||
+        (filterEstoque === 'ok' && p.estoque_atual > p.estoque_minimo)
+
+      const matchAtivo =
+        filterAtivo === 'todos' ||
+        (filterAtivo === 'ativo' && p.ativo !== false) ||
+        (filterAtivo === 'inativo' && p.ativo === false)
+
+      const matchPrecoMin = !filterPrecoMin || p.preco >= parseFloat(filterPrecoMin)
+      const matchPrecoMax = !filterPrecoMax || p.preco <= parseFloat(filterPrecoMax)
+      const matchCustoMin = !filterCustoMin || p.custo >= parseFloat(filterCustoMin)
+      const matchCustoMax = !filterCustoMax || p.custo <= parseFloat(filterCustoMax)
+
+      const matchLoc = !filterLocalizacao || p.localizacao_id === filterLocalizacao ||
+        (p.localizacao || '').toLowerCase().includes(filterLocalizacao.toLowerCase())
+
+      const matchMarca = !filterMarca || (p.marca || '').toLowerCase() === filterMarca.toLowerCase()
+
+      return matchSearch && matchCat && matchEst && matchAtivo && matchPrecoMin && matchPrecoMax && matchCustoMin && matchCustoMax && matchLoc && matchMarca
+    })
+
+    // Ordenação
+    result.sort((a, b) => {
+      const va = (a as any)[sortBy] ?? ''
+      const vb = (b as any)[sortBy] ?? ''
+      const cmp = typeof va === 'string' ? va.localeCompare(vb) : va - vb
+      return sortDir === 'asc' ? cmp : -cmp
+    })
+
+    return result
+  }, [produtos, searchTerm, filterCategoria, filterEstoque, filterAtivo, filterPrecoMin, filterPrecoMax, filterCustoMin, filterCustoMax, filterLocalizacao, filterMarca, sortBy, sortDir])
 
   const paginatedProdutos = filteredProdutos.slice(0, currentPage * pageSize)
   const hasMore = paginatedProdutos.length < filteredProdutos.length
@@ -657,59 +741,152 @@ export function Produtos() {
 
       <Card>
         <CardHeader className="pb-4">
-          <div className="flex items-center justify-between">
-            <div className="relative w-72">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="relative flex-1 min-w-[240px]">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Buscar por SKU, nome..."
+                placeholder="Buscar por SKU, nome, Part Number, código de barras..."
                 className="pl-9"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
-            <div className="flex items-center gap-2">
-              {selectedIds.length > 0 && (
-                <div className="flex items-center gap-2 bg-primary/10 px-3 py-1.5 rounded-lg border border-primary/20 mr-4 animate-in fade-in slide-in-from-top-2">
-                  <span className="text-xs font-bold text-primary">{selectedIds.length} selecionados</span>
-                  <div className="h-4 w-px bg-primary/20 mx-1" />
-                  <Button variant="ghost" size="sm" className="h-8 text-xs font-bold gap-2 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50" onClick={handlePrintLabels}>
-                    <Tag className="w-3.5 h-3.5" /> Etiquetas
-                  </Button>
-                  <Button variant="ghost" size="sm" className="h-8 text-xs font-bold gap-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50" onClick={() => handleBulkAddToCart('orcamento')}>
-                    <FileText className="w-3.5 h-3.5" /> Orçamento
-                  </Button>
-                  <Button variant="ghost" size="sm" className="h-8 text-xs font-bold gap-2 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50" onClick={() => handleBulkAddToCart('venda')}>
-                    <ShoppingCart className="w-3.5 h-3.5" /> Carrinho
-                  </Button>
-                  <Button variant="ghost" size="sm" className="h-8 text-xs font-bold gap-2 text-destructive hover:bg-destructive/10" onClick={handleBulkDelete}>
-                    <Trash2 className="w-3.5 h-3.5" /> Excluir
-                  </Button>
-                  <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => setSelectedIds([])}>
-                    Cancelar
-                  </Button>
-                </div>
-              )}
-              <Select value={pageSize.toString()} onChange={(e) => setPageSize(parseInt(e.target.value))}>
-                {viewMode === "grid" ? (
-                  <>
-                    <option value="12">12 por vez</option>
-                    <option value="30">30 por vez</option>
-                    <option value="90">90 por vez</option>
-                  </>
-                ) : (
-                  <>
-                    <option value="30">30 por vez</option>
-                    <option value="60">60 por vez</option>
-                  </>
-                )}
-              </Select>
-              <div className="flex items-center border border-input rounded-md p-1 bg-background">
-                <Button variant={viewMode === "list" ? "secondary" : "ghost"} size="icon" className="h-7 w-7 rounded-sm" onClick={() => setViewMode("list")}><List className="h-4 w-4" /></Button>
-                <Button variant={viewMode === "grid" ? "secondary" : "ghost"} size="icon" className="h-7 w-7 rounded-sm" onClick={() => setViewMode("grid")}><LayoutGrid className="h-4 w-4" /></Button>
+
+            {selectedIds.length > 0 && (
+              <div className="flex items-center gap-2 bg-primary/10 px-3 py-1.5 rounded-lg border border-primary/20 animate-in fade-in slide-in-from-top-2">
+                <span className="text-xs font-bold text-primary">{selectedIds.length} selecionados</span>
+                <div className="h-4 w-px bg-primary/20 mx-1" />
+                <Button variant="ghost" size="sm" className="h-8 text-xs font-bold gap-2 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50" onClick={handlePrintLabels}><Tag className="w-3.5 h-3.5" /> Etiquetas</Button>
+                <Button variant="ghost" size="sm" className="h-8 text-xs font-bold gap-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50" onClick={() => handleBulkAddToCart('orcamento')}><FileText className="w-3.5 h-3.5" /> Orçamento</Button>
+                <Button variant="ghost" size="sm" className="h-8 text-xs font-bold gap-2 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50" onClick={() => handleBulkAddToCart('venda')}><ShoppingCart className="w-3.5 h-3.5" /> Carrinho</Button>
+                <Button variant="ghost" size="sm" className="h-8 text-xs font-bold gap-2 text-destructive hover:bg-destructive/10" onClick={handleBulkDelete}><Trash2 className="w-3.5 h-3.5" /> Excluir</Button>
+                <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => setSelectedIds([])}>Cancelar</Button>
               </div>
-              <Button variant="outline" className="gap-2"><Filter className="w-4 h-4" /> Filtros</Button>
+            )}
+
+            <select
+              className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+              value={`${sortBy}:${sortDir}`}
+              onChange={e => {
+                const [col, dir] = e.target.value.split(':')
+                setSortBy(col as any)
+                setSortDir(dir as any)
+              }}
+            >
+              <option value="nome:asc">Nome A→Z</option>
+              <option value="nome:desc">Nome Z→A</option>
+              <option value="preco:asc">Menor Preço</option>
+              <option value="preco:desc">Maior Preço</option>
+              <option value="estoque_atual:asc">Menor Estoque</option>
+              <option value="estoque_atual:desc">Maior Estoque</option>
+              <option value="custo:desc">Maior Custo</option>
+            </select>
+
+            <Select value={pageSize.toString()} onChange={(e) => setPageSize(parseInt(e.target.value))}>
+              {viewMode === "grid" ? (
+                <>
+                  <option value="12">12 por vez</option>
+                  <option value="30">30 por vez</option>
+                  <option value="90">90 por vez</option>
+                </>
+              ) : (
+                <>
+                  <option value="30">30 por vez</option>
+                  <option value="60">60 por vez</option>
+                </>
+              )}
+            </Select>
+
+            <div className="flex items-center border border-input rounded-md p-1 bg-background">
+              <Button variant={viewMode === "list" ? "secondary" : "ghost"} size="icon" className="h-7 w-7 rounded-sm" onClick={() => setViewMode("list")}><List className="h-4 w-4" /></Button>
+              <Button variant={viewMode === "grid" ? "secondary" : "ghost"} size="icon" className="h-7 w-7 rounded-sm" onClick={() => setViewMode("grid")}><LayoutGrid className="h-4 w-4" /></Button>
             </div>
+
+            <Button
+              variant={isFilterOpen ? "secondary" : "outline"}
+              className="gap-2 relative"
+              onClick={() => setIsFilterOpen(!isFilterOpen)}
+            >
+              <Filter className="w-4 h-4" /> Filtros
+              {activeFilterCount > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 bg-primary text-primary-foreground text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center">
+                  {activeFilterCount}
+                </span>
+              )}
+              <ChevronDown className={`w-3 h-3 transition-transform ${isFilterOpen ? 'rotate-180' : ''}`} />
+            </Button>
+
+            {activeFilterCount > 0 && (
+              <Button variant="ghost" size="sm" className="text-xs gap-1 text-muted-foreground" onClick={clearFilters}>
+                <X className="w-3 h-3" /> Limpar
+              </Button>
+            )}
           </div>
+
+          {isFilterOpen && (
+            <div className="mt-4 p-4 bg-muted/30 rounded-xl border border-border animate-in fade-in slide-in-from-top-2 grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
+              <div className="space-y-1">
+                <label className="text-[10px] uppercase font-bold text-muted-foreground">Categoria</label>
+                <select className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm" value={filterCategoria} onChange={e => setFilterCategoria(e.target.value)}>
+                  <option value="">Todas</option>
+                  {categorias.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
+                </select>
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] uppercase font-bold text-muted-foreground">Status Estoque</label>
+                <select className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm" value={filterEstoque} onChange={e => setFilterEstoque(e.target.value as any)}>
+                  <option value="todos">Todos</option>
+                  <option value="ok">✅ Normal</option>
+                  <option value="baixo">⚠️ Baixo</option>
+                  <option value="zerado">🔴 Zerado</option>
+                </select>
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] uppercase font-bold text-muted-foreground">Status Produto</label>
+                <select className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm" value={filterAtivo} onChange={e => setFilterAtivo(e.target.value as any)}>
+                  <option value="todos">Todos</option>
+                  <option value="ativo">✅ Ativos</option>
+                  <option value="inativo">❌ Inativos</option>
+                </select>
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] uppercase font-bold text-muted-foreground">Marca</label>
+                <select className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm" value={filterMarca} onChange={e => setFilterMarca(e.target.value)}>
+                  <option value="">Todas</option>
+                  {marcasDisponiveis.map(m => <option key={m} value={m!}>{m}</option>)}
+                </select>
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] uppercase font-bold text-muted-foreground">Localização</label>
+                <select className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm" value={filterLocalizacao} onChange={e => setFilterLocalizacao(e.target.value)}>
+                  <option value="">Todas</option>
+                  {locais.map(l => <option key={l.id} value={l.id}>{l.sigla || l.nome}</option>)}
+                </select>
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] uppercase font-bold text-muted-foreground">Preço min (R$)</label>
+                <input type="number" min="0" step="0.01" placeholder="0,00" value={filterPrecoMin} onChange={e => setFilterPrecoMin(e.target.value)} className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] uppercase font-bold text-muted-foreground">Preço max (R$)</label>
+                <input type="number" min="0" step="0.01" placeholder="∞" value={filterPrecoMax} onChange={e => setFilterPrecoMax(e.target.value)} className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] uppercase font-bold text-muted-foreground">Custo min (R$)</label>
+                <input type="number" min="0" step="0.01" placeholder="0,00" value={filterCustoMin} onChange={e => setFilterCustoMin(e.target.value)} className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] uppercase font-bold text-muted-foreground">Custo max (R$)</label>
+                <input type="number" min="0" step="0.01" placeholder="∞" value={filterCustoMax} onChange={e => setFilterCustoMax(e.target.value)} className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm" />
+              </div>
+              <div className="flex items-end">
+                <div className="text-xs text-muted-foreground bg-primary/5 border border-primary/20 rounded-lg px-3 py-2 w-full text-center">
+                  <span className="font-bold text-primary text-base">{filteredProdutos.length}</span>
+                  <span className="block">produto(s)</span>
+                </div>
+              </div>
+            </div>
+          )}
         </CardHeader>
         <CardContent>
           {loading ? (

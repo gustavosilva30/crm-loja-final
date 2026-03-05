@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useState, useMemo } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
@@ -7,10 +7,10 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select } from "@/components/ui/select"
 import { Modal } from "@/components/ui/modal"
-import { Plus, Search, Filter, MoreHorizontal, ArrowUpCircle, ArrowDownCircle, AlertTriangle, TrendingUp, BarChart3, List, Pencil, Trash2 } from "lucide-react"
+import { Plus, Search, Filter, ArrowUpCircle, ArrowDownCircle, AlertTriangle, TrendingUp, BarChart3, List, Pencil, Trash2, CalendarClock, FileBarChart2, RepeatIcon } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { useAuthStore } from "@/store/authStore"
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from "recharts"
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell } from "recharts"
 
 interface FinanceiroLancamento {
     id: string
@@ -26,7 +26,7 @@ interface FinanceiroLancamento {
 }
 
 export function Financeiro() {
-    const [activeTab, setActiveTab] = useState<"lancamentos" | "fluxo">("lancamentos")
+    const [activeTab, setActiveTab] = useState<"lancamentos" | "fluxo" | "dre" | "previsao">("lancamentos")
     const { atendente } = useAuthStore()
     const [searchTerm, setSearchTerm] = useState("")
     const [lancamentos, setLancamentos] = useState<FinanceiroLancamento[]>([])
@@ -51,7 +51,10 @@ export function Financeiro() {
         categoria_financeira: 'Geral',
         status: 'Pendente',
         forma_pagamento: 'Dinheiro',
-        descricao: ''
+        descricao: '',
+        centro_de_custo: '',
+        recorrencia: 'unica',
+        recorrencia_meses: 1
     })
 
     const fetchLancamentos = async () => {
@@ -81,36 +84,44 @@ export function Financeiro() {
         e.preventDefault()
         setSubmitting(true)
         try {
-            const payload = {
-                ...newEntry,
+            const valor = parseFloat(newEntry.valor)
+            const basePayload = {
+                tipo: newEntry.tipo,
+                valor,
+                data_vencimento: newEntry.data_vencimento,
+                categoria_financeira: newEntry.categoria_financeira,
+                status: newEntry.status,
+                forma_pagamento: newEntry.forma_pagamento,
+                descricao: newEntry.descricao,
+                centro_de_custo: newEntry.centro_de_custo || null,
                 atendente_id: atendente?.id,
-                valor: parseFloat(newEntry.valor)
+                is_automatico: false
             }
 
             if (editingEntry) {
-                const { error } = await supabase
-                    .from('financeiro_lancamentos')
-                    .update(payload)
-                    .eq('id', editingEntry.id)
+                const { error } = await supabase.from('financeiro_lancamentos').update(basePayload).eq('id', editingEntry.id)
                 if (error) throw error
             } else {
-                const { error } = await supabase
-                    .from('financeiro_lancamentos')
-                    .insert([payload])
+                // Gerar parcelas se recorrente
+                const meses = newEntry.recorrencia !== 'unica' ? newEntry.recorrencia_meses : 1
+                const inserts = []
+                for (let i = 0; i < meses; i++) {
+                    const dataBase = new Date(newEntry.data_vencimento + 'T12:00:00')
+                    let dias = 0
+                    if (newEntry.recorrencia === 'mensal') dias = i * 30
+                    else if (newEntry.recorrencia === 'quinzenal') dias = i * 15
+                    else if (newEntry.recorrencia === 'semanal') dias = i * 7
+                    dataBase.setDate(dataBase.getDate() + dias)
+                    const suffix = meses > 1 ? ` (${i + 1}/${meses})` : ''
+                    inserts.push({ ...basePayload, data_vencimento: dataBase.toISOString().split('T')[0], descricao: basePayload.descricao + suffix })
+                }
+                const { error } = await supabase.from('financeiro_lancamentos').insert(inserts)
                 if (error) throw error
             }
 
             setIsModalOpen(false)
             setEditingEntry(null)
-            setNewEntry({
-                tipo: 'Receita',
-                valor: '',
-                data_vencimento: new Date().toISOString().split('T')[0],
-                categoria_financeira: 'Geral',
-                status: 'Pendente',
-                forma_pagamento: 'Dinheiro',
-                descricao: ''
-            })
+            setNewEntry({ tipo: 'Receita', valor: '', data_vencimento: new Date().toISOString().split('T')[0], categoria_financeira: 'Geral', status: 'Pendente', forma_pagamento: 'Dinheiro', descricao: '', centro_de_custo: '', recorrencia: 'unica', recorrencia_meses: 1 })
             fetchLancamentos()
         } catch (err) {
             console.error('Error saving entry:', err)
@@ -175,7 +186,10 @@ export function Financeiro() {
             categoria_financeira: lancamento.categoria_financeira || 'Geral',
             status: lancamento.status,
             forma_pagamento: lancamento.forma_pagamento || 'Dinheiro',
-            descricao: lancamento.descricao || ''
+            descricao: lancamento.descricao || '',
+            centro_de_custo: (lancamento as any).centro_de_custo || '',
+            recorrencia: 'unica',
+            recorrencia_meses: 1
         })
         setIsModalOpen(true)
     }
@@ -209,21 +223,35 @@ export function Financeiro() {
 
     // Prepare chart data (group by month)
     const chartData = lancamentos.reduce((acc: any[], current) => {
-        const month = new Date(current.data_vencimento).toLocaleString('pt-BR', { month: 'short' })
+        const month = new Date(current.data_vencimento + 'T12:00:00').toLocaleString('pt-BR', { month: 'short', year: '2-digit' })
         const existing = acc.find(item => item.name === month)
-
         if (existing) {
             if (current.tipo === 'Receita') existing.receita += current.valor
             else existing.despesa += current.valor
         } else {
-            acc.push({
-                name: month,
-                receita: current.tipo === 'Receita' ? current.valor : 0,
-                despesa: current.tipo === 'Despesa' ? current.valor : 0
-            })
+            acc.push({ name: month, receita: current.tipo === 'Receita' ? current.valor : 0, despesa: current.tipo === 'Despesa' ? current.valor : 0 })
         }
         return acc
-    }, []).reverse()
+    }, []).slice(-8)
+
+    // DRE simplificado
+    const receita_bruta = lancamentos.filter(l => l.tipo === 'Receita').reduce((a, l) => a + l.valor, 0)
+    const despesas_total = lancamentos.filter(l => l.tipo === 'Despesa').reduce((a, l) => a + l.valor, 0)
+    const resultado_liquido = receita_bruta - despesas_total
+    const dreCategories = lancamentos.filter(l => l.tipo === 'Despesa').reduce((acc: any, l) => {
+        const cat = l.categoria_financeira || 'Geral'
+        acc[cat] = (acc[cat] || 0) + l.valor
+        return acc
+    }, {})
+
+    // Previsão 30 dias
+    const hoje = new Date()
+    const em30Dias = new Date(); em30Dias.setDate(em30Dias.getDate() + 30)
+    const hoje_str = hoje.toISOString().split('T')[0]
+    const em30_str = em30Dias.toISOString().split('T')[0]
+    const previsao = lancamentos.filter(l => l.status === 'Pendente' && l.data_vencimento >= hoje_str && l.data_vencimento <= em30_str)
+    const previsao_receitas = previsao.filter(l => l.tipo === 'Receita').reduce((a, l) => a + l.valor, 0)
+    const previsao_despesas = previsao.filter(l => l.tipo === 'Despesa').reduce((a, l) => a + l.valor, 0)
 
     return (
         <div className="space-y-6">
@@ -233,22 +261,18 @@ export function Financeiro() {
                     <p className="text-foreground mt-1">Gerencie suas contas a pagar, receber e fluxo de caixa.</p>
                 </div>
                 <div className="flex items-center gap-3">
-                    <div className="flex items-center border border-border rounded-lg p-1 bg-muted/50">
-                        <Button
-                            variant={activeTab === "lancamentos" ? "secondary" : "ghost"}
-                            size="sm"
-                            className="gap-2 h-8"
-                            onClick={() => setActiveTab("lancamentos")}
-                        >
+                    <div className="flex items-center border border-border rounded-lg p-1 bg-muted/50 flex-wrap gap-1">
+                        <Button variant={activeTab === "lancamentos" ? "secondary" : "ghost"} size="sm" className="gap-2 h-8" onClick={() => setActiveTab("lancamentos")}>
                             <List className="w-4 h-4" /> Lançamentos
                         </Button>
-                        <Button
-                            variant={activeTab === "fluxo" ? "secondary" : "ghost"}
-                            size="sm"
-                            className="gap-2 h-8"
-                            onClick={() => setActiveTab("fluxo")}
-                        >
+                        <Button variant={activeTab === "fluxo" ? "secondary" : "ghost"} size="sm" className="gap-2 h-8" onClick={() => setActiveTab("fluxo")}>
                             <BarChart3 className="w-4 h-4" /> Fluxo de Caixa
+                        </Button>
+                        <Button variant={activeTab === "dre" ? "secondary" : "ghost"} size="sm" className="gap-2 h-8" onClick={() => setActiveTab("dre")}>
+                            <FileBarChart2 className="w-4 h-4" /> DRE
+                        </Button>
+                        <Button variant={activeTab === "previsao" ? "secondary" : "ghost"} size="sm" className="gap-2 h-8" onClick={() => setActiveTab("previsao")}>
+                            <CalendarClock className="w-4 h-4" /> Previsão 30 dias
                         </Button>
                     </div>
                     <Button className="gap-2" onClick={() => setIsModalOpen(true)}>
@@ -460,7 +484,7 @@ export function Financeiro() {
                         )}
                     </CardContent>
                 </Card>
-            ) : (
+            ) : activeTab === "fluxo" ? (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     <Card>
                         <CardHeader>
@@ -502,7 +526,71 @@ export function Financeiro() {
                         </CardContent>
                     </Card>
                 </div>
-            )
+            ) : activeTab === "dre" ? (
+                <Card>
+                    <CardHeader><CardTitle>DRE — Demonstrativo de Resultado</CardTitle></CardHeader>
+                    <CardContent>
+                        <div className="space-y-2 max-w-lg">
+                            <div className="flex justify-between py-2 border-b font-bold text-emerald-500">
+                                <span>Receita Bruta</span>
+                                <span>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(receita_bruta)}</span>
+                            </div>
+                            {Object.entries(dreCategories).sort(([, a], [, b]) => (b as number) - (a as number)).map(([cat, val]) => (
+                                <div key={cat} className="flex justify-between py-1.5 text-sm border-b border-border/50">
+                                    <span className="text-muted-foreground pl-4">(-) {cat}</span>
+                                    <span className="text-rose-500 font-medium">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val as number)}</span>
+                                </div>
+                            ))}
+                            <div className="flex justify-between py-2 border-b font-bold text-rose-500">
+                                <span>Total de Despesas</span>
+                                <span>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(despesas_total)}</span>
+                            </div>
+                            <div className={`flex justify-between py-3 font-black text-lg ${resultado_liquido >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                <span>Resultado Líquido</span>
+                                <span>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(resultado_liquido)}</span>
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+            ) : activeTab === "previsao" ? (
+                <div className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <Card className="border-emerald-500/20 bg-emerald-500/5">
+                            <CardHeader className="pb-2"><CardTitle className="text-sm">A Receber (30 dias)</CardTitle></CardHeader>
+                            <CardContent><div className="text-2xl font-bold text-emerald-500">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(previsao_receitas)}</div></CardContent>
+                        </Card>
+                        <Card className="border-rose-500/20 bg-rose-500/5">
+                            <CardHeader className="pb-2"><CardTitle className="text-sm">A Pagar (30 dias)</CardTitle></CardHeader>
+                            <CardContent><div className="text-2xl font-bold text-rose-500">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(previsao_despesas)}</div></CardContent>
+                        </Card>
+                        <Card className="border-primary/20 bg-primary/5">
+                            <CardHeader className="pb-2"><CardTitle className="text-sm">Saldo Previsto</CardTitle></CardHeader>
+                            <CardContent><div className={`text-2xl font-bold ${(previsao_receitas - previsao_despesas) >= 0 ? 'text-primary' : 'text-rose-500'}`}>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(previsao_receitas - previsao_despesas)}</div></CardContent>
+                        </Card>
+                    </div>
+                    <Card>
+                        <CardHeader><CardTitle className="text-base">Vencimentos Pendentes (próximos 30 dias)</CardTitle></CardHeader>
+                        <CardContent>
+                            <Table>
+                                <TableHeader><TableRow><TableHead>Vencimento</TableHead><TableHead>Descrição</TableHead><TableHead>Tipo</TableHead><TableHead>Categoria</TableHead><TableHead className="text-right">Valor</TableHead></TableRow></TableHeader>
+                                <TableBody>
+                                    {previsao.length === 0 ? (
+                                        <TableRow><TableCell colSpan={5} className="text-center py-6 text-muted-foreground">Nenhum vencimento nos próximos 30 dias.</TableCell></TableRow>
+                                    ) : [...previsao].sort((a, b) => a.data_vencimento.localeCompare(b.data_vencimento)).map(l => (
+                                        <TableRow key={l.id}>
+                                            <TableCell className="text-xs font-medium">{new Date(l.data_vencimento + 'T12:00:00').toLocaleDateString('pt-BR')}</TableCell>
+                                            <TableCell className="text-sm">{l.descricao || '—'}</TableCell>
+                                            <TableCell>{l.tipo === 'Receita' ? <Badge variant="default" className="text-[10px]">Receita</Badge> : <Badge variant="destructive" className="text-[10px]">Despesa</Badge>}</TableCell>
+                                            <TableCell className="text-xs">{l.categoria_financeira || 'Geral'}</TableCell>
+                                            <TableCell className={`text-right font-bold ${l.tipo === 'Receita' ? 'text-emerald-500' : 'text-rose-500'}`}>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(l.valor)}</TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </CardContent>
+                    </Card>
+                </div>
+            ) : null
             }
 
             {/* NEW ENTRY MODAL */}
@@ -511,15 +599,7 @@ export function Financeiro() {
                 onClose={() => {
                     setIsModalOpen(false)
                     setEditingEntry(null)
-                    setNewEntry({
-                        tipo: 'Receita',
-                        valor: '',
-                        data_vencimento: new Date().toISOString().split('T')[0],
-                        categoria_financeira: 'Geral',
-                        status: 'Pendente',
-                        forma_pagamento: 'Dinheiro',
-                        descricao: ''
-                    })
+                    setNewEntry({ tipo: 'Receita', valor: '', data_vencimento: new Date().toISOString().split('T')[0], categoria_financeira: 'Geral', status: 'Pendente', forma_pagamento: 'Dinheiro', descricao: '', centro_de_custo: '', recorrencia: 'unica', recorrencia_meses: 1 })
                 }}
                 title={editingEntry ? "Editar Lançamento" : "Novo Lançamento Financeiro"}
             >
@@ -581,20 +661,14 @@ export function Financeiro() {
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <Label>Status Inicial</Label>
-                            <Select
-                                value={newEntry.status}
-                                onChange={e => setNewEntry({ ...newEntry, status: e.target.value as any })}
-                            >
+                            <Select value={newEntry.status} onChange={e => setNewEntry({ ...newEntry, status: e.target.value as any })}>
                                 <option value="Pendente">Pendente</option>
                                 <option value="Pago">Pago / Recebido</option>
                             </Select>
                         </div>
                         <div className="space-y-2">
                             <Label>Forma de Pagamento</Label>
-                            <Select
-                                value={newEntry.forma_pagamento}
-                                onChange={e => setNewEntry({ ...newEntry, forma_pagamento: e.target.value })}
-                            >
+                            <Select value={newEntry.forma_pagamento} onChange={e => setNewEntry({ ...newEntry, forma_pagamento: e.target.value })}>
                                 <option value="Dinheiro">Dinheiro</option>
                                 <option value="Pix">PIX</option>
                                 <option value="Cartão">Cartão</option>
@@ -605,10 +679,35 @@ export function Financeiro() {
                         </div>
                     </div>
 
+                    <div className="space-y-2">
+                        <Label>Centro de Custo (Opcional)</Label>
+                        <Input placeholder="Ex: Operacional, Administrativo, Vendas..." value={newEntry.centro_de_custo} onChange={e => setNewEntry({ ...newEntry, centro_de_custo: e.target.value })} />
+                    </div>
+
+                    {!editingEntry && (
+                        <div className="grid grid-cols-2 gap-4 p-3 bg-muted/30 rounded-lg border">
+                            <div className="space-y-2">
+                                <Label className="flex items-center gap-1.5"><RepeatIcon className="w-3.5 h-3.5" />Recorrência</Label>
+                                <Select value={newEntry.recorrencia} onChange={e => setNewEntry({ ...newEntry, recorrencia: e.target.value })}>
+                                    <option value="unica">Única vez</option>
+                                    <option value="semanal">Semanal</option>
+                                    <option value="quinzenal">Quinzenal</option>
+                                    <option value="mensal">Mensal</option>
+                                </Select>
+                            </div>
+                            {newEntry.recorrencia !== 'unica' && (
+                                <div className="space-y-2">
+                                    <Label>Nº de Parcelas/Repetições</Label>
+                                    <Input type="number" min={2} max={60} value={newEntry.recorrencia_meses} onChange={e => setNewEntry({ ...newEntry, recorrencia_meses: parseInt(e.target.value) || 1 })} />
+                                </div>
+                            )}
+                        </div>
+                    )}
+
                     <div className="flex justify-end gap-3 pt-4">
                         <Button variant="outline" type="button" onClick={() => setIsModalOpen(false)}>Cancelar</Button>
                         <Button type="submit" disabled={submitting}>
-                            {submitting ? "Salvando..." : "Confirmar Lançamento"}
+                            {submitting ? "Salvando..." : editingEntry ? "Salvar Alterações" : newEntry.recorrencia !== 'unica' ? `Criar ${newEntry.recorrencia_meses} lançamentos` : "Confirmar Lançamento"}
                         </Button>
                     </div>
                 </form>

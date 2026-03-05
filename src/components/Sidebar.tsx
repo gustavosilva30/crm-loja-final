@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom"
-import { LayoutDashboard, Package, ShoppingCart, DollarSign, Users, Truck, Settings, LogOut, FileText, Bell, BarChart, Wallet, MessageCircle, CheckCircle2, Gavel } from "lucide-react"
+import { LayoutDashboard, Package, ShoppingCart, DollarSign, Users, Truck, Settings, LogOut, FileText, Bell, BarChart, Wallet, MessageCircle, CheckCircle2, Gavel, CalendarDays, Target, RotateCcw, Users2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { ModeToggle } from "./ModeToggle"
 import { supabase } from "@/lib/supabase"
@@ -21,6 +21,10 @@ const navItems = [
   { icon: Users, label: "Clientes", href: "/clientes" },
   { icon: Truck, label: "Entregas", href: "/entregas" },
   { icon: Gavel, label: "Leilões", href: "/leiloes" },
+  { icon: CalendarDays, label: "Agenda", href: "/agenda" },
+  { icon: RotateCcw, label: "Devoluções", href: "/devolucoes" },
+  { icon: Target, label: "Metas", href: "/metas" },
+  { icon: Users2, label: "Indicações", href: "/indicacoes" },
 ]
 
 export function Sidebar() {

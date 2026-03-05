@@ -18,6 +18,10 @@ import { Caixa } from "./pages/Caixa"
 import { Fiscal } from "./pages/Fiscal"
 import { Atendimento } from "./pages/Atendimento"
 import { Leiloes } from "./pages/Leiloes"
+import { Agenda } from "./pages/Agenda"
+import { MetasVendedores } from "./pages/MetasVendedores"
+import { Devolucoes } from "./pages/Devolucoes"
+import { Indicacoes } from "./pages/Indicacoes"
 import { ThemeProvider } from "./components/ThemeProvider"
 import { supabase } from "./lib/supabase"
 import { useAuthStore } from "./store/authStore"
@@ -67,6 +71,10 @@ export default function App() {
                 <Route path="fiscal" element={<Fiscal />} />
                 <Route path="atendimento" element={<Atendimento />} />
                 <Route path="leiloes" element={<Leiloes />} />
+                <Route path="agenda" element={<Agenda />} />
+                <Route path="metas" element={<MetasVendedores />} />
+                <Route path="devolucoes" element={<Devolucoes />} />
+                <Route path="indicacoes" element={<Indicacoes />} />
               </Route>
             </>
           )}

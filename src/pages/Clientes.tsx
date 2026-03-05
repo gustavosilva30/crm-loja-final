@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useState, useMemo } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Modal } from "@/components/ui/modal"
-import { Plus, Search, Filter, User, Mail, Phone, MapPin, Trash2, Pencil } from "lucide-react"
+import { Plus, Search, Filter, User, Mail, Phone, MapPin, Trash2, Pencil, X, ChevronDown, RefreshCw, Users, Wallet, TrendingUp, AlertTriangle } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 
 interface Cliente {
@@ -23,6 +23,8 @@ interface Cliente {
     created_at: string
 }
 
+const fmt = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v)
+
 export function Clientes() {
     const [searchTerm, setSearchTerm] = useState("")
     const [clientes, setClientes] = useState<Cliente[]>([])
@@ -31,10 +33,22 @@ export function Clientes() {
     const [editingCliente, setEditingCliente] = useState<Cliente | null>(null)
     const [submitting, setSubmitting] = useState(false)
     const [searchingCNPJ, setSearchingCNPJ] = useState(false)
+    const [isFilterOpen, setIsFilterOpen] = useState(false)
 
     // Pagination
     const [currentPage, setCurrentPage] = useState(1)
     const [pageSize, setPageSize] = useState(20)
+
+    // ─── Filtros ─────────────────────────────────────────────
+    const [filterSaldoHaver, setFilterSaldoHaver] = useState<'todos' | 'com_saldo' | 'sem_saldo'>('todos')
+    const [filterLimiteCredito, setFilterLimiteCredito] = useState<'todos' | 'com_limite' | 'sem_limite'>('todos')
+    const [filterCadastroInicio, setFilterCadastroInicio] = useState('')
+    const [filterCadastroFim, setFilterCadastroFim] = useState('')
+    const [filterTipo, setFilterTipo] = useState<'todos' | 'pf' | 'pj'>('todos') // PF (CPF 11 dígitos) vs PJ (CNPJ 14)
+    const [filterComEmail, setFilterComEmail] = useState<'todos' | 'sim' | 'nao'>('todos')
+    const [filterComTelefone, setFilterComTelefone] = useState<'todos' | 'sim' | 'nao'>('todos')
+    const [sortBy, setSortBy] = useState<'nome' | 'created_at' | 'saldo_haver' | 'limite_credito'>('nome')
+    const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
 
     // Form State
     const [newCliente, setNewCliente] = useState({
@@ -49,17 +63,10 @@ export function Clientes() {
     })
 
     const fetchClientes = async () => {
+        setLoading(true)
         try {
-            const { data, error } = await supabase
-                .from('clientes')
-                .select('*')
-                .order('nome')
-
-            if (error) {
-                console.error('Error fetching clientes:', error)
-            } else {
-                setClientes(data || [])
-            }
+            const { data, error } = await supabase.from('clientes').select('*').order('nome')
+            if (!error) setClientes(data || [])
         } catch (err) {
             console.error('Unexpected error:', err)
         } finally {
@@ -67,24 +74,17 @@ export function Clientes() {
         }
     }
 
-    useEffect(() => {
-        fetchClientes()
-    }, [])
-
-    useEffect(() => {
-        setCurrentPage(1)
-    }, [searchTerm])
+    useEffect(() => { fetchClientes() }, [])
+    useEffect(() => { setCurrentPage(1) }, [searchTerm, filterSaldoHaver, filterLimiteCredito, filterCadastroInicio, filterCadastroFim, filterTipo, filterComEmail, filterComTelefone])
 
     const searchCNPJ = async () => {
         const cnpj = newCliente.documento.replace(/\D/g, '')
         if (cnpj.length !== 14) return alert('Digite um CNPJ válido com 14 números')
-
         setSearchingCNPJ(true)
         try {
             const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpj}`)
             if (!res.ok) throw new Error('CNPJ não encontrado')
             const data = await res.json()
-
             setNewCliente(prev => ({
                 ...prev,
                 nome: data.nome_fantasia || data.razao_social,
@@ -105,33 +105,17 @@ export function Clientes() {
         setSubmitting(true)
         try {
             if (editingCliente) {
-                const { error } = await supabase
-                    .from('clientes')
-                    .update(newCliente)
-                    .eq('id', editingCliente.id)
+                const { error } = await supabase.from('clientes').update(newCliente).eq('id', editingCliente.id)
                 if (error) throw error
             } else {
-                const { error } = await supabase
-                    .from('clientes')
-                    .insert([newCliente])
+                const { error } = await supabase.from('clientes').insert([newCliente])
                 if (error) throw error
             }
-
             setIsModalOpen(false)
             setEditingCliente(null)
-            setNewCliente({
-                nome: '',
-                razao_social: '',
-                documento: '',
-                inscricao_estadual: '',
-                email: '',
-                telefone: '',
-                endereco: '',
-                limite_credito: 0
-            })
+            setNewCliente({ nome: '', razao_social: '', documento: '', inscricao_estadual: '', email: '', telefone: '', endereco: '', limite_credito: 0 })
             fetchClientes()
         } catch (err: any) {
-            console.error('Error adding client:', err)
             alert('Erro ao salvar cliente: ' + (err.message || 'Verifique se o CPF/CNPJ já existe'))
         } finally {
             setSubmitting(false)
@@ -160,15 +144,96 @@ export function Clientes() {
         setIsModalOpen(true)
     }
 
-    const filteredClientes = clientes.filter(c =>
-        c.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        c.documento?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        c.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        c.razao_social?.toLowerCase().includes(searchTerm.toLowerCase())
-    )
+    const clearFilters = () => {
+        setSearchTerm('')
+        setFilterSaldoHaver('todos')
+        setFilterLimiteCredito('todos')
+        setFilterCadastroInicio('')
+        setFilterCadastroFim('')
+        setFilterTipo('todos')
+        setFilterComEmail('todos')
+        setFilterComTelefone('todos')
+        setSortBy('nome')
+        setSortDir('asc')
+    }
+
+    const activeFilterCount = [
+        searchTerm,
+        filterSaldoHaver !== 'todos' ? '1' : '',
+        filterLimiteCredito !== 'todos' ? '1' : '',
+        filterCadastroInicio, filterCadastroFim,
+        filterTipo !== 'todos' ? '1' : '',
+        filterComEmail !== 'todos' ? '1' : '',
+        filterComTelefone !== 'todos' ? '1' : '',
+    ].filter(Boolean).length
+
+    const filteredClientes = useMemo(() => {
+        let result = clientes.filter(c => {
+            const term = searchTerm.toLowerCase()
+            const matchSearch = !searchTerm ||
+                c.nome.toLowerCase().includes(term) ||
+                c.documento?.toLowerCase().includes(term) ||
+                c.email?.toLowerCase().includes(term) ||
+                c.razao_social?.toLowerCase().includes(term) ||
+                c.telefone?.includes(searchTerm) ||
+                c.endereco?.toLowerCase().includes(term)
+
+            const matchSaldo =
+                filterSaldoHaver === 'todos' ||
+                (filterSaldoHaver === 'com_saldo' && (c.saldo_haver || 0) > 0) ||
+                (filterSaldoHaver === 'sem_saldo' && (c.saldo_haver || 0) === 0)
+
+            const matchLimite =
+                filterLimiteCredito === 'todos' ||
+                (filterLimiteCredito === 'com_limite' && (c.limite_credito || 0) > 0) ||
+                (filterLimiteCredito === 'sem_limite' && (c.limite_credito || 0) === 0)
+
+            const docDigits = (c.documento || '').replace(/\D/g, '')
+            const matchTipo =
+                filterTipo === 'todos' ||
+                (filterTipo === 'pf' && docDigits.length === 11) ||
+                (filterTipo === 'pj' && docDigits.length === 14) ||
+                (filterTipo === 'pj' && docDigits.length === 0)
+
+            const matchEmail =
+                filterComEmail === 'todos' ||
+                (filterComEmail === 'sim' && !!c.email) ||
+                (filterComEmail === 'nao' && !c.email)
+
+            const matchTel =
+                filterComTelefone === 'todos' ||
+                (filterComTelefone === 'sim' && !!c.telefone) ||
+                (filterComTelefone === 'nao' && !c.telefone)
+
+            const cadDate = new Date(c.created_at).getTime()
+            const matchInicio = !filterCadastroInicio || cadDate >= new Date(filterCadastroInicio + 'T00:00:00').getTime()
+            const matchFim = !filterCadastroFim || cadDate <= new Date(filterCadastroFim + 'T23:59:59').getTime()
+
+            return matchSearch && matchSaldo && matchLimite && matchTipo && matchEmail && matchTel && matchInicio && matchFim
+        })
+
+        // Sort
+        result.sort((a, b) => {
+            let va: any = a[sortBy] ?? ''
+            let vb: any = b[sortBy] ?? ''
+            if (typeof va === 'string') va = va.toLowerCase()
+            if (typeof vb === 'string') vb = vb.toLowerCase()
+            if (va < vb) return sortDir === 'asc' ? -1 : 1
+            if (va > vb) return sortDir === 'asc' ? 1 : -1
+            return 0
+        })
+
+        return result
+    }, [clientes, searchTerm, filterSaldoHaver, filterLimiteCredito, filterCadastroInicio, filterCadastroFim, filterTipo, filterComEmail, filterComTelefone, sortBy, sortDir])
 
     const paginatedClientes = filteredClientes.slice(0, currentPage * pageSize)
     const hasMore = paginatedClientes.length < filteredClientes.length
+
+    // KPIs
+    const totalComSaldo = clientes.filter(c => (c.saldo_haver || 0) > 0).length
+    const totalSaldoHaver = clientes.reduce((a, c) => a + (c.saldo_haver || 0), 0)
+    const totalComLimite = clientes.filter(c => (c.limite_credito || 0) > 0).length
+    const semContato = clientes.filter(c => !c.email && !c.telefone).length
 
     return (
         <div className="space-y-6">
@@ -177,59 +242,169 @@ export function Clientes() {
                     <h1 className="text-3xl font-bold tracking-tight">Clientes</h1>
                     <p className="text-muted-foreground mt-1">Gerencie seu cadastro de clientes e histórico de compras.</p>
                 </div>
-                <Button className="gap-2" onClick={() => {
-                    setEditingCliente(null)
-                    setNewCliente({
-                        nome: '',
-                        razao_social: '',
-                        documento: '',
-                        inscricao_estadual: '',
-                        email: '',
-                        telefone: '',
-                        endereco: '',
-                        limite_credito: 0
-                    })
-                    setIsModalOpen(true)
-                }}>
-                    <Plus className="w-4 h-4" />
-                    Novo Cliente
-                </Button>
+                <div className="flex items-center gap-2">
+                    <Button variant="outline" size="icon" onClick={fetchClientes}><RefreshCw className="w-4 h-4" /></Button>
+                    <Button className="gap-2" onClick={() => {
+                        setEditingCliente(null)
+                        setNewCliente({ nome: '', razao_social: '', documento: '', inscricao_estadual: '', email: '', telefone: '', endereco: '', limite_credito: 0 })
+                        setIsModalOpen(true)
+                    }}>
+                        <Plus className="w-4 h-4" /> Novo Cliente
+                    </Button>
+                </div>
+            </div>
+
+            {/* KPIs */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <Card>
+                    <CardHeader className="pb-2"><CardTitle className="text-xs text-muted-foreground uppercase tracking-wide flex items-center gap-1"><Users className="w-3 h-3" /> Total</CardTitle></CardHeader>
+                    <CardContent><div className="text-2xl font-bold">{clientes.length}</div><p className="text-xs text-muted-foreground">clientes cadastrados</p></CardContent>
+                </Card>
+                <Card className="border-emerald-500/20 bg-emerald-500/5">
+                    <CardHeader className="pb-2"><CardTitle className="text-xs text-muted-foreground uppercase tracking-wide flex items-center gap-1"><Wallet className="w-3 h-3" /> Saldo Haver</CardTitle></CardHeader>
+                    <CardContent><div className="text-xl font-bold text-emerald-500">{fmt(totalSaldoHaver)}</div><p className="text-xs text-muted-foreground">{totalComSaldo} clientes com saldo</p></CardContent>
+                </Card>
+                <Card className="border-blue-500/20 bg-blue-500/5">
+                    <CardHeader className="pb-2"><CardTitle className="text-xs text-muted-foreground uppercase tracking-wide flex items-center gap-1"><TrendingUp className="w-3 h-3" /> Limite Crédito</CardTitle></CardHeader>
+                    <CardContent><div className="text-2xl font-bold text-blue-500">{totalComLimite}</div><p className="text-xs text-muted-foreground">clientes com limite</p></CardContent>
+                </Card>
+                <Card className="border-amber-500/20 bg-amber-500/5">
+                    <CardHeader className="pb-2"><CardTitle className="text-xs text-muted-foreground uppercase tracking-wide flex items-center gap-1"><AlertTriangle className="w-3 h-3" /> Sem Contato</CardTitle></CardHeader>
+                    <CardContent><div className="text-2xl font-bold text-amber-500">{semContato}</div><p className="text-xs text-muted-foreground">sem e-mail nem telefone</p></CardContent>
+                </Card>
             </div>
 
             <Card>
                 <CardHeader className="pb-4">
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-4 flex-1">
-                            <div className="relative w-72">
-                                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                                <Input
-                                    placeholder="Buscar por nome, fantasia, CPF/CNPJ..."
-                                    className="pl-9"
-                                    value={searchTerm}
-                                    onChange={(e) => setSearchTerm(e.target.value)}
-                                />
-                            </div>
-                            <select
-                                className="h-9 w-28 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                                value={pageSize.toString()}
-                                onChange={e => setPageSize(parseInt(e.target.value))}
-                            >
-                                <option value="20">20 por vez</option>
-                                <option value="50">50 por vez</option>
-                                <option value="100">100 por vez</option>
-                            </select>
+                    {/* Barra de busca e botão filtros */}
+                    <div className="flex flex-wrap items-center gap-3">
+                        <div className="relative flex-1 min-w-[240px]">
+                            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                            <Input
+                                placeholder="Buscar por nome, fantasia, CPF/CNPJ, telefone, e-mail..."
+                                className="pl-9"
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                            />
                         </div>
-                        <Button variant="outline" className="gap-2">
-                            <Filter className="w-4 h-4" />
-                            Filtros
+
+                        {/* Ordenação rápida */}
+                        <select
+                            className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                            value={`${sortBy}:${sortDir}`}
+                            onChange={e => {
+                                const [col, dir] = e.target.value.split(':')
+                                setSortBy(col as any)
+                                setSortDir(dir as any)
+                            }}
+                        >
+                            <option value="nome:asc">Nome A→Z</option>
+                            <option value="nome:desc">Nome Z→A</option>
+                            <option value="created_at:desc">Mais recentes</option>
+                            <option value="created_at:asc">Mais antigos</option>
+                            <option value="saldo_haver:desc">Maior saldo haver</option>
+                            <option value="limite_credito:desc">Maior limite</option>
+                        </select>
+
+                        <select
+                            className="h-9 w-28 rounded-md border border-input bg-background px-3 text-sm"
+                            value={pageSize.toString()}
+                            onChange={e => setPageSize(parseInt(e.target.value))}
+                        >
+                            <option value="20">20 por vez</option>
+                            <option value="50">50 por vez</option>
+                            <option value="100">100 por vez</option>
+                        </select>
+
+                        <Button
+                            variant={isFilterOpen ? "secondary" : "outline"}
+                            className="gap-2 relative"
+                            onClick={() => setIsFilterOpen(!isFilterOpen)}
+                        >
+                            <Filter className="w-4 h-4" /> Filtros
+                            {activeFilterCount > 0 && (
+                                <span className="absolute -top-1.5 -right-1.5 bg-primary text-primary-foreground text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center">
+                                    {activeFilterCount}
+                                </span>
+                            )}
+                            <ChevronDown className={`w-3 h-3 transition-transform ${isFilterOpen ? 'rotate-180' : ''}`} />
                         </Button>
+
+                        {activeFilterCount > 0 && (
+                            <Button variant="ghost" size="sm" className="text-xs gap-1 text-muted-foreground" onClick={clearFilters}>
+                                <X className="w-3 h-3" /> Limpar filtros
+                            </Button>
+                        )}
                     </div>
+
+                    {/* Painel de Filtros */}
+                    {isFilterOpen && (
+                        <div className="mt-4 p-4 bg-muted/30 rounded-xl border border-border animate-in fade-in slide-in-from-top-2 grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <div className="space-y-1">
+                                <Label className="text-[10px] uppercase font-bold text-muted-foreground">Tipo de Pessoa</Label>
+                                <select className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm" value={filterTipo} onChange={e => setFilterTipo(e.target.value as any)}>
+                                    <option value="todos">Todos</option>
+                                    <option value="pf">Pessoa Física (CPF)</option>
+                                    <option value="pj">Pessoa Jurídica (CNPJ)</option>
+                                </select>
+                            </div>
+                            <div className="space-y-1">
+                                <Label className="text-[10px] uppercase font-bold text-muted-foreground">Saldo Haver</Label>
+                                <select className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm" value={filterSaldoHaver} onChange={e => setFilterSaldoHaver(e.target.value as any)}>
+                                    <option value="todos">Todos</option>
+                                    <option value="com_saldo">Com saldo</option>
+                                    <option value="sem_saldo">Sem saldo</option>
+                                </select>
+                            </div>
+                            <div className="space-y-1">
+                                <Label className="text-[10px] uppercase font-bold text-muted-foreground">Limite de Crédito</Label>
+                                <select className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm" value={filterLimiteCredito} onChange={e => setFilterLimiteCredito(e.target.value as any)}>
+                                    <option value="todos">Todos</option>
+                                    <option value="com_limite">Com limite</option>
+                                    <option value="sem_limite">Sem limite</option>
+                                </select>
+                            </div>
+                            <div className="space-y-1">
+                                <Label className="text-[10px] uppercase font-bold text-muted-foreground">E-mail Cadastrado</Label>
+                                <select className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm" value={filterComEmail} onChange={e => setFilterComEmail(e.target.value as any)}>
+                                    <option value="todos">Todos</option>
+                                    <option value="sim">Com e-mail</option>
+                                    <option value="nao">Sem e-mail</option>
+                                </select>
+                            </div>
+                            <div className="space-y-1">
+                                <Label className="text-[10px] uppercase font-bold text-muted-foreground">Telefone Cadastrado</Label>
+                                <select className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm" value={filterComTelefone} onChange={e => setFilterComTelefone(e.target.value as any)}>
+                                    <option value="todos">Todos</option>
+                                    <option value="sim">Com telefone</option>
+                                    <option value="nao">Sem telefone</option>
+                                </select>
+                            </div>
+                            <div className="space-y-1">
+                                <Label className="text-[10px] uppercase font-bold text-muted-foreground">Cadastro de</Label>
+                                <input type="date" value={filterCadastroInicio}
+                                    onChange={e => setFilterCadastroInicio(e.target.value)}
+                                    className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm" />
+                            </div>
+                            <div className="space-y-1">
+                                <Label className="text-[10px] uppercase font-bold text-muted-foreground">Cadastro até</Label>
+                                <input type="date" value={filterCadastroFim}
+                                    onChange={e => setFilterCadastroFim(e.target.value)}
+                                    className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm" />
+                            </div>
+                            <div className="flex items-end">
+                                <div className="text-xs text-muted-foreground bg-primary/5 border border-primary/20 rounded-lg px-3 py-2 w-full text-center">
+                                    <span className="font-bold text-primary text-base">{filteredClientes.length}</span>
+                                    <span className="block">resultado(s)</span>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </CardHeader>
+
                 <CardContent>
                     {loading ? (
-                        <div className="flex items-center justify-center p-8 text-muted-foreground">
-                            Carregando clientes...
-                        </div>
+                        <div className="flex items-center justify-center p-8 text-muted-foreground animate-pulse">Carregando clientes...</div>
                     ) : (
                         <Table>
                             <TableHeader>
@@ -240,34 +415,40 @@ export function Clientes() {
                                     <TableHead>Localização</TableHead>
                                     <TableHead>Saldo Haver</TableHead>
                                     <TableHead>Limite Crédito</TableHead>
-                                    <TableHead>Data Cadastro</TableHead>
+                                    <TableHead>Cadastro</TableHead>
                                     <TableHead className="text-right">Ações</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
                                 {paginatedClientes.length === 0 ? (
                                     <TableRow>
-                                        <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
-                                            Nenhum cliente encontrado.
+                                        <TableCell colSpan={8} className="text-center py-12 text-muted-foreground">
+                                            <Users className="w-10 h-10 mx-auto mb-3 opacity-20" />
+                                            <p>Nenhum cliente encontrado.</p>
+                                            {activeFilterCount > 0 && (
+                                                <Button variant="link" size="sm" className="mt-1" onClick={clearFilters}>Limpar filtros</Button>
+                                            )}
                                         </TableCell>
                                     </TableRow>
                                 ) : paginatedClientes.map((cliente) => (
-                                    <TableRow key={cliente.id}>
+                                    <TableRow key={cliente.id} className="group">
                                         <TableCell>
                                             <div className="flex items-center gap-3">
-                                                <div className="bg-primary/10 p-2 rounded-full">
+                                                <div className="bg-primary/10 p-2 rounded-full shrink-0">
                                                     <User className="w-4 h-4 text-primary" />
                                                 </div>
                                                 <div className="flex flex-col">
                                                     <span className="font-bold">{cliente.nome}</span>
-                                                    <span className="text-[10px] text-muted-foreground uppercase truncate max-w-[150px]">{cliente.razao_social || "Pessoa Física"}</span>
+                                                    <span className="text-[10px] text-muted-foreground uppercase truncate max-w-[150px]">
+                                                        {cliente.razao_social || "Pessoa Física"}
+                                                    </span>
                                                 </div>
                                             </div>
                                         </TableCell>
                                         <TableCell>
                                             <div className="flex flex-col">
-                                                <span className="font-mono text-xs">{cliente.documento || "-"}</span>
-                                                <span className="text-[9px] text-muted-foreground italic truncate">IE: {cliente.inscricao_estadual || "Isento"}</span>
+                                                <span className="font-mono text-xs">{cliente.documento || "—"}</span>
+                                                <span className="text-[9px] text-muted-foreground italic">IE: {cliente.inscricao_estadual || "Isento"}</span>
                                             </div>
                                         </TableCell>
                                         <TableCell>
@@ -282,49 +463,35 @@ export function Clientes() {
                                                         <Phone className="w-3 h-3" /> {cliente.telefone}
                                                     </div>
                                                 )}
-                                                {!cliente.email && !cliente.telefone && "-"}
+                                                {!cliente.email && !cliente.telefone && (
+                                                    <span className="text-xs text-amber-500 flex items-center gap-1"><AlertTriangle className="w-3 h-3" /> Sem contato</span>
+                                                )}
                                             </div>
                                         </TableCell>
                                         <TableCell>
-                                            <div className="flex items-center gap-1.5 text-xs text-muted-foreground max-w-[200px] truncate">
-                                                {cliente.endereco ? (
-                                                    <>
-                                                        <MapPin className="w-3 h-3 shrink-0" />
-                                                        {cliente.endereco}
-                                                    </>
-                                                ) : "-"}
+                                            <div className="flex items-center gap-1.5 text-xs text-muted-foreground max-w-[180px] truncate">
+                                                {cliente.endereco ? (<><MapPin className="w-3 h-3 shrink-0" />{cliente.endereco}</>) : "—"}
                                             </div>
                                         </TableCell>
                                         <TableCell>
                                             <Badge variant={(cliente.saldo_haver || 0) > 0 ? "default" : "outline"} className="font-bold">
-                                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(cliente.saldo_haver || 0)}
+                                                {fmt(cliente.saldo_haver || 0)}
                                             </Badge>
                                         </TableCell>
                                         <TableCell>
-                                            <div className="font-bold text-emerald-600 text-xs">
-                                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(cliente.limite_credito || 0)}
+                                            <div className={`font-bold text-xs ${(cliente.limite_credito || 0) > 0 ? 'text-emerald-600' : 'text-muted-foreground'}`}>
+                                                {fmt(cliente.limite_credito || 0)}
                                             </div>
                                         </TableCell>
                                         <TableCell className="text-[10px]">
                                             {new Date(cliente.created_at).toLocaleDateString("pt-BR")}
                                         </TableCell>
                                         <TableCell className="text-right">
-                                            <div className="flex justify-end gap-1">
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    title="Editar"
-                                                    onClick={() => startEdit(cliente)}
-                                                >
+                                            <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <Button variant="ghost" size="icon" title="Editar" onClick={() => startEdit(cliente)}>
                                                     <Pencil className="w-4 h-4 text-muted-foreground" />
                                                 </Button>
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    title="Excluir"
-                                                    onClick={() => handleDelete(cliente.id)}
-                                                    className="text-destructive"
-                                                >
+                                                <Button variant="ghost" size="icon" title="Excluir" onClick={() => handleDelete(cliente.id)} className="text-destructive">
                                                     <Trash2 className="w-4 h-4" />
                                                 </Button>
                                             </div>
@@ -336,8 +503,8 @@ export function Clientes() {
                     )}
                     {hasMore && (
                         <div className="flex justify-center mt-6">
-                            <Button variant="outline" className="px-10 h-10 border-indigo-600/20 text-indigo-600 hover:bg-indigo-600/5 font-bold" onClick={() => setCurrentPage(prev => prev + 1)}>
-                                Carregar Mais Clientes
+                            <Button variant="outline" className="px-10 h-10 font-bold" onClick={() => setCurrentPage(prev => prev + 1)}>
+                                Carregar mais ({filteredClientes.length - paginatedClientes.length} restantes)
                             </Button>
                         </div>
                     )}
@@ -349,42 +516,21 @@ export function Clientes() {
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <Label>Nome Fantasia / Nome</Label>
-                            <Input
-                                required
-                                placeholder="Nome Fantasia"
-                                value={newCliente.nome}
-                                onChange={e => setNewCliente({ ...newCliente, nome: e.target.value })}
-                            />
+                            <Input required placeholder="Nome Fantasia" value={newCliente.nome} onChange={e => setNewCliente({ ...newCliente, nome: e.target.value })} />
                         </div>
                         <div className="space-y-2">
                             <Label>Razão Social</Label>
-                            <Input
-                                placeholder="Nome no Contrato Social"
-                                value={newCliente.razao_social}
-                                onChange={e => setNewCliente({ ...newCliente, razao_social: e.target.value })}
-                            />
+                            <Input placeholder="Nome no Contrato Social" value={newCliente.razao_social} onChange={e => setNewCliente({ ...newCliente, razao_social: e.target.value })} />
                         </div>
                     </div>
-
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <Label>CPF / CNPJ</Label>
                             <div className="flex gap-2">
-                                <Input
-                                    placeholder="00.000.000/0001-00"
-                                    value={newCliente.documento}
-                                    onChange={e => setNewCliente({ ...newCliente, documento: e.target.value })}
-                                />
+                                <Input placeholder="00.000.000/0001-00" value={newCliente.documento}
+                                    onChange={e => setNewCliente({ ...newCliente, documento: e.target.value })} />
                                 {newCliente.documento.replace(/\D/g, '').length === 14 && (
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        size="icon"
-                                        onClick={searchCNPJ}
-                                        disabled={searchingCNPJ}
-                                        className="shrink-0"
-                                        title="Buscar dados do CNPJ"
-                                    >
+                                    <Button type="button" variant="outline" size="icon" onClick={searchCNPJ} disabled={searchingCNPJ} title="Buscar dados do CNPJ">
                                         <Search className={`w-4 h-4 ${searchingCNPJ ? 'animate-spin' : ''}`} />
                                     </Button>
                                 )}
@@ -392,55 +538,33 @@ export function Clientes() {
                         </div>
                         <div className="space-y-2">
                             <Label>Inscrição Estadual (IE)</Label>
-                            <Input
-                                placeholder="000.000.000.000"
-                                value={newCliente.inscricao_estadual}
-                                onChange={e => setNewCliente({ ...newCliente, inscricao_estadual: e.target.value })}
-                            />
+                            <Input placeholder="000.000.000.000" value={newCliente.inscricao_estadual}
+                                onChange={e => setNewCliente({ ...newCliente, inscricao_estadual: e.target.value })} />
                         </div>
                     </div>
-
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <Label>Telefone</Label>
-                            <Input
-                                placeholder="(00) 00000-0000"
-                                value={newCliente.telefone}
-                                onChange={e => setNewCliente({ ...newCliente, telefone: e.target.value })}
-                            />
+                            <Input placeholder="(00) 00000-0000" value={newCliente.telefone}
+                                onChange={e => setNewCliente({ ...newCliente, telefone: e.target.value })} />
                         </div>
                         <div className="space-y-2">
                             <Label>E-mail</Label>
-                            <Input
-                                type="email"
-                                placeholder="email@exemplo.com"
-                                value={newCliente.email}
-                                onChange={e => setNewCliente({ ...newCliente, email: e.target.value })}
-                            />
+                            <Input type="email" placeholder="email@exemplo.com" value={newCliente.email}
+                                onChange={e => setNewCliente({ ...newCliente, email: e.target.value })} />
                         </div>
                     </div>
-
                     <div className="space-y-2">
                         <Label>Endereço Completo</Label>
-                        <Input
-                            placeholder="Rua, Número, Bairro, Cidade - UF"
-                            value={newCliente.endereco}
-                            onChange={e => setNewCliente({ ...newCliente, endereco: e.target.value })}
-                        />
+                        <Input placeholder="Rua, Número, Bairro, Cidade - UF" value={newCliente.endereco}
+                            onChange={e => setNewCliente({ ...newCliente, endereco: e.target.value })} />
                     </div>
-
                     <div className="space-y-2">
-                        <Label>Limite de Crédito (Boleto)</Label>
-                        <Input
-                            type="number"
-                            step="0.01"
-                            placeholder="Ex: 5000.00"
-                            value={newCliente.limite_credito}
-                            onChange={e => setNewCliente({ ...newCliente, limite_credito: parseFloat(e.target.value) || 0 })}
-                        />
+                        <Label>Limite de Crédito (R$)</Label>
+                        <Input type="number" step="0.01" placeholder="Ex: 5000.00" value={newCliente.limite_credito}
+                            onChange={e => setNewCliente({ ...newCliente, limite_credito: parseFloat(e.target.value) || 0 })} />
                         <p className="text-[10px] text-muted-foreground italic">Define o valor máximo permitido para vendas faturadas no boleto.</p>
                     </div>
-
                     <div className="flex justify-end gap-3 pt-4 border-t border-border">
                         <Button variant="outline" type="button" onClick={() => setIsModalOpen(false)}>Cancelar</Button>
                         <Button type="submit" disabled={submitting}>
