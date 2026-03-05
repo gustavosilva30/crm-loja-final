@@ -581,92 +581,155 @@ export function Produtos() {
     setLoading(false);
   }
 
-  const handlePrintLabels = () => {
+  const handlePrintLabels = async () => {
     const selectedProducts = produtos.filter(p => selectedIds.includes(p.id));
     if (selectedProducts.length === 0) return;
+
+    // Generate QR codes as base64 for each product SKU
+    const QRCode = (await import('qrcode')).default;
+    const labelsHtml = await Promise.all(
+      selectedProducts.map(async (p) => {
+        const loc = locais.find(l => l.id === p.localizacao_id);
+        let locSigla = 'N/A';
+
+        if (loc) {
+          if (loc.parent_id) {
+            const parent = locais.find(l => l.id === loc.parent_id);
+            locSigla = `${parent?.sigla || ''} > ${loc.sigla || ''}`;
+          } else {
+            locSigla = loc.sigla || loc.nome;
+          }
+        } else if (p.localizacao) {
+          locSigla = p.localizacao;
+        }
+
+        // Generate the QR code for the SKU as a data URL (offline, no CDN needed)
+        const qrDataUrl = await QRCode.toDataURL(p.sku, {
+          width: 120,
+          margin: 1,
+          color: { dark: '#000000', light: '#ffffff' }
+        });
+
+        return `
+          <div class="label">
+            <div class="left">
+              <div class="sku">${p.sku}</div>
+              <div class="name">${p.nome}</div>
+              <div class="location">&#128205; ${locSigla}</div>
+              ${p.part_number ? `<div class="part">PN: ${p.part_number}</div>` : ''}
+            </div>
+            <div class="right">
+              <img src="${qrDataUrl}" class="qr" alt="QR ${p.sku}" />
+              <div class="qr-label">ESCANEIE</div>
+            </div>
+          </div>
+        `;
+      })
+    );
 
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
 
-    const labelsHtml = selectedProducts.map(p => {
-      const loc = locais.find(l => l.id === p.localizacao_id);
-      let locSigla = 'N/A';
-
-      if (loc) {
-        if (loc.parent_id) {
-          const parent = locais.find(l => l.id === loc.parent_id);
-          locSigla = `${parent?.sigla || ''} > ${loc.sigla || ''}`;
-        } else {
-          locSigla = loc.sigla || loc.nome;
-        }
-      } else if (p.localizacao) {
-        locSigla = p.localizacao;
-      }
-
-      return `
-        <div class="label">
-          <div class="sku">SKU: ${p.sku}</div>
-          <div class="name">${p.nome}</div>
-          <div class="location">LOC: ${locSigla}</div>
-        </div>
-      `;
-    }).join('');
-
     printWindow.document.write(`
       <html>
         <head>
-          <title>Impressão de Etiquetas</title>
+          <title>Etiquetas — ${selectedProducts.length} produto(s)</title>
           <style>
             @page {
               size: 100mm 50mm;
               margin: 0;
             }
+            *, *::before, *::after { box-sizing: border-box; }
             body {
               margin: 0;
               padding: 0;
-              font-family: sans-serif;
+              font-family: Arial, Helvetica, sans-serif;
+              background: #fff;
             }
             .label {
               width: 100mm;
               height: 50mm;
-              padding: 5mm;
-              box-sizing: border-box;
+              padding: 4mm 4mm 3mm 4mm;
+              display: flex;
+              flex-direction: row;
+              align-items: center;
+              gap: 3mm;
+              border: 1px dashed #aaa;
+              page-break-after: always;
+              overflow: hidden;
+            }
+            .left {
+              flex: 1;
               display: flex;
               flex-direction: column;
               justify-content: center;
-              border: 1px dashed #ccc;
-              page-break-after: always;
+              gap: 1mm;
+              overflow: hidden;
+            }
+            .right {
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              justify-content: center;
+              flex-shrink: 0;
+              gap: 1mm;
             }
             .sku {
-              font-size: 24pt;
-              font-weight: bold;
-              margin-bottom: 2mm;
+              font-size: 18pt;
+              font-weight: 900;
+              letter-spacing: -0.5px;
+              color: #000;
+              line-height: 1;
             }
             .name {
-              font-size: 14pt;
-              margin-bottom: 2mm;
+              font-size: 9pt;
+              color: #222;
+              line-height: 1.2;
               display: -webkit-box;
               -webkit-line-clamp: 2;
               -webkit-box-orient: vertical;
               overflow: hidden;
             }
             .location {
-              font-size: 12pt;
-              color: #444;
+              font-size: 9pt;
               font-weight: bold;
-              border-top: 1px solid #000;
-              padding-top: 1mm;
+              color: #000;
+              border-top: 1px solid #ccc;
+              padding-top: 1.5mm;
+              margin-top: 0.5mm;
+              white-space: nowrap;
+              overflow: hidden;
+              text-overflow: ellipsis;
+            }
+            .part {
+              font-size: 7.5pt;
+              color: #555;
+              font-family: monospace;
+            }
+            .qr {
+              width: 30mm;
+              height: 30mm;
+              display: block;
+              border: 1px solid #ddd;
+              border-radius: 2px;
+            }
+            .qr-label {
+              font-size: 6pt;
+              color: #888;
+              text-align: center;
+              letter-spacing: 0.5px;
+              font-weight: bold;
             }
           </style>
         </head>
         <body>
-          ${labelsHtml}
+          ${labelsHtml.join('')}
           <script>
             window.onload = () => {
               window.print();
               window.close();
             };
-          </script>
+          <\/script>
         </body>
       </html>
     `);

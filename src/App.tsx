@@ -22,6 +22,8 @@ import { Agenda } from "./pages/Agenda"
 import { MetasVendedores } from "./pages/MetasVendedores"
 import { Devolucoes } from "./pages/Devolucoes"
 import { Indicacoes } from "./pages/Indicacoes"
+import { QrScanner } from "./pages/QrScanner"
+import { Sucatas } from "./pages/Sucatas"
 import { ThemeProvider } from "./components/ThemeProvider"
 import { supabase } from "./lib/supabase"
 import { useAuthStore } from "./store/authStore"
@@ -75,6 +77,8 @@ export default function App() {
                 <Route path="metas" element={<MetasVendedores />} />
                 <Route path="devolucoes" element={<Devolucoes />} />
                 <Route path="indicacoes" element={<Indicacoes />} />
+                <Route path="qrcode" element={<QrScanner />} />
+                <Route path="sucatas" element={<Sucatas />} />
               </Route>
             </>
           )}

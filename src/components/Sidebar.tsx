@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom"
-import { LayoutDashboard, Package, ShoppingCart, DollarSign, Users, Truck, Settings, LogOut, FileText, Bell, BarChart, Wallet, MessageCircle, CheckCircle2, Gavel, CalendarDays, Target, RotateCcw, Users2 } from "lucide-react"
+import { LayoutDashboard, Package, ShoppingCart, DollarSign, Users, Truck, Settings, LogOut, FileText, Bell, BarChart, Wallet, MessageCircle, CheckCircle2, Gavel, CalendarDays, Target, RotateCcw, Users2, QrCode, Car } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { ModeToggle } from "./ModeToggle"
 import { supabase } from "@/lib/supabase"
@@ -11,6 +11,7 @@ const navItems = [
   { icon: MessageCircle, label: "Atendimento", href: "/atendimento" },
   { icon: Bell, label: "Lembretes", href: "/lembretes" },
   { icon: Package, label: "Estoque", href: "/produtos" },
+  { icon: QrCode, label: "QR Code", href: "/qrcode" },
   { icon: ShoppingCart, label: "Vendas", href: "/vendas" },
   { icon: CheckCircle2, label: "Vendas Concluídas", href: "/vendas-concluidas" },
   { icon: FileText, label: "Orçamentos", href: "/orcamentos" },
@@ -21,6 +22,7 @@ const navItems = [
   { icon: Users, label: "Clientes", href: "/clientes" },
   { icon: Truck, label: "Entregas", href: "/entregas" },
   { icon: Gavel, label: "Leilões", href: "/leiloes" },
+  { icon: Car, label: "Sucatas", href: "/sucatas" },
   { icon: CalendarDays, label: "Agenda", href: "/agenda" },
   { icon: RotateCcw, label: "Devoluções", href: "/devolucoes" },
   { icon: Target, label: "Metas", href: "/metas" },
