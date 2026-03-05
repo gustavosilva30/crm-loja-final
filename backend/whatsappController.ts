@@ -10,68 +10,78 @@ const supabase = createClient(
     process.env.VITE_SUPABASE_ANON_KEY!
 );
 
-const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN;
-const PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_ID;
+const EVO_API_URL = process.env.EVO_API_URL;
+const EVO_API_KEY = process.env.EVO_API_KEY;
+const EVO_INSTANCE = process.env.EVO_INSTANCE;
 
 export const whatsappController = {
-    // Webhook Verification (GET)
+    // Webhook Verification (Evolution API doesn't strictly require this like Meta, but we can keep it for security check)
     verifyWebhook: (req: Request, res: Response) => {
-        const mode = req.query['hub.mode'];
-        const token = req.query['hub.verify_token'];
-        const challenge = req.query['hub.challenge'];
-
-        if (mode === 'subscribe' && token === process.env.WHATSAPP_VERIFY_TOKEN) {
-            res.status(200).send(challenge);
-        } else {
-            res.sendStatus(403);
-        }
+        // Evolution API usually sends a simple POST. We can check a secret token if configured.
+        res.status(200).send("Webhook is active");
     },
 
-    // Receive Messages (Webhook POST)
+    // Receive Messages (Evolution API Webhook POST)
     receiveMessage: async (req: Request, res: Response) => {
         try {
-            const entry = req.body.entry?.[0];
-            const changes = entry?.changes?.[0];
-            const value = changes?.value;
-            const message = value?.messages?.[0];
+            const event = req.body.event;
+            const data = req.body.data;
 
-            if (message) {
-                const from = message.from;
-                const text = message.text?.body;
-                const name = value?.contacts?.[0]?.profile?.name || from;
+            // Evolution API event for new messages is usually 'messages.upsert'
+            if (event === 'messages.upsert' && data) {
+                const message = data.message;
+                const key = data.key;
 
-                // 1. Find or create conversation
-                let { data: conversa, error: convErr } = await supabase
-                    .from('conversas')
-                    .select('*')
-                    .eq('telefone', from)
-                    .single();
+                // Extract remote JID (phone number)
+                const remoteJid = key?.remoteJid;
+                const from = remoteJid?.split('@')[0]; // Remove @s.whatsapp.net
 
-                if (convErr && convErr.code === 'PGRST116') {
-                    const { data: newConv, error: createErr } = await supabase
-                        .from('conversas')
-                        .insert([{ cliente_nome: name, telefone: from, status_aberto: true }])
-                        .select()
-                        .single();
-                    conversa = newConv;
+                // Only process external incoming messages (not from self)
+                if (key?.fromMe) {
+                    return res.sendStatus(200);
                 }
 
-                if (conversa) {
-                    // 2. Save incoming message
-                    await supabase.from('mensagens').insert([
-                        {
-                            conversa_id: conversa.id,
-                            conteudo: text,
-                            tipo_envio: 'received',
-                            wa_message_id: message.id
-                        }
-                    ]);
+                // Extract text content
+                const text = message?.conversation ||
+                    message?.extendedTextMessage?.text ||
+                    message?.imageMessage?.caption || "";
+
+                const name = data.pushName || from;
+
+                if (from && text) {
+                    // 1. Find or create conversation
+                    let { data: conversa, error: convErr } = await supabase
+                        .from('conversas')
+                        .select('*')
+                        .eq('telefone', from)
+                        .single();
+
+                    if (convErr && convErr.code === 'PGRST116') {
+                        const { data: newConv, error: createErr } = await supabase
+                            .from('conversas')
+                            .insert([{ cliente_nome: name, telefone: from, status_aberto: true }])
+                            .select()
+                            .single();
+                        conversa = newConv;
+                    }
+
+                    if (conversa) {
+                        // 2. Save incoming message
+                        await supabase.from('mensagens').insert([
+                            {
+                                conversa_id: conversa.id,
+                                conteudo: text,
+                                tipo_envio: 'received',
+                                wa_message_id: key.id
+                            }
+                        ]);
+                    }
                 }
             }
 
             res.sendStatus(200);
         } catch (err) {
-            console.error('Error on WhatsApp Webhook:', err);
+            console.error('Error on Evolution API Webhook:', err);
             res.sendStatus(500);
         }
     },
@@ -81,16 +91,15 @@ export const whatsappController = {
         const { conversa_id, telefone, conteudo } = req.body;
 
         try {
-            // 1. Send via Meta Graph API
+            // 1. Send via Evolution API
             const response = await axios.post(
-                `https://graph.facebook.com/v17.0/${PHONE_NUMBER_ID}/messages`,
+                `${EVO_API_URL}/message/sendText/${EVO_INSTANCE}`,
                 {
-                    messaging_product: 'whatsapp',
-                    to: telefone,
-                    text: { body: conteudo }
+                    number: telefone,
+                    text: conteudo
                 },
                 {
-                    headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}` }
+                    headers: { 'apikey': EVO_API_KEY }
                 }
             );
 
@@ -100,14 +109,14 @@ export const whatsappController = {
                     conversa_id: conversa_id,
                     conteudo: conteudo,
                     tipo_envio: 'sent',
-                    wa_message_id: response.data.messages?.[0]?.id
+                    wa_message_id: response.data.key?.id || 'manual-' + Date.now()
                 }
             ]).select();
 
             res.status(200).json(data);
         } catch (err: any) {
-            console.error('Error sending WhatsApp message:', err.response?.data || err.message);
-            res.status(500).json({ error: 'Failed to send message' });
+            console.error('Error sending message via Evolution API:', err.response?.data || err.message);
+            res.status(500).json({ error: 'Failed to send message via Evolution API' });
         }
     }
 };

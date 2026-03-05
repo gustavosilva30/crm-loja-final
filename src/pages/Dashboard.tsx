@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import {
   DollarSign, ShoppingBag, PackageOpen, TrendingUp, ArrowUpRight, ArrowDownRight,
   Users, AlertTriangle, Target, RefreshCw, Award, Calendar, CreditCard, Percent,
-  ChevronUp, ChevronDown, Minus, Clock, BellRing, TrendingDown
+  ChevronUp, ChevronDown, Minus, Clock, BellRing, TrendingDown, Brain, ListChecks, Search, Zap, Map
 } from "lucide-react"
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -303,6 +303,27 @@ export function Dashboard() {
           ))}
         </div>
       )}
+
+      {/* Destaques de Inovação (Smart Features) */}
+      <div className="grid gap-4 md:grid-cols-5">
+        {[
+          { icon: Brain, label: "AI Pricing", desc: "Sugestões de preço via IA", href: "/produtos", color: "text-purple-500", bg: "bg-purple-500/10" },
+          { icon: ListChecks, label: "Checklist Desmonte", desc: "Entrada rápida de peças", href: "/sucatas", color: "text-amber-500", bg: "bg-amber-500/10" },
+          { icon: Zap, label: "Sales AI", desc: "WhatsApp para Orçamento", href: "/sales-ai", color: "text-emerald-500", bg: "bg-emerald-500/10" },
+          { icon: Search, label: "VIN Decoder", desc: "Chassi Automático", href: "/sucatas", color: "text-blue-500", bg: "bg-blue-500/10" },
+          { icon: Map, label: "Yard Map", desc: "Mapa Visual do Pátio", href: "/yard-map", color: "text-primary", bg: "bg-primary/10" },
+        ].map((feat, i) => (
+          <Card key={i} className="border-border/50 hover:border-primary/50 transition-all hover:scale-105 cursor-pointer" onClick={() => window.location.href = feat.href}>
+            <CardContent className="p-4 flex flex-col items-center text-center">
+              <div className={`w-10 h-10 rounded-xl ${feat.bg} flex items-center justify-center mb-3`}>
+                <feat.icon className={`h-6 w-6 ${feat.color}`} />
+              </div>
+              <h3 className="font-bold text-xs uppercase tracking-tight">{feat.label}</h3>
+              <p className="text-[10px] text-muted-foreground mt-1 leading-tight">{feat.desc}</p>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
 
       {/* KPIs Principais */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

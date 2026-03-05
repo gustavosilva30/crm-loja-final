@@ -9,8 +9,9 @@ import { Modal } from "@/components/ui/modal"
 import {
     Car, Plus, Search, ChevronLeft, Package, MapPin, DollarSign, Upload, X,
     Wrench, CheckCircle2, AlertCircle, RefreshCw, BarChart2, Camera, ExternalLink,
-    Trash2, Pencil, ArrowRight, ClipboardList, Layers
+    Trash2, Pencil, ArrowRight, ClipboardList, Layers, ListChecks, Filter, Brain
 } from "lucide-react"
+import { DismantlingChecklistDialog } from "@/components/DismantlingChecklistDialog"
 import { supabase } from "@/lib/supabase"
 import { useAuthStore } from "@/store/authStore"
 
@@ -140,6 +141,10 @@ export function Sucatas() {
     const [sucataForm, setSucataForm] = useState<any>(BLANK_SUCATA)
     const [pecaForm, setPecaForm] = useState<any>(BLANK_PECA)
     const [submitting, setSubmitting] = useState(false)
+    const [isDecodingVin, setIsDecodingVin] = useState(false)
+
+    // Dismantling Checklist State
+    const [isChecklistOpen, setIsChecklistOpen] = useState(false)
 
     // ── Fetchers ────────────────────────────────────────────────────────────────
 
@@ -300,6 +305,39 @@ export function Sucatas() {
         else fetchSucatas()
     }
 
+    const decodeVIN = async () => {
+        const vin = sucataForm.chassi;
+        if (!vin || vin.length < 17) return alert("Insira um Chassi (VIN) válido de 17 dígitos.");
+
+        setIsDecodingVin(true);
+        // Simulate VIN decoding API
+        setTimeout(() => {
+            const lowerVin = vin.toLowerCase();
+            let decoded = { marca: "", modelo: "", ano_modelo: 2020 };
+
+            if (lowerVin.startsWith("9bw")) {
+                decoded = { marca: "Volkswagen", modelo: "Gol", ano_modelo: 2014 };
+            } else if (lowerVin.startsWith("8af")) {
+                decoded = { marca: "Toyota", modelo: "Hilux", ano_modelo: 2019 };
+            } else if (lowerVin.startsWith("1hg")) {
+                decoded = { marca: "Honda", modelo: "Civic", ano_modelo: 2018 };
+            } else {
+                // Random mock for other VINs
+                decoded = { marca: "Ford", modelo: "Ka", ano_modelo: 2017 };
+            }
+
+            setSucataForm(prev => ({
+                ...prev,
+                marca: decoded.marca,
+                modelo: decoded.modelo,
+                ano_modelo: decoded.ano_modelo,
+                ano_fabricacao: decoded.ano_modelo - 1
+            }));
+            setIsDecodingVin(false);
+            alert("✅ Chassi decodificado com sucesso!");
+        }, 1200);
+    }
+
     const openDetail = (s: Sucata) => {
         setSelectedSucata(s)
         setView("detail")
@@ -432,6 +470,42 @@ export function Sucatas() {
         }
     }
 
+    // ── Bulk Save Pecas from Checklist ──────────────────────────────────────────
+
+    const handleBulkSavePecas = async (newPecas: Omit<SucataPeca, 'id' | 'created_at' | 'sucata_id'>[]) => {
+        if (!selectedSucata || newPecas.length === 0) return
+        setSubmitting(true)
+        try {
+            const pecasToInsert = newPecas.map(p => ({
+                ...p,
+                sucata_id: selectedSucata.id,
+                custo_estimado: parseFloat(p.custo_estimado as any) || 0,
+                preco_venda: parseFloat(p.preco_venda as any) || 0,
+                descricao: p.descricao || null,
+                part_number: p.part_number || null,
+                localizacao_id: p.localizacao_id || null,
+            }))
+
+            const { error } = await supabase.from("sucatas_pecas").insert(pecasToInsert)
+            if (error) throw error
+
+            // Update sucata status to Em Desmontagem automatically if it was Aguardando
+            if (selectedSucata.status === "Aguardando") {
+                await supabase.from("sucatas").update({ status: "Em Desmontagem" }).eq("id", selectedSucata.id)
+                setSelectedSucata(prev => prev ? { ...prev, status: "Em Desmontagem" } : prev)
+            }
+
+            setIsChecklistOpen(false)
+            await fetchPecas(selectedSucata.id)
+            await fetchSucatas()
+            alert("Peças registradas com sucesso!")
+        } catch (e: any) {
+            alert("Erro ao registrar peças em massa: " + e.message)
+        } finally {
+            setSubmitting(false)
+        }
+    }
+
     // ── Rentabilidade do veículo ─────────────────────────────────────────────────
 
     const rentabilidade = useMemo(() => {
@@ -480,6 +554,9 @@ export function Sucatas() {
                             {selectedSucata.placa ? ` · ${selectedSucata.placa}` : ""}
                         </p>
                     </div>
+                    <Button variant="outline" className="gap-2 border-amber-300 text-amber-700 hover:bg-amber-50" onClick={() => setIsChecklistOpen(true)}>
+                        <ListChecks className="w-4 h-4" /> Checklist Rápido
+                    </Button>
                     <Button className="gap-2" onClick={openNewPeca}>
                         <Plus className="w-4 h-4" /> Registrar Peça
                     </Button>
@@ -687,10 +764,17 @@ export function Sucatas() {
                         </div>
                     </form>
                 </Modal>
-            </div>
+
+                <DismantlingChecklistDialog
+                    isOpen={isChecklistOpen}
+                    onClose={() => setIsChecklistOpen(false)}
+                    sucata={selectedSucata}
+                    onComplete={handleBulkSavePecas}
+                    locations={locations}
+                />
+            </div >
         )
     }
-
     // ────────────────────────────────────────────────────────────────────────────
     // RENDER — LIST VIEW
     // ────────────────────────────────────────────────────────────────────────────
@@ -809,9 +893,11 @@ export function Sucatas() {
                                         <Button size="sm" variant="outline" className="flex-1 gap-2 text-xs" onClick={() => openEditSucata(s)}>
                                             <Pencil className="w-3 h-3" /> Editar
                                         </Button>
+                                        <Button variant="outline" size="sm" className="gap-2 border-amber-300 text-amber-700 hover:bg-amber-50" onClick={(e) => { e.stopPropagation(); setSelectedSucata(s); setIsChecklistOpen(true); }}>
+                                            <ListChecks className="w-4 h-4" /> Checklist
+                                        </Button>
                                         <Button size="sm" className="flex-1 gap-2 text-xs" onClick={() => openDetail(s)}>
-                                            <Wrench className="w-3 h-3" /> Gerenciar Peças
-                                            <ArrowRight className="w-3 h-3" />
+                                            Visualizar <ArrowRight className="w-3 h-3" />
                                         </Button>
                                     </div>
                                 </CardContent>
@@ -855,9 +941,20 @@ export function Sucatas() {
                                 <Label>Placa</Label>
                                 <Input value={sucataForm.placa} onChange={e => setSucataForm({ ...sucataForm, placa: e.target.value })} placeholder="ABC-1234" />
                             </div>
-                            <div className="space-y-1">
-                                <Label>Chassi / RENAVAM</Label>
-                                <Input value={sucataForm.chassi} onChange={e => setSucataForm({ ...sucataForm, chassi: e.target.value })} />
+                            <div className="space-y-1 col-span-2">
+                                <Label className="flex justify-between items-center">
+                                    Chassi / RENAVAM
+                                    <button
+                                        type="button"
+                                        onClick={decodeVIN}
+                                        disabled={isDecodingVin || !sucataForm.chassi}
+                                        className="text-[9px] font-black uppercase tracking-tighter text-purple-600 bg-purple-50 px-2 py-0.5 rounded border border-purple-200 flex items-center gap-1 hover:bg-purple-100 disabled:opacity-50 transition-all"
+                                    >
+                                        {isDecodingVin ? <RefreshCw className="w-2.5 h-2.5 animate-spin" /> : <Brain className="w-2.5 h-2.5" />}
+                                        Inteligência VIN
+                                    </button>
+                                </Label>
+                                <Input value={sucataForm.chassi} onChange={e => setSucataForm({ ...sucataForm, chassi: e.target.value })} placeholder="17 caracteres do chassi" />
                             </div>
                             <div className="space-y-1">
                                 <Label>Cor</Label>

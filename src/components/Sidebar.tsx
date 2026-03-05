@@ -1,5 +1,6 @@
 import { Link, useLocation } from "react-router-dom"
-import { LayoutDashboard, Package, ShoppingCart, ShoppingBag, DollarSign, Users, Truck, Settings, LogOut, FileText, Bell, BarChart, Wallet, MessageCircle, CheckCircle2, Gavel, CalendarDays, Target, RotateCcw, Users2, QrCode, Car } from "lucide-react"
+import { LayoutDashboard, Package, ShoppingCart, ShoppingBag, DollarSign, Users, Truck, Settings, LogOut, FileText, Bell, BarChart, Wallet, MessageCircle, CheckCircle2, Gavel, CalendarDays, Target, RotateCcw, Users2, QrCode, Car, Zap, Map } from "lucide-react"
+import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils"
 import { ModeToggle } from "./ModeToggle"
 import { supabase } from "@/lib/supabase"
@@ -9,6 +10,8 @@ import { useAuthStore } from "@/store/authStore"
 const navItems = [
   { icon: LayoutDashboard, label: "Dashboard", href: "/" },
   { icon: MessageCircle, label: "Atendimento", href: "/atendimento" },
+  { icon: Zap, label: "Sales AI", href: "/sales-ai" },
+  { icon: Map, label: "Yard Map", href: "/yard-map" },
   { icon: Bell, label: "Lembretes", href: "/lembretes" },
   { icon: Package, label: "Estoque", href: "/produtos" },
   { icon: Car, label: "Catálogo", href: "/catalogo" },

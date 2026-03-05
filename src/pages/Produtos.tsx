@@ -7,11 +7,12 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select } from "@/components/ui/select"
 import { Modal } from "@/components/ui/modal"
-import { Plus, Search, Filter, LayoutGrid, List, Package, Trash2, Pencil, ShoppingCart, FileText, Camera, Upload, X, Shield, Activity, Box, Tag, Ruler, Truck, Info, Settings, Maximize2, ChevronLeft, ChevronRight, ChevronDown, RefreshCw, Car, ImagePlus } from "lucide-react"
+import { Plus, Search, Filter, LayoutGrid, List, Package, Trash2, Pencil, ShoppingCart, FileText, Camera, Upload, X, Shield, Activity, Box, Tag, Ruler, Truck, Info, Settings, Maximize2, ChevronLeft, ChevronRight, ChevronDown, RefreshCw, Car, ImagePlus, Brain } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { supabase } from "@/lib/supabase"
 import { useAuthStore } from "@/store/authStore"
 import { ImageViewer } from "@/components/ImageViewer"
+import { AIPricingDialog } from "@/components/AIPricingDialog"
 
 interface Produto {
   id: string
@@ -70,6 +71,11 @@ interface Compatibilidade {
 
 export function Produtos() {
   const [searchTerm, setSearchTerm] = useState("")
+  const [searchTimer, setSearchTimer] = useState<any>(null)
+
+  // AI Pricing State
+  const [isAIPricingOpen, setIsAIPricingOpen] = useState(false)
+  const [selectedProductForAI, setSelectedProductForAI] = useState<Produto | null>(null)
   const [viewMode, setViewMode] = useState<"list" | "grid">("grid")
   const [produtos, setProdutos] = useState<Produto[]>([])
   const [loading, setLoading] = useState(true)
@@ -1155,6 +1161,10 @@ export function Produtos() {
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1">
+                        <Button variant="outline" size="sm" title="Precificação IA" onClick={() => { setSelectedProductForAI(produto); setIsAIPricingOpen(true); }} className="gap-1 h-8 px-2 border-purple-200 text-purple-600 hover:bg-purple-50">
+                          <Brain className="w-3.5 h-3.5" />
+                          <span className="text-[10px] font-bold uppercase">Precificar</span>
+                        </Button>
                         <Button variant="ghost" size="icon" title="Enviar para Orçamento" onClick={() => handleAddToCart(produto, 'orcamento')}><FileText className="w-4 h-4 text-blue-500" /></Button>
                         <Button variant="ghost" size="icon" title="Enviar para Carrinho (Venda)" onClick={() => handleAddToCart(produto, 'venda')}><ShoppingCart className="w-4 h-4 text-emerald-500" /></Button>
                         <Button variant="ghost" size="icon" title="Editar" onClick={() => startEdit(produto)}><Pencil className="w-4 h-4 text-muted-foreground" /></Button>
@@ -1255,6 +1265,10 @@ export function Produtos() {
                     <div className="flex items-center justify-between mb-3"><span className="font-black text-lg text-foreground">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(produto.preco)}</span></div>
                     <div className="flex items-center justify-between pt-3 border-t border-border/10">
                       <div className="flex gap-2">
+                        <button onClick={() => { setSelectedProductForAI(produto); setIsAIPricingOpen(true); }} title="Precificação IA" className="flex items-center gap-1.5 px-2 py-1 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-all font-bold text-[10px] uppercase shadow-sm">
+                          <Brain className="w-3.5 h-3.5" />
+                          Precificar
+                        </button>
                         <button onClick={() => handleAddToCart(produto, 'orcamento')} title="Enviar para Orçamento" className="p-1.5 text-blue-500 hover:text-white transition-colors hover:bg-blue-500 rounded"><FileText className="w-4 h-4" /></button>
                         <button onClick={() => handleAddToCart(produto, 'venda')} title="Enviar para Carrinho (Venda)" className="p-1.5 text-emerald-500 hover:text-white transition-colors hover:bg-emerald-500 rounded"><ShoppingCart className="w-4 h-4" /></button>
                         <button onClick={() => startEdit(produto)} title="Editar" className="p-1.5 text-muted-foreground hover:text-primary transition-colors hover:bg-muted rounded"><Pencil className="w-4 h-4" /></button>
@@ -1466,7 +1480,19 @@ export function Produtos() {
 
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 <div className="space-y-2"><Label>Custo Compra (R$)</Label><Input type="number" step="0.01" value={newProduto.custo} onChange={e => setNewProduto({ ...newProduto, custo: parseFloat(e.target.value) || 0 })} /></div>
-                <div className="space-y-2"><Label>Valor Venda (R$)</Label><Input type="number" step="0.01" value={newProduto.preco} onChange={e => setNewProduto({ ...newProduto, preco: parseFloat(e.target.value) || 0 })} /></div>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between h-5">
+                    <Label className="text-xs">Valor Venda (R$)</Label>
+                    <button
+                      type="button"
+                      onClick={() => { setSelectedProductForAI(editingProduto); setIsAIPricingOpen(true); }}
+                      className="text-[9px] font-black uppercase tracking-tighter text-purple-600 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200 flex items-center gap-1 hover:bg-purple-100 transition-colors"
+                    >
+                      <Brain className="w-2.5 h-2.5" /> Sugestão IA
+                    </button>
+                  </div>
+                  <Input type="number" step="0.01" className="font-bold border-primary/20 focus:border-primary/50" value={newProduto.preco} onChange={e => setNewProduto({ ...newProduto, preco: parseFloat(e.target.value) || 0 })} />
+                </div>
                 <div className="space-y-2"><Label>Adicional Venda (%)</Label><Input type="number" step="0.01" value={newProduto.adicional_venda_percentual} onChange={e => setNewProduto({ ...newProduto, adicional_venda_percentual: parseFloat(e.target.value) || 0 })} /></div>
                 <div className="space-y-2"><Label>Estoque Total</Label><Input type="number" value={newProduto.estoque_atual} onChange={e => setNewProduto({ ...newProduto, estoque_atual: parseInt(e.target.value) })} /></div>
               </div>
@@ -1634,7 +1660,7 @@ export function Produtos() {
             <TabsContent value="compat" className="space-y-4">
               <div className="p-4 bg-muted/20 rounded-xl border border-border/50 space-y-4">
                 <h3 className="font-bold text-sm flex items-center gap-2"><Activity className="w-4 h-4 text-primary" /> Adicionar Modelo Compatível</h3>
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                <div className="grid grid-cols-2 gap-4 pt-2">
                   <div className="space-y-1">
                     <Label className="text-[10px] uppercase">Marca</Label>
                     <Input
@@ -1818,6 +1844,26 @@ export function Produtos() {
         isOpen={isViewerOpen}
         onClose={() => setIsViewerOpen(false)}
       />
-    </div>
+      <AIPricingDialog
+        isOpen={isAIPricingOpen}
+        onClose={() => setIsAIPricingOpen(false)}
+        produto={selectedProductForAI}
+        onApplyPrice={async (newPrice) => {
+          if (selectedProductForAI) {
+            const { error } = await supabase
+              .from('produtos')
+              .update({ preco: newPrice })
+              .eq('id', selectedProductForAI.id)
+
+            if (error) {
+              alert("Erro ao atualizar preço")
+            } else {
+              setProdutos(prev => prev.map(p => p.id === selectedProductForAI.id ? { ...p, preco: newPrice } : p))
+              setIsAIPricingOpen(false)
+            }
+          }
+        }}
+      />
+    </div >
   )
 }
