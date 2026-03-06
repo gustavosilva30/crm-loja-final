@@ -338,7 +338,9 @@ export function Atendimento() {
         if ((!newMessage.trim() && !fileBase64) || !selectedConversa) return
 
         // Nome do atendente prioritário: vindo do authStore, fallback para localStorage se disponível
-        const nomeAtendente = atendente?.nome || "Vendedor";
+        // Nome do atendente prioritário: vindo do authStore
+        const { user } = useAuthStore.getState();
+        const nomeAtendente = atendente?.nome || atendente?.name || user?.user_metadata?.full_name || user?.email?.split('@')[0] || "Vendedor";
 
         const payload = {
             conversa_id: selectedConversa.id,

@@ -29,12 +29,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
                 .eq('auth_user_id', session.user.id)
                 .maybeSingle()
 
-            // 2. Se não achou, tentar por e-mail (vínculo inicial)
+            // 2. Se não achou, tentar por e-mail (vínculo inicial) - case insensitive
             if (!atendente && session.user.email) {
                 const { data: foundByEmail } = await supabase
                     .from('atendentes')
                     .select('*')
-                    .eq('email', session.user.email)
+                    .ilike('email', session.user.email)
                     .maybeSingle()
 
                 if (foundByEmail) {
