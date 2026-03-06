@@ -77,7 +77,7 @@ const whatsappController = {
             const data = req.body.data;
             const instanceName = req.body.instance;
 
-            if (event !== 'messages.upsert' || !data || !instanceName) {
+            if (!instanceName || !data) {
                 return res.sendStatus(200);
             }
 
@@ -90,7 +90,27 @@ const whatsappController = {
 
             if (errInst || !dbInstance) {
                 console.log(`[Webhook] Instância '${instanceName}' não encontrada no banco de dados. Ignorando.`);
-                return res.sendStatus(200); // 200 pra Evo não tentar repostar
+                return res.sendStatus(200);
+            }
+
+            // 1. Tratar Evento de Conexão
+            if (event === 'connection.update') {
+                const state = data.state;
+                if (state) {
+                    console.log(`[Webhook] Atualizando status de conexão da instância ${instanceName} para: ${state}`);
+                    await supabase.from('whatsapp_instancias')
+                        .update({
+                            status_conexao: state,
+                            updated_at: new Date().toISOString()
+                        })
+                        .eq('id', dbInstance.id);
+                }
+                return res.sendStatus(200);
+            }
+
+            // 2. Tratar Mensagens (Apenas upsert por enquanto)
+            if (event !== 'messages.upsert') {
+                return res.sendStatus(200);
             }
 
             const message = data.message;
@@ -521,7 +541,8 @@ const whatsappController = {
                         events: [
                             "MESSAGES_UPSERT",
                             "MESSAGES_UPDATE",
-                            "SEND_MESSAGE"
+                            "SEND_MESSAGE",
+                            "CONNECTION_UPDATE"
                         ]
                     }, { headers: { apikey: EVO_API_KEY } });
                 } catch (err: any) {
