@@ -73,14 +73,15 @@ const whatsappController = {
 
     receiveMessage: async (req: Request, res: Response) => {
         try {
-            console.log(`[Webhook] Recebido evento: ${req.body.event} da instância: ${req.body.instance}`);
-            // console.log('[Webhook] Body completo:', JSON.stringify(req.body, null, 2));
-
             const event = req.body.event;
             const data = req.body.data;
-            const instanceName = req.body.instance;
+            const instanceName = req.body.instance || req.body.instanceName; // Suporte a campos variados da Evolution
+
+            console.log(`[Webhook] Evento: ${event} | Instância: ${instanceName} | Keys: ${Object.keys(req.body).join(', ')}`);
 
             if (!instanceName || !data) {
+                // Se for um evento de checagem ou vazio, apenas confirma
+                console.log('[Webhook] Payload sem instance ou data ignorado.');
                 return res.sendStatus(200);
             }
 
