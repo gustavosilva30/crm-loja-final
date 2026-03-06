@@ -1290,6 +1290,7 @@ export function Produtos() {
               <Button
                 variant="outline"
                 className="gap-2 px-12 h-10 border-primary/30 text-primary hover:bg-primary/10 font-bold"
+                type="button"
                 onClick={() => setCurrentPage(prev => prev + 1)}
               >
                 Ver Mais Produtos

@@ -57,6 +57,15 @@ export const fetchProfilePic = async (instanceName: string, number: string): Pro
     }
 };
 
+export const fetchGroupInfo = async (instanceName: string, groupJid: string): Promise<string | null> => {
+    try {
+        const { data } = await axios.get(`${EVO_API_URL}/group/findGroupInfos/${instanceName}?groupJid=${groupJid}`, { headers: { apikey: EVO_API_KEY } });
+        return data?.subject || null;
+    } catch (err) {
+        return null;
+    }
+};
+
 const whatsappController = {
     verifyWebhook: (_req: Request, res: Response) => {
         return res.status(200).send('Webhook is active');
@@ -105,9 +114,15 @@ const whatsappController = {
             const senderName = data.pushName || actualSender;
             const convName = isGroup ? (data.pushName || from) : senderName;
 
+            let actualConvName = convName;
+            if (isGroup) {
+                const groupName = await fetchGroupInfo(instanceName, remoteJid);
+                if (groupName) actualConvName = groupName;
+            }
+
             let profilePicUrl = data.profilePicUrl || data.message?.profilePicUrl || null;
 
-            if (!profilePicUrl && !isGroup) {
+            if (!profilePicUrl) {
                 profilePicUrl = await fetchProfilePic(instanceName, remoteJid);
             }
 
@@ -167,7 +182,7 @@ const whatsappController = {
                         instancia_id: dbInstance.id,
                         atendente_id: dbInstance.atendente_id,
                         telefone: from,
-                        cliente_nome: convName,
+                        cliente_nome: actualConvName,
                         status_aberto: true,
                         is_group: isGroup,
                         unread_count: isFromMe ? 0 : 1,
@@ -205,8 +220,8 @@ const whatsappController = {
                     ultima_mensagem: text,
                     updated_at: new Date().toISOString()
                 };
-                if (profilePicUrl && !isGroup) updatePayload.foto_url = profilePicUrl;
-                if (!isGroup) updatePayload.cliente_nome = convName;
+                if (profilePicUrl) updatePayload.foto_url = profilePicUrl;
+                updatePayload.cliente_nome = actualConvName;
 
                 await supabase.from('conversas').update(updatePayload).eq('id', conversa.id);
             }
