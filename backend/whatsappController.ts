@@ -97,7 +97,7 @@ const whatsappController = {
                 .maybeSingle();
 
             if (errInst || !dbInstance) {
-                console.log(`[Webhook] Instância '${instanceName}' não encontrada no banco de dados. Ignorando.`);
+                console.log(`[Webhook] Instância '${instanceName}' não encontrada ou erro:`, errInst?.message || 'Não encontrada');
                 return res.sendStatus(200);
             }
 
@@ -227,6 +227,7 @@ const whatsappController = {
                     .single();
 
                 if (createErr) {
+                    console.error('[Webhook] Erro ao criar conversa:', createErr);
                     if (createErr.code === '23505') {
                         const { data: retryConv } = await supabase.from('conversas').select('*').eq('telefone', from).eq('instancia_id', dbInstance.id).maybeSingle();
                         conversa = retryConv;
@@ -285,8 +286,8 @@ const whatsappController = {
             }]);
 
             if (msgError && msgError.code !== '23505') { // Ignora violação de constraint Unique
-                console.error('Erro ao salvar mensagem recebida:', msgError);
-                return res.sendStatus(500);
+                console.error('[Webhook] Erro CRÍTICO ao salvar mensagem:', msgError);
+                return res.status(500).json({ error: msgError.message, code: msgError.code });
             }
 
             return res.sendStatus(200);
@@ -308,7 +309,22 @@ const whatsappController = {
             if (errInst || !dbInstance) return res.status(404).json({ error: 'Instância não encontrada' });
             const instanceName = dbInstance.instance_name;
 
-            let evolutionResponse;
+            // Busca conversa para saber se é grupo e garantir o telefone correto
+            const { data: dbConversa } = await supabase.from('conversas').select('is_group, telefone').eq('id', conversa_id).maybeSingle();
+            const isGroup = dbConversa?.is_group || telefone.includes('@g.us');
+
+            // Formata o número para Evolution (Adiciona 55 se faltar em números BR)
+            let formattedNumber = telefone.replace(/\s+/g, '');
+            if (isGroup) {
+                formattedNumber = formattedNumber.includes('@g.us') ? formattedNumber : `${formattedNumber}@g.us`;
+            } else if (!formattedNumber.includes('@')) {
+                // Se for número BR (10 ou 11 dígitos) e não começar com 55, adiciona
+                if ((formattedNumber.length === 10 || formattedNumber.length === 11) && !formattedNumber.startsWith('55')) {
+                    formattedNumber = '55' + formattedNumber;
+                }
+            }
+
+            let evolutionResponse: any;
             let mediaUrl = null;
             let mediaType = 'texto';
             let messageToClient = atendente_nome ? `*${atendente_nome}:*\n${conteudo}` : conteudo;
@@ -326,14 +342,14 @@ const whatsappController = {
                 let evoTask;
                 if (isAudio && (mediaMimeType.includes('ogg') || mediaMimeType.includes('mp4'))) {
                     mediaType = 'audio';
-                    evoTask = axios.post(`${EVO_API_URL}/message/sendWhatsAppAudio/${instanceName}`, { number: telefone, audio: mediaBase64 }, { headers: { apikey: EVO_API_KEY, 'Content-Type': 'application/json' } });
+                    evoTask = axios.post(`${EVO_API_URL}/message/sendWhatsAppAudio/${instanceName}`, { number: formattedNumber, audio: mediaBase64 }, { headers: { apikey: EVO_API_KEY, 'Content-Type': 'application/json' } });
                 } else {
                     mediaType = mediaMimeType?.startsWith('image/') ? 'image' : mediaMimeType?.startsWith('video/') ? 'video' : 'document';
-                    evoTask = axios.post(`${EVO_API_URL}/message/sendMedia/${instanceName}`, { number: telefone, mediatype: mediaType, mimetype: mediaMimeType || 'application/octet-stream', caption: messageToClient || undefined, media: base64Data, fileName: mediaFileName || 'arquivo' }, { headers: { apikey: EVO_API_KEY, 'Content-Type': 'application/json' } });
+                    evoTask = axios.post(`${EVO_API_URL}/message/sendMedia/${instanceName}`, { number: formattedNumber, mediatype: mediaType, mimetype: mediaMimeType || 'application/octet-stream', caption: messageToClient || undefined, media: base64Data, fileName: mediaFileName || 'arquivo' }, { headers: { apikey: EVO_API_KEY, 'Content-Type': 'application/json' } });
                 }
                 tasks.push(evoTask.then(res => evolutionResponse = res));
             } else {
-                const textTask = axios.post(`${EVO_API_URL}/message/sendText/${instanceName}`, { number: telefone, text: messageToClient }, { headers: { apikey: EVO_API_KEY, 'Content-Type': 'application/json' } }).then(res => evolutionResponse = res);
+                const textTask = axios.post(`${EVO_API_URL}/message/sendText/${instanceName}`, { number: formattedNumber, text: messageToClient }, { headers: { apikey: EVO_API_KEY, 'Content-Type': 'application/json' } }).then(res => evolutionResponse = res);
                 tasks.push(textTask);
             }
 
@@ -373,8 +389,12 @@ const whatsappController = {
 
             return res.status(200).json(data);
         } catch (err: any) {
-            console.error('Error sending message:', err.response?.data || err.message);
-            return res.status(500).json({ error: 'Failed to send message via Evolution API' });
+            console.error('[sendMessage] Erro crítico:', err.response?.data || err.message);
+            const errorData = err.response?.data || { message: err.message };
+            return res.status(500).json({
+                error: 'Failed to send message via Evolution API',
+                details: errorData
+            });
         }
     },
 
