@@ -230,16 +230,23 @@ export function Atendimento() {
     const handleSendMessage = async (e: React.FormEvent) => {
         e.preventDefault()
         if ((!newMessage.trim() && !fileBase64) || !selectedConversa) return
+
+        // Nome do atendente prioritário: vindo do authStore, fallback para localStorage se disponível
+        const nomeAtendente = atendente?.nome || "Vendedor";
+
         const payload = {
             conversa_id: selectedConversa.id,
             telefone: selectedConversa.telefone,
             conteudo: newMessage,
             atendente_id: atendente?.id,
-            atendente_nome: atendente?.nome,
+            atendente_nome: nomeAtendente,
             mediaBase64: fileBase64 || undefined,
             mediaMimeType: selectedFile?.type || undefined,
             mediaFileName: selectedFile?.name || undefined
         }
+
+        console.log("Enviando mensagem com atendente:", nomeAtendente);
+
         setNewMessage("")
         removeFile()
         try {
