@@ -547,34 +547,51 @@ export function Atendimento() {
         if (!confirm(`Deseja tentar sincronizar as fotos de ${conversas.length} conversas? Isso pode levar um momento.`)) return
 
         setIsSyncingAll(true)
+        console.log('[BulkSync] Iniciando sincronização de fotos...');
+
         const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
 
         let successCount = 0
+        let errorCount = 0
+
         for (const conv of conversas) {
-            // Apenas tenta se não tiver foto ou para atualizar
+            const targetInstanciaId = conv.instancia_id || whatsappInstancia?.id;
+
+            if (!targetInstanciaId) {
+                console.warn(`[BulkSync] Conversa ${conv.telefone} sem instancia_id associada.`);
+                errorCount++;
+                continue;
+            }
+
             try {
+                console.log(`[BulkSync] Sincronizando ${conv.cliente_nome} (${conv.telefone})...`);
                 const { data } = await axios.post(`${apiUrl}/api/whatsapp/fetch-profile-pic`, {
                     telefone: conv.telefone,
-                    instancia_id: conv.instancia_id || whatsappInstancia?.id
+                    instancia_id: targetInstanciaId
                 });
 
                 if (data.success && data.profilePicUrl) {
+                    console.log(`[BulkSync] Sucesso para ${conv.telefone}`);
                     setConversas(prev => prev.map(c => c.id === conv.id ? { ...c, foto_url: data.profilePicUrl } : c));
                     setContatos(prev => prev.map(c => c.telefone === conv.telefone ? { ...c, foto_url: data.profilePicUrl } : c));
                     if (selectedConversa?.id === conv.id) {
                         setSelectedConversa(prev => prev ? { ...prev, foto_url: data.profilePicUrl } : null);
                     }
                     successCount++
+                } else {
+                    console.log(`[BulkSync] Apenas ignorado para ${conv.telefone}: ${data.message || 'Sem foto'}`);
                 }
-                // Pequeno delay para não sobrecarregar
-                await new Promise(resolve => setTimeout(resolve, 500))
+                // Pequeno delay para não sobrecarregar mas rápido o suficiente
+                await new Promise(resolve => setTimeout(resolve, 300))
             } catch (err) {
-                console.error(`Erro ao sincronizar foto de ${conv.telefone}:`, err)
+                console.error(`[BulkSync] Erro para ${conv.telefone}:`, err)
+                errorCount++;
             }
         }
 
         setIsSyncingAll(false)
-        alert(`Sincronização concluída! ${successCount} fotos atualizadas.`)
+        console.log(`[BulkSync] Concluído. Sucessos: ${successCount}, Falhas/Ignorados: ${errorCount}`);
+        alert(`Sincronização concluída! ${successCount} fotos atualizadas comercialmente.`);
     }
 
     const handleSyncPhoto = async () => {

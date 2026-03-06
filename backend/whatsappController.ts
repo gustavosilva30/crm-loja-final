@@ -489,25 +489,42 @@ const whatsappController = {
 
     syncProfilePic: async (req: Request, res: Response) => {
         const { telefone, instancia_id } = req.body;
-        if (!telefone || !instancia_id) return res.status(400).json({ error: 'telefone e instancia_id obrigatórios' });
+        if (!telefone || !instancia_id) {
+            console.log('[SyncProfilePic] Erro: Faltam parâmetros', { telefone, instancia_id });
+            return res.status(400).json({ error: 'telefone e instancia_id obrigatórios' });
+        }
 
         try {
+            console.log(`[SyncProfilePic] Iniciando para ${telefone} na instância ${instancia_id}`);
             const { data: dbInstance } = await supabase.from('whatsapp_instancias').select('*').eq('id', instancia_id).maybeSingle();
-            if (!dbInstance) return res.status(404).json({ error: 'Instância off' });
+            if (!dbInstance) {
+                console.log(`[SyncProfilePic] Instância ${instancia_id} não encontrada`);
+                return res.status(404).json({ error: 'Instância off' });
+            }
 
             const jid = telefone.includes('@') ? telefone : `${telefone}@s.whatsapp.net`;
             const profilePicUrl = await fetchProfilePic(dbInstance.instance_name, jid);
 
             if (profilePicUrl) {
+                console.log(`[SyncProfilePic] Foto encontrada para ${telefone}: ${profilePicUrl.substring(0, 50)}...`);
                 const updatePayload = { foto_url: profilePicUrl, updated_at: new Date().toISOString() };
-                await Promise.all([
-                    supabase.from('conversas').update(updatePayload).eq('telefone', telefone.split('@')[0]).eq('instancia_id', instancia_id),
-                    supabase.from('contatos').update(updatePayload).eq('telefone', telefone.split('@')[0])
+                const numOnly = telefone.split('@')[0];
+
+                const results = await Promise.all([
+                    supabase.from('conversas').update(updatePayload).eq('telefone', numOnly).eq('instancia_id', instancia_id),
+                    supabase.from('contatos').update(updatePayload).eq('telefone', numOnly)
                 ]);
+
+                results.forEach((r, idx) => {
+                    if (r.error) console.error(`[SyncProfilePic] Erro no update ${idx === 0 ? 'conversas' : 'contatos'}:`, r.error);
+                });
+
                 return res.status(200).json({ success: true, profilePicUrl });
             }
+            console.log(`[SyncProfilePic] Nenhuma foto encontrada para ${telefone}`);
             return res.status(200).json({ success: false, message: 'Nenhuma foto encontrada' });
         } catch (err: any) {
+            console.error('[SyncProfilePic] Crítico:', err.message);
             return res.status(500).json({ error: 'Internal Server Error' });
         }
     },
