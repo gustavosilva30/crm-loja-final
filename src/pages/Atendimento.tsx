@@ -28,6 +28,7 @@ interface Conversa {
     telefone: string
     status_aberto: boolean
     updated_at: string
+    last_message_at: string
     etapa_funil?: string
     is_group?: boolean
     unread_count?: number
@@ -261,8 +262,8 @@ export function Atendimento() {
             // Se fixado, fica em cima
             if (a.is_pinned && !b.is_pinned) return -1
             if (!a.is_pinned && b.is_pinned) return 1
-            // Senão, por data da última mensagem (descendente)
-            return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+            // Senão, por data da última mensagem REAL (descendente)
+            return new Date(b.last_message_at || b.updated_at).getTime() - new Date(a.last_message_at || a.updated_at).getTime()
         })
     }, [conversas, searchTerm, activeFilter])
 
@@ -630,7 +631,7 @@ export function Atendimento() {
                                 <div className="flex justify-between items-center">
                                     <span className="font-bold truncate text-[#111b21] dark:text-[#e9edef] text-sm">{conv.cliente_nome}</span>
                                     <span className={cn("text-[10px]", conv.unread_count ? "text-emerald-500 font-bold" : "text-[#8696a0]")}>
-                                        {new Date(conv.updated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                        {new Date(conv.last_message_at || conv.updated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                     </span>
                                 </div>
                                 <div className="flex justify-between items-center mt-0.5">

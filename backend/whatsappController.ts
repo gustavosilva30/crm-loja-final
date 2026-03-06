@@ -177,6 +177,7 @@ export const whatsappController = {
                         status_aberto: true,
                         is_group: isGroup,
                         unread_count: 1,
+                        last_message_at: new Date().toISOString(),
                         updated_at: new Date().toISOString(),
                         foto_url: profilePicUrl
                     }])
@@ -198,6 +199,7 @@ export const whatsappController = {
                 const updatePayload: any = {
                     is_group: isGroup,
                     unread_count: (conversa.unread_count || 0) + 1,
+                    last_message_at: new Date().toISOString(),
                     updated_at: new Date().toISOString()
                 };
 
@@ -319,8 +321,11 @@ export const whatsappController = {
                 return res.status(500).json({ error: 'Failed to save outgoing message' });
             }
 
-            // Atualiza o updated_at da conversa para ela subir no funil/lista
-            await supabase.from('conversas').update({ updated_at: new Date().toISOString() }).eq('id', conversa_id);
+            // Atualiza o last_message_at da conversa para ela subir no funil/lista (apenas no envio/recebimento)
+            await supabase.from('conversas').update({
+                last_message_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+            }).eq('id', conversa_id);
 
             return res.status(200).json(data);
         } catch (err: any) {
