@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import axios from 'axios';
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
+import { Buffer } from 'buffer';
 
 dotenv.config();
 
@@ -22,17 +23,38 @@ const EVO_API_URL = process.env.EVO_API_URL;
 const EVO_API_KEY = process.env.EVO_API_KEY;
 const EVO_INSTANCE = process.env.EVO_INSTANCE;
 
-if (!EVO_API_URL) {
-    throw new Error('EVO_API_URL is required');
+if (!EVO_API_URL || !EVO_API_KEY || !EVO_INSTANCE) {
+    throw new Error('Evolution API env vars are missing.');
 }
 
-if (!EVO_API_KEY) {
-    throw new Error('EVO_API_KEY is required');
-}
+const uploadBase64ToSupabase = async (base64Data: string, mimeType: string) => {
+    try {
+        const buffer = Buffer.from(base64Data, 'base64');
+        const extension = mimeType.split('/')[1]?.split(';')[0] || 'bin';
+        const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${extension}`;
 
-if (!EVO_INSTANCE) {
-    throw new Error('EVO_INSTANCE is required');
-}
+        const { data, error } = await supabase.storage
+            .from('whatsapp_media')
+            .upload(fileName, buffer, {
+                contentType: mimeType,
+                upsert: false
+            });
+
+        if (error) {
+            console.error('Error uploading to Supabase Storage:', error);
+            return null;
+        }
+
+        const { data: { publicUrl } } = supabase.storage
+            .from('whatsapp_media')
+            .getPublicUrl(fileName);
+
+        return { publicUrl, fileName };
+    } catch (err) {
+        console.error('Error in uploadBase64ToSupabase:', err);
+        return null;
+    }
+};
 
 export const whatsappController = {
     verifyWebhook: (_req: Request, res: Response) => {
@@ -54,25 +76,48 @@ export const whatsappController = {
             const remoteJid = key?.remoteJid;
             const from = remoteJid?.split('@')[0];
 
-            if (!from) {
+            if (!from || key?.fromMe) {
                 return res.sendStatus(200);
             }
 
-            if (key?.fromMe) {
-                return res.sendStatus(200);
-            }
-
-            const text =
+            let text =
                 message?.conversation ||
                 message?.extendedTextMessage?.text ||
                 message?.imageMessage?.caption ||
                 message?.videoMessage?.caption ||
+                message?.documentMessage?.caption ||
                 '';
 
             const name = data.pushName || from;
 
-            if (!text) {
-                return res.sendStatus(200);
+            // Media extraction
+            const isMedia = message?.imageMessage || message?.audioMessage || message?.videoMessage || message?.documentMessage;
+            let mediaUrl = null;
+            let mediaType = null;
+            let mimeType = null;
+            let fileName = null;
+
+            if (isMedia) {
+                if (message?.imageMessage) { mediaType = 'image'; mimeType = message.imageMessage.mimetype; }
+                else if (message?.audioMessage) { mediaType = 'audio'; mimeType = message.audioMessage.mimetype; }
+                else if (message?.videoMessage) { mediaType = 'video'; mimeType = message.videoMessage.mimetype; }
+                else if (message?.documentMessage) { mediaType = 'document'; mimeType = message.documentMessage.mimetype; fileName = message.documentMessage.fileName; }
+
+                if (data.message?.base64) {
+                    const base64Str = data.message.base64.includes(',') ? data.message.base64.split(',')[1] : data.message.base64;
+                    const uploadResult = await uploadBase64ToSupabase(base64Str, mimeType || 'application/octet-stream');
+
+                    if (uploadResult) {
+                        mediaUrl = uploadResult.publicUrl;
+                        fileName = fileName || uploadResult.fileName;
+                    }
+                } else {
+                    text = text || `[Mídia recebida: ${mediaType}]`;
+                }
+            }
+
+            if (!text && !mediaUrl) {
+                return res.sendStatus(200); // Ignore empty messages without media
             }
 
             let conversa: any = null;
@@ -93,13 +138,7 @@ export const whatsappController = {
             if (!conversa) {
                 const { data: newConv, error: createErr } = await supabase
                     .from('conversas')
-                    .insert([
-                        {
-                            telefone: from,
-                            cliente_nome: name,
-                            status_aberto: true,
-                        },
-                    ])
+                    .insert([{ telefone: from, cliente_nome: name, status_aberto: true }])
                     .select()
                     .single();
 
@@ -107,7 +146,6 @@ export const whatsappController = {
                     console.error('Erro ao criar conversa:', createErr);
                     return res.sendStatus(500);
                 }
-
                 conversa = newConv;
             }
 
@@ -117,9 +155,13 @@ export const whatsappController = {
                     remetente: from,
                     mensagem: text,
                     conteudo: text,
-                    tipo: 'texto',
+                    tipo: mediaType || 'texto',
                     tipo_envio: 'received',
                     wa_message_id: key?.id || null,
+                    media_url: mediaUrl,
+                    media_type: mediaType,
+                    mime_type: mimeType,
+                    file_name: fileName
                 },
             ]);
 
@@ -136,28 +178,51 @@ export const whatsappController = {
     },
 
     sendMessage: async (req: Request, res: Response) => {
-        const { conversa_id, telefone, conteudo } = req.body;
+        const { conversa_id, telefone, conteudo, mediaBase64, mediaMimeType, mediaFileName } = req.body;
 
-        if (!telefone || !conteudo) {
-            return res.status(400).json({
-                error: 'telefone e conteudo são obrigatórios',
-            });
+        if (!telefone) {
+            return res.status(400).json({ error: 'telefone é obrigatório' });
         }
 
         try {
-            const response = await axios.post(
-                `${EVO_API_URL}/message/sendText/${EVO_INSTANCE}`,
-                {
+            let evolutionResponse;
+            let mediaUrl = null;
+            let mediaType = 'texto';
+
+            if (mediaBase64) {
+                // Determine Evo API endpoint based on mime type
+                const base64Data = mediaBase64.includes(',') ? mediaBase64.split(',')[1] : mediaBase64;
+                const isAudio = mediaMimeType?.startsWith('audio/');
+
+                if (isAudio && mediaMimeType.includes('ogg')) {
+                    mediaType = 'audio';
+                    evolutionResponse = await axios.post(`${EVO_API_URL}/message/sendWhatsAppAudio/${EVO_INSTANCE}`, {
+                        number: telefone,
+                        audio: base64Data
+                    }, { headers: { apikey: EVO_API_KEY, 'Content-Type': 'application/json' } });
+                } else {
+                    mediaType = mediaMimeType?.startsWith('image/') ? 'image' : mediaMimeType?.startsWith('video/') ? 'video' : 'document';
+                    evolutionResponse = await axios.post(`${EVO_API_URL}/message/sendMedia/${EVO_INSTANCE}`, {
+                        number: telefone,
+                        mediatype: mediaType,
+                        mimetype: mediaMimeType || 'application/octet-stream',
+                        caption: conteudo || undefined,
+                        media: base64Data,
+                        fileName: mediaFileName || 'arquivo'
+                    }, { headers: { apikey: EVO_API_KEY, 'Content-Type': 'application/json' } });
+                }
+
+                // Upload to Supabase to save the URL in our DB
+                const uploadResult = await uploadBase64ToSupabase(base64Data, mediaMimeType || 'application/octet-stream');
+                if (uploadResult) {
+                    mediaUrl = uploadResult.publicUrl;
+                }
+            } else {
+                evolutionResponse = await axios.post(`${EVO_API_URL}/message/sendText/${EVO_INSTANCE}`, {
                     number: telefone,
                     text: conteudo,
-                },
-                {
-                    headers: {
-                        apikey: EVO_API_KEY,
-                        'Content-Type': 'application/json',
-                    },
-                }
-            );
+                }, { headers: { apikey: EVO_API_KEY, 'Content-Type': 'application/json' } });
+            }
 
             const { data, error } = await supabase
                 .from('mensagens')
@@ -165,11 +230,15 @@ export const whatsappController = {
                     {
                         conversa_id,
                         remetente: 'atendente',
-                        mensagem: conteudo,
-                        conteudo: conteudo,
-                        tipo: 'texto',
+                        mensagem: conteudo || '',
+                        conteudo: conteudo || '',
+                        tipo: mediaType,
                         tipo_envio: 'sent',
-                        wa_message_id: response.data?.key?.id || `manual-${Date.now()}`,
+                        wa_message_id: evolutionResponse.data?.key?.id || evolutionResponse.data?.id || `manual-${Date.now()}`,
+                        media_url: mediaUrl,
+                        media_type: mediaType,
+                        mime_type: mediaMimeType,
+                        file_name: mediaFileName
                     },
                 ])
                 .select();
@@ -181,10 +250,7 @@ export const whatsappController = {
 
             return res.status(200).json(data);
         } catch (err: any) {
-            console.error(
-                'Error sending message via Evolution API:',
-                err.response?.data || err.message
-            );
+            console.error('Error sending message via Evolution API:', err.response?.data || err.message);
             return res.status(500).json({ error: 'Failed to send message via Evolution API' });
         }
     },
