@@ -482,6 +482,7 @@ const whatsappController = {
         if (!atendente_id) return res.status(400).json({ error: 'atendente_id é obrigatório' });
 
         try {
+            console.log(`[createInstance] Iniciando para atendente_id: ${atendente_id}`);
             // Verifica se a instancia ja existe no banco
             const { data: existingDbInstance } = await supabase.from('whatsapp_instancias').select('*').eq('atendente_id', atendente_id).maybeSingle();
 
@@ -495,12 +496,15 @@ const whatsappController = {
 
             // Tenta criar na API da Evolution
             try {
+                console.log(`[createInstance] Criando na Evolution: ${instance_name}`);
                 await axios.post(`${EVO_API_URL}/instance/create`, {
                     instanceName: instance_name,
                     token: "",
-                    qrcode: true
+                    qrcode: true,
+                    integration: "WHATSAPP-BAILEYS"
                 }, { headers: { apikey: EVO_API_KEY } });
             } catch (createErr: any) {
+                console.error(`[createInstance] Erro Evolution:`, createErr.response?.data || createErr.message);
                 if (createErr.response?.data?.message !== 'Name or value already exists') {
                     throw createErr;
                 }
@@ -532,11 +536,15 @@ const whatsappController = {
                 status_conexao: 'close'
             }]).select().single();
 
-            if (dbErr) return res.status(500).json({ error: 'Erro salvando instancia no DB' });
+            if (dbErr) {
+                console.error(`[createInstance] Erro Supabase DB:`, dbErr);
+                return res.status(500).json({ error: 'Erro salvando instancia no DB' });
+            }
 
             return res.status(200).json(newInstance);
 
         } catch (err: any) {
+            console.error(`[createInstance] Erro Geral:`, err.response?.data || err.message || err);
             return res.status(500).json({ error: err.response?.data || err.message });
         }
     }
