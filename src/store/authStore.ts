@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase'
 interface AuthState {
     user: any | null
     atendente: any | null
+    whatsappInstancia: any | null
     loading: boolean
     initialized: boolean
     signIn: () => Promise<void>
@@ -14,6 +15,7 @@ interface AuthState {
 export const useAuthStore = create<AuthState>((set, get) => ({
     user: null,
     atendente: null,
+    whatsappInstancia: null,
     loading: true,
     initialized: false,
 
@@ -50,15 +52,25 @@ export const useAuthStore = create<AuthState>((set, get) => ({
                 }
             }
 
-            set({ user: session.user, atendente, loading: false, initialized: true })
+            let whatsappInstancia = null;
+            if (atendente) {
+                const { data: inst } = await supabase
+                    .from('whatsapp_instancias')
+                    .select('*')
+                    .eq('atendente_id', atendente.id)
+                    .maybeSingle()
+                whatsappInstancia = inst;
+            }
+
+            set({ user: session.user, atendente, whatsappInstancia, loading: false, initialized: true })
         } else {
-            set({ user: null, atendente: null, loading: false, initialized: true })
+            set({ user: null, atendente: null, whatsappInstancia: null, loading: false, initialized: true })
         }
     },
 
     signOut: async () => {
         await supabase.auth.signOut()
-        set({ user: null, atendente: null })
+        set({ user: null, atendente: null, whatsappInstancia: null })
     },
 
     refresh: async () => {

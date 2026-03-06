@@ -13,6 +13,7 @@ import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { motion, Reorder } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
+import { useAuthStore } from '@/store/authStore'
 
 interface Conversa {
     id: string
@@ -46,6 +47,7 @@ export function Funil() {
         COLUNAS.forEach(c => labels[c.id] = c.label)
         return labels
     })
+    const { atendente } = useAuthStore()
 
     const handleDragStart = (e: React.DragEvent, id: string) => {
         e.dataTransfer.setData('cardId', id)
@@ -67,10 +69,15 @@ export function Funil() {
 
     const fetchConversas = async () => {
         setLoading(true)
-        const { data, error } = await supabase
-            .from('conversas')
-            .select('*')
-            .order('updated_at', { ascending: false })
+
+        let query = supabase.from('conversas').select('*').order('updated_at', { ascending: false })
+        if (!atendente?.perm_config) {
+            if (atendente?.id) query = query.eq('atendente_id', atendente.id)
+        } else {
+            query = query.eq('legacy', false)
+        }
+
+        const { data, error } = await query
 
         if (!error && data) {
             setConversas(data)

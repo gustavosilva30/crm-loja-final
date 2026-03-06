@@ -35,6 +35,7 @@ interface Conversa {
     unread_count?: number
     foto_url?: string
     is_pinned?: boolean
+    instancia_id?: string
 }
 
 interface Mensagem {
@@ -122,7 +123,7 @@ export function Atendimento() {
     const [fileBase64, setFileBase64] = useState<string>("")
     const fileInputRef = useRef<HTMLInputElement>(null)
     const scrollRef = useRef<HTMLDivElement>(null)
-    const { atendente } = useAuthStore()
+    const { atendente, user, whatsappInstancia } = useAuthStore()
 
     // Audio Recording
     const [isRecording, setIsRecording] = useState(false)
@@ -141,7 +142,15 @@ export function Atendimento() {
     // 1. Buscar Conversas e Contatos
     const fetchData = async () => {
         setLoadingConv(true)
-        const { data: convs } = await supabase.from('conversas').select('*').order('updated_at', { ascending: false })
+
+        let query = supabase.from('conversas').select('*').order('updated_at', { ascending: false })
+        if (!atendente?.perm_config) {
+            if (atendente?.id) query = query.eq('atendente_id', atendente.id)
+        } else {
+            query = query.eq('legacy', false)
+        }
+
+        const { data: convs } = await query
         const { data: conts } = await supabase.from('contatos').select('*').order('nome', { ascending: true })
         setConversas(convs || [])
         setContatos(conts || [])
@@ -158,10 +167,11 @@ export function Atendimento() {
 
     // 1.5 Fetch Connection status
     const fetchWaStatus = async () => {
+        if (!whatsappInstancia?.instance_name) return;
         setIsCheckingConnection(true)
         try {
             const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
-            const { data } = await axios.get(`${apiUrl}/api/whatsapp/status`)
+            const { data } = await axios.get(`${apiUrl}/api/whatsapp/status?instance_name=${whatsappInstancia.instance_name}`)
             setWaConnectionState(data.state)
         } catch (e) {
             setWaConnectionState('unknown')
@@ -170,10 +180,11 @@ export function Atendimento() {
     }
 
     const fetchQrCode = async () => {
+        if (!whatsappInstancia?.instance_name) return;
         setQrBase64(null)
         try {
             const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
-            const { data } = await axios.get(`${apiUrl}/api/whatsapp/qr`)
+            const { data } = await axios.get(`${apiUrl}/api/whatsapp/qr?instance_name=${whatsappInstancia.instance_name}`)
             if (data?.qr_base64) {
                 setQrBase64(data.qr_base64)
             } else if (data?.state === 'open') {
@@ -185,11 +196,12 @@ export function Atendimento() {
     }
 
     const handleDisconnectWa = async () => {
+        if (!whatsappInstancia?.instance_name) return;
         if (!confirm('Tem certeza que deseja desconectar a sessão do WhatsApp?')) return;
         setIsCheckingConnection(true)
         try {
             const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
-            await axios.post(`${apiUrl}/api/whatsapp/disconnect`)
+            await axios.post(`${apiUrl}/api/whatsapp/disconnect`, { instance_name: whatsappInstancia.instance_name })
             setWaConnectionState('close')
             fetchQrCode()
         } catch (e) {
@@ -450,6 +462,7 @@ export function Atendimento() {
         await axios.post(`${apiUrl}/api/whatsapp/send`, {
             conversa_id: selectedConversa.id,
             telefone: selectedConversa.telefone,
+            instancia_id: selectedConversa.instancia_id || whatsappInstancia?.id,
             atendente_id: atendente?.id,
             atendente_nome: nomeAtendente,
             mediaBase64: base64,
@@ -497,6 +510,7 @@ export function Atendimento() {
         const payload = {
             conversa_id: selectedConversa.id,
             telefone: selectedConversa.telefone,
+            instancia_id: selectedConversa.instancia_id || whatsappInstancia?.id,
             conteudo: newMessage,
             atendente_id: atendente?.id,
             atendente_nome: nomeAtendente,
@@ -527,7 +541,8 @@ export function Atendimento() {
         try {
             const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
             const { data } = await axios.post(`${apiUrl}/api/whatsapp/fetch-profile-pic`, {
-                telefone: selectedConversa.telefone
+                telefone: selectedConversa.telefone,
+                instancia_id: selectedConversa.instancia_id || whatsappInstancia?.id
             });
             if (data.success) {
                 // local update
@@ -549,6 +564,7 @@ export function Atendimento() {
             await axios.post(`${apiUrl}/api/whatsapp/reaction`, {
                 telefone: selectedConversa?.telefone,
                 wa_message_id: msg.wa_message_id,
+                instancia_id: selectedConversa?.instancia_id || whatsappInstancia?.id,
                 emoji
             })
 
@@ -574,7 +590,8 @@ export function Atendimento() {
                 const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
                 await axios.post(`${apiUrl}/api/whatsapp/delete`, {
                     telefone: selectedConversa?.telefone,
-                    wa_message_id: msg.wa_message_id, // assumindo que mensagens tem isso se precisar
+                    wa_message_id: msg.wa_message_id,
+                    instancia_id: selectedConversa?.instancia_id || whatsappInstancia?.id,
                     deleteForEveryone: true
                 });
             }
@@ -609,6 +626,7 @@ export function Atendimento() {
             const payload = {
                 conversa_id: targetConv.id,
                 telefone: targetConv.telefone,
+                instancia_id: targetConv.instancia_id || whatsappInstancia?.id,
                 conteudo: forwardingMsg.conteudo || forwardingMsg.mensagem,
                 atendente_id: atendente?.id,
                 mediaBase64: undefined, // Requires fetching or backend support for forwarding media URL
@@ -627,7 +645,14 @@ export function Atendimento() {
         if (!newContact.nome || !newContact.telefone) return
         const tel = newContact.telefone.replace(/\D/g, '')
         try {
-            const { data: convData } = await supabase.from('conversas').upsert({ telefone: tel, cliente_nome: newContact.nome, status_aberto: true }, { onConflict: 'telefone' }).select().single()
+            const { data: convData } = await supabase.from('conversas').upsert({
+                telefone: tel,
+                cliente_nome: newContact.nome,
+                status_aberto: true,
+                atendente_id: atendente?.id,
+                instancia_id: whatsappInstancia?.id,
+                legacy: false
+            }, { onConflict: 'telefone' }).select().single()
             await supabase.from('contatos').upsert({ nome: newContact.nome, telefone: tel, email: newContact.email })
 
             // Trigger background fetch for profile picture via backend
@@ -1116,6 +1141,7 @@ export function Atendimento() {
                                                                 const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
                                                                 await axios.post(`${apiUrl}/api/whatsapp/location`, {
                                                                     telefone: selectedConversa?.telefone,
+                                                                    instancia_id: selectedConversa?.instancia_id || whatsappInstancia?.id,
                                                                     name: 'Nossa Loja',
                                                                     address: 'Rua Principal, 123 - Centro',
                                                                     latitude: -23.5505,
@@ -1352,38 +1378,72 @@ export function Atendimento() {
                             <Button variant="ghost" size="icon" className="rounded-full h-8 w-8" onClick={() => setShowConnectionModal(false)}><X className="w-4 h-4" /></Button>
                         </div>
 
-                        {waConnectionState === 'open' ? (
-                            <div className="space-y-6">
-                                <div className="w-20 h-20 rounded-full bg-emerald-500/20 flex items-center justify-center mx-auto">
-                                    <CheckCircle2 className="w-10 h-10 text-emerald-500 animate-in zoom-in" />
+                        {whatsappInstancia?.instance_name ? (
+                            waConnectionState === 'open' ? (
+                                <div className="space-y-6">
+                                    <div className="w-20 h-20 rounded-full bg-emerald-500/20 flex items-center justify-center mx-auto">
+                                        <CheckCircle2 className="w-10 h-10 text-emerald-500 animate-in zoom-in" />
+                                    </div>
+                                    <div>
+                                        <h4 className="font-bold text-lg">WhatsApp Conectado</h4>
+                                        <p className="text-sm text-gray-500 mt-1">Seu aparelho está pareado e pronto para o uso.</p>
+                                    </div>
+                                    <Button variant="destructive" className="w-full h-12 rounded-xl font-bold" onClick={handleDisconnectWa}>
+                                        DESCONECTAR APARELHO
+                                    </Button>
                                 </div>
-                                <div>
-                                    <h4 className="font-bold text-lg">WhatsApp Conectado</h4>
-                                    <p className="text-sm text-gray-500 mt-1">Seu aparelho está pareado e pronto para o uso.</p>
+                            ) : (
+                                <div className="space-y-6 flex flex-col items-center">
+                                    {qrBase64 ? (
+                                        <div className="bg-white p-4 rounded-3xl shadow-lg">
+                                            <img src={`data:image/png;base64,${qrBase64}`} className="w-56 h-56" alt="QR Code" />
+                                        </div>
+                                    ) : (
+                                        <div className="w-56 h-56 bg-muted/30 rounded-3xl flex items-center justify-center border-2 border-dashed border-muted">
+                                            {isCheckingConnection ? <Loader2 className="animate-spin text-primary" /> : <p className="text-xs opacity-50">Aguardando QR Code...</p>}
+                                        </div>
+                                    )}
+                                    <div>
+                                        <h4 className="font-bold text-lg">Parear Aparelho</h4>
+                                        <p className="text-xs text-gray-500 mt-2 max-w-xs">
+                                            Abra o WhatsApp no seu celular {'>'} Configurações {'>'} Aparelhos Conectados {'>'} Conectar um Aparelho.
+                                        </p>
+                                    </div>
+                                    <Button variant="outline" className="w-full h-12 rounded-xl font-bold" onClick={fetchQrCode} disabled={isCheckingConnection}>
+                                        {isCheckingConnection ? <Loader2 className="animate-spin mr-2" /> : "GERAR NOVO QR CODE"}
+                                    </Button>
                                 </div>
-                                <Button variant="destructive" className="w-full h-12 rounded-xl font-bold" onClick={handleDisconnectWa}>
-                                    DESCONECTAR APARELHO
-                                </Button>
-                            </div>
+                            )
                         ) : (
                             <div className="space-y-6 flex flex-col items-center">
-                                {qrBase64 ? (
-                                    <div className="bg-white p-4 rounded-3xl shadow-lg">
-                                        <img src={`data:image/png;base64,${qrBase64}`} className="w-56 h-56" alt="QR Code" />
-                                    </div>
-                                ) : (
-                                    <div className="w-56 h-56 bg-muted/30 rounded-3xl flex items-center justify-center border-2 border-dashed border-muted">
-                                        {isCheckingConnection ? <Loader2 className="animate-spin text-primary" /> : <p className="text-xs opacity-50">Aguardando QR Code...</p>}
-                                    </div>
-                                )}
+                                <div className="w-20 h-20 rounded-full bg-blue-500/10 flex items-center justify-center mx-auto">
+                                    <Phone className="w-8 h-8 text-blue-500" />
+                                </div>
                                 <div>
-                                    <h4 className="font-bold text-lg">Parear Aparelho</h4>
-                                    <p className="text-xs text-gray-500 mt-2 max-w-xs">
-                                        Abra o WhatsApp no seu celular {'>'} Configurações {'>'} Aparelhos Conectados {'>'} Conectar um Aparelho.
+                                    <h4 className="font-bold text-lg">Criar Instância</h4>
+                                    <p className="text-sm text-gray-500 mt-1 max-w-xs text-center">
+                                        Você ainda não possui uma instância de WhatsApp dedicada. Clique no botão abaixo para gerar uma.
                                     </p>
                                 </div>
-                                <Button variant="outline" className="w-full h-12 rounded-xl font-bold" onClick={fetchQrCode} disabled={isCheckingConnection}>
-                                    {isCheckingConnection ? <Loader2 className="animate-spin mr-2" /> : "GERAR NOVO QR CODE"}
+                                <Button
+                                    className="w-full h-12 rounded-xl font-bold"
+                                    disabled={isCheckingConnection}
+                                    onClick={async () => {
+                                        setIsCheckingConnection(true);
+                                        try {
+                                            const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+                                            await axios.post(`${apiUrl}/api/whatsapp/instances/create`, { atendente_id: atendente?.id });
+                                            // Atualiza o store
+                                            await useAuthStore.getState().signIn();
+                                            alert('Instância gerada com sucesso! Você já pode gerar o QR Code.');
+                                        } catch (e) {
+                                            alert('Erro ao criar instância. Tente novamente.');
+                                        } finally {
+                                            setIsCheckingConnection(false);
+                                        }
+                                    }}
+                                >
+                                    {isCheckingConnection ? <Loader2 className="animate-spin mr-2" /> : "GERAR INSTÂNCIA DE ATENDIMENTO"}
                                 </Button>
                             </div>
                         )}

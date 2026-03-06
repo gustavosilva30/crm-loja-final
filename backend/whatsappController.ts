@@ -9,22 +9,17 @@ dotenv.config();
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
 
-if (!supabaseUrl) {
-    throw new Error('SUPABASE_URL is required');
-}
-
-if (!supabaseAnonKey) {
-    throw new Error('SUPABASE_ANON_KEY is required');
+if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error('Supabase env vars are missing');
 }
 
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 const EVO_API_URL = process.env.EVO_API_URL;
 const EVO_API_KEY = process.env.EVO_API_KEY;
-const EVO_INSTANCE = process.env.EVO_INSTANCE;
 
-if (!EVO_API_URL || !EVO_API_KEY || !EVO_INSTANCE) {
-    throw new Error('Evolution API env vars are missing.');
+if (!EVO_API_URL || !EVO_API_KEY) {
+    throw new Error('Evolution API env vars (URL or KEY) are missing.');
 }
 
 const uploadBase64ToSupabase = async (base64Data: string, mimeType: string) => {
@@ -32,15 +27,11 @@ const uploadBase64ToSupabase = async (base64Data: string, mimeType: string) => {
         const buffer = Buffer.from(base64Data, 'base64');
         const extension = mimeType.split('/')[1]?.split(';')[0] || 'bin';
         const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${extension}`;
-
         const BUCKET_NAME = 'whatsapp_media';
 
         const { data, error } = await supabase.storage
             .from(BUCKET_NAME)
-            .upload(fileName, buffer, {
-                contentType: mimeType,
-                upsert: false
-            });
+            .upload(fileName, buffer, { contentType: mimeType, upsert: false });
 
         if (error) {
             console.error(`[Supabase Storage] Erro ao subir para o bucket ${BUCKET_NAME}:`, error);
@@ -55,9 +46,9 @@ const uploadBase64ToSupabase = async (base64Data: string, mimeType: string) => {
     }
 };
 
-export const fetchProfilePic = async (number: string): Promise<string | null> => {
+export const fetchProfilePic = async (instanceName: string, number: string): Promise<string | null> => {
     try {
-        const { data } = await axios.post(`${EVO_API_URL}/chat/fetchProfilePictureUrl/${EVO_INSTANCE}`, {
+        const { data } = await axios.post(`${EVO_API_URL}/chat/fetchProfilePictureUrl/${instanceName}`, {
             number: number
         }, { headers: { apikey: EVO_API_KEY } });
         return data?.profilePicUrl || null;
@@ -75,46 +66,52 @@ const whatsappController = {
         try {
             const event = req.body.event;
             const data = req.body.data;
+            const instanceName = req.body.instance;
 
-            if (event !== 'messages.upsert' || !data) {
+            if (event !== 'messages.upsert' || !data || !instanceName) {
                 return res.sendStatus(200);
+            }
+
+            // Identificar instância pelo nome recebido no Webhook
+            const { data: dbInstance, error: errInst } = await supabase
+                .from('whatsapp_instancias')
+                .select('*')
+                .eq('instance_name', instanceName)
+                .maybeSingle();
+
+            if (errInst || !dbInstance) {
+                console.log(`[Webhook] Instância '${instanceName}' não encontrada no banco de dados. Ignorando.`);
+                return res.sendStatus(200); // 200 pra Evo não tentar repostar
             }
 
             const message = data.message;
             const key = data.key;
-
             const remoteJid = key?.remoteJid;
             const from = remoteJid?.split('@')[0];
             const isGroup = remoteJid?.endsWith('@g.us');
 
-            if (!from) {
-                return res.sendStatus(200);
-            }
+            if (!from) return res.sendStatus(200);
 
             const isFromMe = key?.fromMe || false;
-
             const participant = data.participant || key?.participant || data.message?.participant;
             const actualSender = isGroup && participant ? participant.split('@')[0] : from;
 
-            let text =
-                message?.conversation ||
+            let text = message?.conversation ||
                 message?.extendedTextMessage?.text ||
                 message?.imageMessage?.caption ||
                 message?.videoMessage?.caption ||
-                message?.documentMessage?.caption ||
-                '';
+                message?.documentMessage?.caption || '';
 
             const senderName = data.pushName || actualSender;
             const convName = isGroup ? (data.pushName || from) : senderName;
 
             let profilePicUrl = data.profilePicUrl || data.message?.profilePicUrl || null;
 
-            // Se não veio foto no webhook, tentamos buscar ativamente (apenas se for nova conversa ou se quiser forçar)
-            if (!profilePicUrl) {
-                profilePicUrl = await fetchProfilePic(remoteJid);
+            if (!profilePicUrl && !isGroup) {
+                profilePicUrl = await fetchProfilePic(instanceName, remoteJid);
             }
 
-            // Media extraction
+            // Extração de Mídia
             const isMedia = message?.imageMessage || message?.audioMessage || message?.videoMessage || message?.documentMessage;
             let mediaUrl = null;
             let mediaType = null;
@@ -127,7 +124,6 @@ const whatsappController = {
                 else if (message?.videoMessage) { mediaType = 'video'; mimeType = message.videoMessage.mimetype; }
                 else if (message?.documentMessage) { mediaType = 'document'; mimeType = message.documentMessage.mimetype; fileName = message.documentMessage.fileName; }
 
-                // Tentar encontrar o base64 em diferentes lugares comuns da Evolution API
                 const base64Str = data.base64 ||
                     data.message?.base64 ||
                     message?.imageMessage?.base64 ||
@@ -139,34 +135,28 @@ const whatsappController = {
                     try {
                         const cleanBase64 = base64Str.includes(',') ? base64Str.split(',')[1] : base64Str;
                         const uploadResult = await uploadBase64ToSupabase(cleanBase64, mimeType || 'application/octet-stream');
-
                         if (uploadResult) {
                             mediaUrl = uploadResult.publicUrl;
                             fileName = fileName || uploadResult.fileName;
                         }
                     } catch (storageErr) {
-                        console.error('[Supabase Storage] Erro ao subir mídia. Certifique-se que o bucket WHATSAPP_MEDIA existe:', storageErr);
+                        console.error('[Supabase Storage] Erro bucket:', storageErr);
                     }
                 } else {
-                    console.log(`[Webhook] Mídia ${mediaType} SEM Base64 no JID ${remoteJid}`);
                     text = text || `[Mídia recebida: ${mediaType}]`;
                 }
             }
 
             if (!text && !mediaUrl) return res.sendStatus(200);
 
+            // Resolução de Conversa baseada em instância e telefone
             let conversa: any = null;
-
-            const { data: conversaExistente, error: convErr } = await supabase
+            const { data: conversaExistente } = await supabase
                 .from('conversas')
                 .select('*')
                 .eq('telefone', from)
+                .eq('instancia_id', dbInstance.id)
                 .maybeSingle();
-
-            if (convErr) {
-                console.error('Erro ao buscar conversa:', convErr);
-                return res.sendStatus(500);
-            }
 
             conversa = conversaExistente;
 
@@ -174,78 +164,84 @@ const whatsappController = {
                 const { data: newConv, error: createErr } = await supabase
                     .from('conversas')
                     .insert([{
+                        instancia_id: dbInstance.id,
+                        atendente_id: dbInstance.atendente_id,
                         telefone: from,
                         cliente_nome: convName,
                         status_aberto: true,
                         is_group: isGroup,
                         unread_count: isFromMe ? 0 : 1,
+                        nao_lidas_count: isFromMe ? 0 : 1,
                         last_message_at: new Date().toISOString(),
+                        ultima_mensagem_em: new Date().toISOString(),
+                        last_message_text: text,
+                        ultima_mensagem: text,
                         updated_at: new Date().toISOString(),
-                        foto_url: profilePicUrl
+                        foto_url: profilePicUrl,
+                        legacy: false
                     }])
                     .select()
                     .single();
 
                 if (createErr) {
                     if (createErr.code === '23505') {
-                        const { data: retryConv } = await supabase.from('conversas').select('*').eq('telefone', from).maybeSingle();
+                        const { data: retryConv } = await supabase.from('conversas').select('*').eq('telefone', from).eq('instancia_id', dbInstance.id).maybeSingle();
                         conversa = retryConv;
                     } else {
-                        console.error('Erro ao criar conversa:', createErr);
-                        return res.sendStatus(500);
+                        throw createErr;
                     }
                 } else {
                     conversa = newConv;
                 }
             } else {
+                const newUnreadCount = isFromMe ? (conversa.unread_count || 0) : (conversa.unread_count || 0) + 1;
                 const updatePayload: any = {
                     is_group: isGroup,
-                    unread_count: isFromMe ? (conversa.unread_count || 0) : (conversa.unread_count || 0) + 1,
+                    unread_count: newUnreadCount,
+                    nao_lidas_count: newUnreadCount,
                     last_message_at: new Date().toISOString(),
+                    ultima_mensagem_em: new Date().toISOString(),
+                    last_message_text: text,
+                    ultima_mensagem: text,
                     updated_at: new Date().toISOString()
                 };
-
-                if (profilePicUrl) {
-                    updatePayload.foto_url = profilePicUrl;
-                }
-
-                // Somente atualizamos o nome se NÃO for grupo (pois no grupo o pushName do webhook é da pessoa)
-                if (!isGroup) {
-                    updatePayload.cliente_nome = convName;
-                }
+                if (profilePicUrl && !isGroup) updatePayload.foto_url = profilePicUrl;
+                if (!isGroup) updatePayload.cliente_nome = convName;
 
                 await supabase.from('conversas').update(updatePayload).eq('id', conversa.id);
             }
 
-            // Sempre tentamos atualizar/sincronizar a foto na tabela de contatos também
             if (profilePicUrl && !isGroup) {
-                // Background update for contacts table
-                supabase.from('contatos').update({
-                    foto_url: profilePicUrl,
-                    updated_at: new Date().toISOString()
-                }).eq('telefone', from).then(({ error }) => {
-                    if (error) console.log('[Sync] Contato não encontrado para atualização de foto, ou erro:', error.message);
-                });
+                supabase.from('contatos').update({ foto_url: profilePicUrl, updated_at: new Date().toISOString() })
+                    .eq('telefone', from).then(({ error }) => { if (error) console.log('[Sync Contatos] Erro:', error.message); });
             }
 
-            const { error: msgError } = await supabase.from('mensagens').insert([
-                {
-                    conversa_id: conversa.id,
-                    remetente: isFromMe ? 'Celular' : senderName,
-                    mensagem: text,
-                    conteudo: text,
-                    tipo: mediaType || 'texto',
-                    tipo_envio: isFromMe ? 'sent' : 'received',
-                    wa_message_id: key?.id || null,
-                    media_url: mediaUrl,
-                    media_type: mediaType,
-                    mime_type: mimeType,
-                    file_name: fileName,
-                    remetente_foto: isGroup && !isFromMe ? profilePicUrl : null
-                },
-            ]);
+            // Preparar JSON seguro e insert da mensagem
+            const payloadJson = { ...data };
+            if (payloadJson.base64) delete payloadJson.base64;
+            if (payloadJson.message?.base64) delete payloadJson.message.base64;
 
-            if (msgError) {
+            const { error: msgError } = await supabase.from('mensagens').insert([{
+                instancia_id: dbInstance.id,
+                atendente_id: dbInstance.atendente_id,
+                conversa_id: conversa.id,
+                remetente: isFromMe ? 'Celular' : senderName,
+                mensagem: text,
+                conteudo: text,
+                tipo: mediaType || 'texto',
+                tipo_envio: isFromMe ? 'sent' : 'received',
+                direction: isFromMe ? 'outbound' : 'inbound',
+                status_envio: isFromMe ? 'delivered' : 'read',
+                wa_message_id: key?.id || `manual-${Date.now()}`,
+                media_url: mediaUrl,
+                media_type: mediaType,
+                mime_type: mimeType,
+                file_name: fileName,
+                remetente_foto: isGroup && !isFromMe ? profilePicUrl : null,
+                payload_json: payloadJson
+            }]);
+
+            if (msgError && msgError.code !== '23505') { // Ignora violação de constraint Unique
                 console.error('Erro ao salvar mensagem recebida:', msgError);
                 return res.sendStatus(500);
             }
@@ -258,263 +254,275 @@ const whatsappController = {
     },
 
     sendMessage: async (req: Request, res: Response) => {
-        const { conversa_id, telefone, conteudo, mediaBase64, mediaMimeType, mediaFileName, atendente_nome } = req.body;
+        const { conversa_id, telefone, conteudo, mediaBase64, mediaMimeType, mediaFileName, atendente_nome, instancia_id } = req.body;
 
-        if (!telefone) {
-            return res.status(400).json({ error: 'telefone é obrigatório' });
+        if (!telefone || !instancia_id) {
+            return res.status(400).json({ error: 'telefone e instancia_id são obrigatórios' });
         }
 
         try {
+            const { data: dbInstance, error: errInst } = await supabase.from('whatsapp_instancias').select('*').eq('id', instancia_id).maybeSingle();
+            if (errInst || !dbInstance) return res.status(404).json({ error: 'Instância não encontrada' });
+            const instanceName = dbInstance.instance_name;
+
             let evolutionResponse;
             let mediaUrl = null;
             let mediaType = 'texto';
+            let messageToClient = atendente_nome ? `*${atendente_nome}:*\n${conteudo}` : conteudo;
 
-            let messageToClient = conteudo;
-            if (atendente_nome) {
-                messageToClient = `*${atendente_nome}:*\n${conteudo}`;
-            }
-
-            // Parallelize operations for better performance
             const tasks: Promise<any>[] = [];
 
             if (mediaBase64) {
                 const base64Data = mediaBase64.includes(',') ? mediaBase64.split(',')[1] : mediaBase64;
                 const isAudio = mediaMimeType?.startsWith('audio/');
 
-                // Task 1: Upload to Supabase
                 const uploadTask = uploadBase64ToSupabase(base64Data, mediaMimeType || 'application/octet-stream')
                     .then(res => { if (res) mediaUrl = res.publicUrl; });
                 tasks.push(uploadTask);
 
-                // Task 2: Send to Evolution API
                 let evoTask;
                 if (isAudio && (mediaMimeType.includes('ogg') || mediaMimeType.includes('mp4'))) {
                     mediaType = 'audio';
-                    evoTask = axios.post(`${EVO_API_URL}/message/sendWhatsAppAudio/${EVO_INSTANCE}`, {
-                        number: telefone,
-                        audio: mediaBase64
-                    }, { headers: { apikey: EVO_API_KEY, 'Content-Type': 'application/json' } });
+                    evoTask = axios.post(`${EVO_API_URL}/message/sendWhatsAppAudio/${instanceName}`, { number: telefone, audio: mediaBase64 }, { headers: { apikey: EVO_API_KEY, 'Content-Type': 'application/json' } });
                 } else {
                     mediaType = mediaMimeType?.startsWith('image/') ? 'image' : mediaMimeType?.startsWith('video/') ? 'video' : 'document';
-                    evoTask = axios.post(`${EVO_API_URL}/message/sendMedia/${EVO_INSTANCE}`, {
-                        number: telefone,
-                        mediatype: mediaType,
-                        mimetype: mediaMimeType || 'application/octet-stream',
-                        caption: messageToClient || undefined,
-                        media: base64Data,
-                        fileName: mediaFileName || 'arquivo'
-                    }, { headers: { apikey: EVO_API_KEY, 'Content-Type': 'application/json' } });
+                    evoTask = axios.post(`${EVO_API_URL}/message/sendMedia/${instanceName}`, { number: telefone, mediatype: mediaType, mimetype: mediaMimeType || 'application/octet-stream', caption: messageToClient || undefined, media: base64Data, fileName: mediaFileName || 'arquivo' }, { headers: { apikey: EVO_API_KEY, 'Content-Type': 'application/json' } });
                 }
                 tasks.push(evoTask.then(res => evolutionResponse = res));
             } else {
-                // Just text message
-                const textTask = axios.post(`${EVO_API_URL}/message/sendText/${EVO_INSTANCE}`, {
-                    number: telefone,
-                    text: messageToClient,
-                }, { headers: { apikey: EVO_API_KEY, 'Content-Type': 'application/json' } })
-                    .then(res => evolutionResponse = res);
+                const textTask = axios.post(`${EVO_API_URL}/message/sendText/${instanceName}`, { number: telefone, text: messageToClient }, { headers: { apikey: EVO_API_KEY, 'Content-Type': 'application/json' } }).then(res => evolutionResponse = res);
                 tasks.push(textTask);
             }
 
-            // Wait for critical tasks (API Send + Upload)
             await Promise.all(tasks);
 
-            // Save to DB
-            const { data, error } = await supabase
-                .from('mensagens')
-                .insert([
-                    {
-                        conversa_id,
-                        remetente: 'atendente',
-                        mensagem: conteudo || '',
-                        conteudo: conteudo || '',
-                        tipo: mediaType,
-                        tipo_envio: 'sent',
-                        wa_message_id: evolutionResponse?.data?.key?.id || evolutionResponse?.data?.id || `manual-${Date.now()}`,
-                        media_url: mediaUrl,
-                        media_type: mediaType,
-                        mime_type: mediaMimeType,
-                        file_name: mediaFileName,
-                        atendente_nome: atendente_nome || null
-                    },
-                ])
-                .select();
+            const { data, error } = await supabase.from('mensagens').insert([{
+                instancia_id: dbInstance.id,
+                atendente_id: dbInstance.atendente_id,
+                conversa_id,
+                remetente: 'atendente',
+                mensagem: conteudo || '',
+                conteudo: conteudo || '',
+                tipo: mediaType,
+                tipo_envio: 'sent',
+                direction: 'outbound',
+                status_envio: 'sent',
+                wa_message_id: evolutionResponse?.data?.key?.id || evolutionResponse?.data?.id || `manual-${Date.now()}`,
+                media_url: mediaUrl,
+                media_type: mediaType,
+                mime_type: mediaMimeType,
+                file_name: mediaFileName,
+                atendente_nome: atendente_nome || null
+            }]).select();
 
             if (error) {
                 console.error('Erro ao salvar mensagem enviada:', error);
                 return res.status(500).json({ error: 'Failed to save outgoing message' });
             }
 
-            // Background task: Update conversation timestamp (don't await)
             supabase.from('conversas').update({
                 last_message_at: new Date().toISOString(),
+                ultima_mensagem_em: new Date().toISOString(),
+                last_message_text: conteudo,
+                ultima_mensagem: conteudo,
                 updated_at: new Date().toISOString()
-            }).eq('id', conversa_id).then(({ error }) => {
-                if (error) console.error('Erro ao atualizar conversa em background:', error);
-            });
+            }).eq('id', conversa_id).then();
 
             return res.status(200).json(data);
         } catch (err: any) {
-            console.error('Error sending message via Evolution API:', err.response?.data || err.message);
+            console.error('Error sending message:', err.response?.data || err.message);
             return res.status(500).json({ error: 'Failed to send message via Evolution API' });
         }
     },
 
     deleteMessage: async (req: Request, res: Response) => {
-        const { telefone, wa_message_id, deleteForEveryone } = req.body;
-
-        if (!telefone || !wa_message_id) {
-            return res.status(400).json({ error: 'telefone e wa_message_id são obrigatórios' });
-        }
+        const { telefone, wa_message_id, deleteForEveryone, instancia_id } = req.body;
+        if (!telefone || !wa_message_id || !instancia_id) return res.status(400).json({ error: 'telefone, wa_message_id e instancia_id são obrigatórios' });
 
         try {
-            if (deleteForEveryone) {
-                // Tenta apagar via Evolution API
+            const { data: dbInstance } = await supabase.from('whatsapp_instancias').select('*').eq('id', instancia_id).maybeSingle();
+            if (deleteForEveryone && dbInstance) {
                 try {
-                    await axios.delete(`${EVO_API_URL}/chat/deleteMessageForEveryone/${EVO_INSTANCE}`, {
+                    await axios.delete(`${EVO_API_URL}/chat/deleteMessageForEveryone/${dbInstance.instance_name}`, {
                         headers: { apikey: EVO_API_KEY, 'Content-Type': 'application/json' },
-                        data: {
-                            number: telefone,
-                            messageId: wa_message_id
-                        }
+                        data: { number: telefone, messageId: wa_message_id }
                     });
-                } catch (err: any) {
-                    console.error('Aviso: Erro ao apagar na Evolution API:', err.response?.data || err.message);
-                    // Opcionalmente podemos retornar erro se quisermos estritamente depender da api
-                    // Mas vamos ignorar se falhar pois o provedor pode não aceitar mais apagar (passou do tempo)
-                }
+                } catch (err: any) { console.error('Aviso: Erro delete Evo:', err.response?.data || err.message); }
             }
-
             return res.status(200).json({ success: true });
         } catch (err: any) {
-            console.error('Error on deleteMessage:', err);
             return res.status(500).json({ error: 'Internal Server Error' });
         }
     },
 
     sendReaction: async (req: Request, res: Response) => {
-        const { telefone, wa_message_id, emoji } = req.body;
-
-        if (!telefone || !wa_message_id || !emoji) {
-            return res.status(400).json({ error: 'telefone, wa_message_id e emoji são obrigatórios' });
-        }
+        const { telefone, wa_message_id, emoji, instancia_id } = req.body;
+        if (!telefone || !wa_message_id || !emoji || !instancia_id) return res.status(400).json({ error: 'Faltam campos (instancia_id)' });
 
         try {
-            await axios.post(`${EVO_API_URL}/message/sendReaction/${EVO_INSTANCE}`, {
-                number: telefone,
-                reactionMessage: {
-                    key: {
-                        id: wa_message_id,
-                        fromMe: false // or handle depending on message
-                    },
-                    text: emoji
-                }
-            }, { headers: { apikey: EVO_API_KEY, 'Content-Type': 'application/json' } });
-
+            const { data: dbInstance } = await supabase.from('whatsapp_instancias').select('*').eq('id', instancia_id).maybeSingle();
+            if (dbInstance) {
+                await axios.post(`${EVO_API_URL}/message/sendReaction/${dbInstance.instance_name}`, {
+                    number: telefone, reactionMessage: { key: { id: wa_message_id, fromMe: false }, text: emoji }
+                }, { headers: { apikey: EVO_API_KEY, 'Content-Type': 'application/json' } });
+            }
             return res.status(200).json({ success: true });
         } catch (err: any) {
-            console.error('Error on sendReaction:', err.response?.data || err.message);
             return res.status(500).json({ error: 'Internal Server Error' });
         }
     },
 
     sendLocation: async (req: Request, res: Response) => {
-        const { telefone, name, address, latitude, longitude } = req.body;
-
-        if (!telefone || !latitude || !longitude) {
-            return res.status(400).json({ error: 'telefone, latitude e longitude são obrigatórios' });
-        }
+        const { telefone, name, address, latitude, longitude, instancia_id } = req.body;
+        if (!telefone || !latitude || !longitude || !instancia_id) return res.status(400).json({ error: 'Faltam campos' });
 
         try {
-            const evolutionResponse = await axios.post(`${EVO_API_URL}/message/sendLocation/${EVO_INSTANCE}`, {
-                number: telefone,
-                name: name || 'Localização',
-                address: address || 'Endereço',
-                latitude: String(latitude),
-                longitude: String(longitude)
+            const { data: dbInstance } = await supabase.from('whatsapp_instancias').select('*').eq('id', instancia_id).maybeSingle();
+            if (!dbInstance) return res.status(404).json({ error: 'Instância não encontrada' });
+            const evolutionResponse = await axios.post(`${EVO_API_URL}/message/sendLocation/${dbInstance.instance_name}`, {
+                number: telefone, name: name || 'Localização', address: address || 'Endereço', latitude: String(latitude), longitude: String(longitude)
             }, { headers: { apikey: EVO_API_KEY, 'Content-Type': 'application/json' } });
-
             return res.status(200).json(evolutionResponse.data);
         } catch (err: any) {
-            console.error('Error on sendLocation:', err.response?.data || err.message);
             return res.status(500).json({ error: 'Internal Server Error' });
         }
     },
 
     getConnectionStatus: async (req: Request, res: Response) => {
+        const { instance_name } = req.query;
+        if (!instance_name) return res.status(400).json({ error: 'instance_name query is required' });
         try {
-            const evolutionResponse = await axios.get(`${EVO_API_URL}/instance/connectionState/${EVO_INSTANCE}`, {
-                headers: { apikey: EVO_API_KEY }
-            });
+            const evolutionResponse = await axios.get(`${EVO_API_URL}/instance/connectionState/${instance_name}`, { headers: { apikey: EVO_API_KEY } });
             const state = evolutionResponse.data?.instance?.state || 'close';
+
+            // Sync status on DB
+            supabase.from('whatsapp_instancias').update({ status_conexao: state, updated_at: new Date().toISOString() })
+                .eq('instance_name', instance_name).then();
+
             return res.status(200).json({ state });
         } catch (err: any) {
-            console.error('Error on getConnectionStatus:', err.response?.data || err.message);
             return res.status(500).json({ error: 'Internal Server Error', state: 'unknown' });
         }
     },
 
     getQrCode: async (req: Request, res: Response) => {
+        const { instance_name } = req.query;
+        if (!instance_name) return res.status(400).json({ error: 'instance_name is required' });
         try {
-            const evolutionResponse = await axios.get(`${EVO_API_URL}/instance/connect/${EVO_INSTANCE}`, {
-                headers: { apikey: EVO_API_KEY }
-            });
-
-            // É possível que retorne o próprio base64 se estiver em close/connecting
-            // ou retornar infos da API. Depende da versão.
+            const evolutionResponse = await axios.get(`${EVO_API_URL}/instance/connect/${instance_name}`, { headers: { apikey: EVO_API_KEY } });
             const data = evolutionResponse.data;
-            if (data?.base64) {
-                return res.status(200).json({ qr_base64: data.base64 });
-            }
-            if (data?.instance?.state === 'open') {
-                return res.status(200).json({ state: 'open' });
-            }
+            if (data?.base64) return res.status(200).json({ qr_base64: data.base64 });
+            if (data?.instance?.state === 'open') return res.status(200).json({ state: 'open' });
             return res.status(200).json({ data });
         } catch (err: any) {
-            console.error('Error on getQrCode:', err.response?.data || err.message);
-            return res.status(500).json({ error: 'Internal Server Error' });
+            return res.status(500).json({ error: err.response?.data?.response?.message?.[0] || 'Internal Server Error' });
         }
     },
 
     disconnect: async (req: Request, res: Response) => {
+        const { instance_name } = req.body;
+        if (!instance_name) return res.status(400).json({ error: 'instance_name is required' });
         try {
-            await axios.delete(`${EVO_API_URL}/instance/logout/${EVO_INSTANCE}`, {
-                headers: { apikey: EVO_API_KEY }
-            });
+            await axios.delete(`${EVO_API_URL}/instance/logout/${instance_name}`, { headers: { apikey: EVO_API_KEY } });
+
+            supabase.from('whatsapp_instancias').update({
+                status_conexao: 'close',
+                ultima_desconexao_em: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+            }).eq('instance_name', instance_name).then();
+
             return res.status(200).json({ success: true });
         } catch (err: any) {
-            console.error('Error on disconnect:', err.response?.data || err.message);
             return res.status(500).json({ error: 'Internal Server Error' });
         }
     },
 
     syncProfilePic: async (req: Request, res: Response) => {
-        const { telefone } = req.body;
-        if (!telefone) return res.status(400).json({ error: 'telefone é obrigatório' });
+        const { telefone, instancia_id } = req.body;
+        if (!telefone || !instancia_id) return res.status(400).json({ error: 'telefone e instancia_id obrigatórios' });
 
         try {
+            const { data: dbInstance } = await supabase.from('whatsapp_instancias').select('*').eq('id', instancia_id).maybeSingle();
+            if (!dbInstance) return res.status(404).json({ error: 'Instância off' });
+
             const jid = telefone.includes('@') ? telefone : `${telefone}@s.whatsapp.net`;
-            const profilePicUrl = await fetchProfilePic(jid);
+            const profilePicUrl = await fetchProfilePic(dbInstance.instance_name, jid);
 
             if (profilePicUrl) {
-                // Update both tables
-                const updatePayload = {
-                    foto_url: profilePicUrl,
-                    updated_at: new Date().toISOString()
-                };
-
-                const [res1, res2] = await Promise.all([
-                    supabase.from('conversas').update(updatePayload).eq('telefone', telefone.split('@')[0]),
+                const updatePayload = { foto_url: profilePicUrl, updated_at: new Date().toISOString() };
+                await Promise.all([
+                    supabase.from('conversas').update(updatePayload).eq('telefone', telefone.split('@')[0]).eq('instancia_id', instancia_id),
                     supabase.from('contatos').update(updatePayload).eq('telefone', telefone.split('@')[0])
                 ]);
-
                 return res.status(200).json({ success: true, profilePicUrl });
             }
-
             return res.status(200).json({ success: false, message: 'Nenhuma foto encontrada' });
         } catch (err: any) {
-            console.error('Error on syncProfilePic:', err.message);
             return res.status(500).json({ error: 'Internal Server Error' });
+        }
+    },
+
+    createInstance: async (req: Request, res: Response) => {
+        const { atendente_id } = req.body;
+        if (!atendente_id) return res.status(400).json({ error: 'atendente_id é obrigatório' });
+
+        try {
+            // Verifica se a instancia ja existe no banco
+            const { data: existingDbInstance } = await supabase.from('whatsapp_instancias').select('*').eq('atendente_id', atendente_id).maybeSingle();
+
+            if (existingDbInstance) {
+                return res.status(200).json(existingDbInstance);
+            }
+
+            const { data: atendente } = await supabase.from('atendentes').select('nome').eq('id', atendente_id).single();
+            const cleanName = (atendente?.nome || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase() || 'user';
+            const instance_name = `crm_${cleanName}_${atendente_id.substring(0, 6)}`;
+
+            // Tenta criar na API da Evolution
+            try {
+                await axios.post(`${EVO_API_URL}/instance/create`, {
+                    instanceName: instance_name,
+                    token: "",
+                    qrcode: true
+                }, { headers: { apikey: EVO_API_KEY } });
+            } catch (createErr: any) {
+                if (createErr.response?.data?.message !== 'Name or value already exists') {
+                    throw createErr;
+                }
+            }
+
+            // Configura webhook para essa nova instância
+            const WEBHOOK_URL = process.env.WEBHOOK_URL;
+            if (WEBHOOK_URL) {
+                try {
+                    await axios.post(`${EVO_API_URL}/webhook/set/${instance_name}`, {
+                        url: WEBHOOK_URL,
+                        webhook_by_events: false,
+                        webhook_base64: true,
+                        events: [
+                            "MESSAGES_UPSERT",
+                            "MESSAGES_UPDATE",
+                            "SEND_MESSAGE"
+                        ]
+                    }, { headers: { apikey: EVO_API_KEY } });
+                } catch (err: any) {
+                    console.log("[Aviso] Erro ao setar webhook: " + (err.response?.data?.message || err.message));
+                }
+            }
+
+            // Salva no banco
+            const { data: newInstance, error: dbErr } = await supabase.from('whatsapp_instancias').insert([{
+                atendente_id: atendente_id,
+                instance_name: instance_name,
+                status_conexao: 'close'
+            }]).select().single();
+
+            if (dbErr) return res.status(500).json({ error: 'Erro salvando instancia no DB' });
+
+            return res.status(200).json(newInstance);
+
+        } catch (err: any) {
+            return res.status(500).json({ error: err.response?.data || err.message });
         }
     }
 };
