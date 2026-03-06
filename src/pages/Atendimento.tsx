@@ -29,6 +29,7 @@ interface Conversa {
     status_aberto: boolean
     updated_at: string
     last_message_at: string
+    last_message_text?: string // New field for performance
     etapa_funil?: string
     is_group?: boolean
     unread_count?: number
@@ -197,23 +198,35 @@ export function Atendimento() {
         setIsCheckingConnection(false)
     }
 
-    // 2. Buscar Mensagens
+    // 2. Buscar Mensagens (com limite para performance)
     const fetchMensagens = async (conversaId: string) => {
         setLoadingMsg(true)
-        const { data } = await supabase.from('mensagens').select('*').eq('conversa_id', conversaId).order('timestamp', { ascending: true })
-        setMensagens(data || [])
+        // Carregar apenas as últimas 50 mensagens inicialmente (Paginação)
+        const { data } = await supabase.from('mensagens')
+            .select('*')
+            .eq('conversa_id', conversaId)
+            .order('timestamp', { ascending: false }) // Busca as mais recentes primeiro
+            .limit(50)
+
+        // Re-ordena para exibição cronológica (ascendente)
+        const cronMsgs = (data || []).reverse()
+        setMensagens(cronMsgs)
         setLoadingMsg(false)
 
-        // Marcar conversa como lida ao abrir
-        await supabase.from('conversas').update({ unread_count: 0 }).eq('id', conversaId)
+        // Marcar conversa como lida ao abrir usando RPC otimizado
+        await supabase.rpc('mark_messages_as_read', { p_conversa_id: conversaId })
 
         // Atualização Otimista: Zera o contador na lista local imediatamente
         setConversas(prev => prev.map(c => c.id === conversaId ? { ...c, unread_count: 0 } : c))
     }
 
     useEffect(() => {
-        if (selectedConversa) fetchMensagens(selectedConversa.id)
-    }, [selectedConversa])
+        if (selectedConversa && !selectedConversa.id.startsWith('temp-')) {
+            fetchMensagens(selectedConversa.id)
+        } else if (selectedConversa?.id.startsWith('temp-')) {
+            setMensagens([])
+        }
+    }, [selectedConversa?.id]) // Dependência específica do ID para evitar refetches ciclicos
 
     const handleOpenConversa = (conv: Conversa) => {
         setSelectedConversa(conv);
@@ -256,16 +269,19 @@ export function Atendimento() {
 
     useEffect(() => {
         fetchData()
+
+        // Canal de Mensagens (Otimizando para não recarregar lista completa)
         const channel = supabase.channel('whatsapp-realtime')
             .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'mensagens' }, (payload) => {
                 const newMsg = payload.new as Mensagem
+
+                // 1. Atualiza mensagens do chat se for a conversa selecionada
                 if (selectedConversa && newMsg.conversa_id === selectedConversa.id) {
                     setMensagens(prev => {
                         // Evita duplicatas se a mensagem otimista já estiver lá
-                        // Procuramos por uma mensagem 'sending' com o mesmo conteúdo
                         const optimisticIndex = prev.findIndex(m =>
                             m.status === 'sending' &&
-                            m.mensagem === newMsg.mensagem &&
+                            m.conteudo === newMsg.conteudo &&
                             Math.abs(new Date(m.timestamp).getTime() - new Date(newMsg.timestamp).getTime()) < 10000
                         );
 
@@ -275,37 +291,55 @@ export function Atendimento() {
                             return newArr;
                         }
 
-                        // Se não for duplicata, apenas adiciona
                         if (prev.some(m => m.id === newMsg.id || (m.wa_message_id && m.wa_message_id === newMsg.wa_message_id))) {
                             return prev;
                         }
                         return [...prev, newMsg];
                     });
+
+                    // Se estiver com a conversa aberta, marca como lida imediatamente
+                    supabase.rpc('mark_messages_as_read', { p_conversa_id: selectedConversa.id });
                 }
-                // Em vez de fetchData() completo, poderíamos apenas atualizar a conversa específica na lista
+
+                // 2. Atualiza a conversa específica na lista (SEM fetchData completo)
                 updateConversaInList(newMsg.conversa_id, newMsg);
             })
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'conversas' }, () => fetchData())
+            // Apenas recarrega se houver mudança estrutural ou exclusão
+            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'conversas' }, (payload) => {
+                const updated = payload.new as Conversa;
+                setConversas(prev => prev.map(c => c.id === updated.id ? { ...c, ...updated } : c));
+            })
+            .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'conversas' }, () => fetchData())
             .subscribe()
+
         return () => { supabase.removeChannel(channel) }
-    }, [selectedConversa])
+    }, [selectedConversa?.id])
 
     const updateConversaInList = (conversaId: string, lastMsg: Mensagem) => {
         setConversas(prev => {
             const index = prev.findIndex(c => c.id === conversaId);
             if (index === -1) {
-                fetchData(); // Se não achou na lista, melhor buscar tudo
+                // Se não está na lista (conversa nova), busca no banco o registro completo
+                supabase.from('conversas').select('*').eq('id', conversaId).single()
+                    .then(({ data }) => {
+                        if (data) setConversas(old => [data, ...old]);
+                    });
                 return prev;
             }
             const updated = [...prev];
             updated[index] = {
                 ...updated[index],
                 last_message_at: lastMsg.timestamp,
+                last_message_text: lastMsg.conteudo || lastMsg.mensagem || 'Mídia',
                 updated_at: new Date().toISOString(),
-                // Poderíamos atualizar o texto da última mensagem aqui se tivéssemos esse campo na interface Conversa
+                unread_count: selectedConversa?.id === conversaId ? 0 : (updated[index].unread_count || 0) + 1
             };
-            // Re-ordena a lista
-            return updated.sort((a, b) => new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime());
+            // Re-ordena trazendo a conversa atualizada para o topo (se não fixada)
+            return updated.sort((a, b) => {
+                if (a.is_pinned && !b.is_pinned) return -1;
+                if (!a.is_pinned && b.is_pinned) return 1;
+                return new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime();
+            });
         });
     }
 
@@ -817,8 +851,14 @@ export function Atendimento() {
                                     </span>
                                 </div>
                                 <div className="flex justify-between items-center mt-0.5">
-                                    <span className="text-[11px] text-[#667781] dark:text-[#8696a0] truncate flex-1">
-                                        {conv.telefone}
+                                    <span className="text-[11px] text-[#667781] dark:text-[#8696a0] truncate flex-1 flex items-center gap-1">
+                                        {conv.last_message_text ? (
+                                            <>
+                                                <span className="truncate">{conv.last_message_text}</span>
+                                            </>
+                                        ) : (
+                                            <span>{conv.telefone}</span>
+                                        )}
                                     </span>
                                     {conv.unread_count && conv.unread_count > 0 ? (
                                         <div className="bg-emerald-500 text-white text-[10px] font-black min-w-[20px] h-[20px] rounded-full flex items-center justify-center animate-in zoom-in duration-300">

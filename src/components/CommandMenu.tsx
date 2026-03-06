@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase'
 
 interface SearchResult {
     id: string
-    type: 'produto' | 'cliente' | 'venda'
+    type: 'produto' | 'cliente' | 'venda' | 'pagina'
     title: string
     subtitle: string
     url: string
@@ -58,6 +58,29 @@ export function CommandMenu() {
                 ])
 
                 const newResults: SearchResult[] = []
+
+                // 0. Buscar páginas internas (Navigation)
+                const pages = [
+                    { label: 'Configurações', url: '/configuracoes', keywords: ['config', 'setup', 'preferencias', 'atendentes', 'empresa'] },
+                    { label: 'Atendimento (WhatsApp)', url: '/atendimento', keywords: ['chat', 'mensagens', 'zap', 'wa'] },
+                    { label: 'Dashboard', url: '/dashboard', keywords: ['home', 'painel', 'index'] },
+                    { label: 'Estoque / Produtos', url: '/produtos', keywords: ['pecas', 'inventario'] },
+                    { label: 'Financeiro', url: '/financeiro', keywords: ['contas', 'caixa', 'pagamentos'] },
+                    { label: 'Relatórios', url: '/relatorios', keywords: ['graficos', 'pdf', 'vendas'] },
+                    { label: 'Clientes', url: '/clientes', keywords: ['cadastro', 'leads'] },
+                ]
+
+                pages.forEach(p => {
+                    if (p.label.toLowerCase().includes(query.toLowerCase()) || p.keywords.some(k => k.includes(query.toLowerCase()))) {
+                        newResults.push({
+                            id: `page-${p.url}`,
+                            type: 'pagina',
+                            title: p.label,
+                            subtitle: `Navegar para ${p.label}`,
+                            url: p.url
+                        })
+                    }
+                })
 
                 if (prodRes.data) {
                     prodRes.data.forEach(p => newResults.push({
@@ -165,7 +188,13 @@ export function CommandMenu() {
                         <div className="space-y-1">
                             {results.map((res, idx) => {
                                 const isSelected = idx === selectedIndex
-                                const Icon = res.type === 'produto' ? Package : res.type === 'cliente' ? Users : ShoppingBag
+                                const Icon = res.type === 'produto'
+                                    ? Package
+                                    : res.type === 'cliente'
+                                        ? Users
+                                        : res.type === 'venda'
+                                            ? ShoppingBag
+                                            : Search // Icon for pages
 
                                 return (
                                     <div

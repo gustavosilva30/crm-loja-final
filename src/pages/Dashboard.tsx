@@ -130,9 +130,20 @@ export function Dashboard() {
       const { start, end, prevStart, prevEnd } = getPeriodDates(period)
       const endDateTime = end + 'T23:59:59'
 
-      // Parallel fetches
+      // 1. Chamada Consolidada via RPC (Muito mais rápido que 7 selects)
+      const { data: rpcStats, error: rpcError } = await supabase.rpc('get_dashboard_stats', {
+        p_start_date: start,
+        p_end_date: end
+      })
+
+      if (rpcError) throw rpcError
+
+      // 2. Buscas complementares (Dados granulares para listas e gráficos)
       const [
-        vendasRes, vendasPrevRes, produtosRes, itensRes, financRes, clientesRes, contasRes
+        vendasRes,
+        vendasPrevRes,
+        itensRes,
+        contasRes
       ] = await Promise.all([
         supabase
           .from('vendas')
@@ -142,41 +153,30 @@ export function Dashboard() {
         prevStart && prevEnd
           ? supabase.from('vendas').select('id, total, status').gte('data_venda', prevStart).lte('data_venda', prevEnd + 'T23:59:59')
           : Promise.resolve({ data: [] }),
-        supabase.from('produtos').select('id, nome, estoque_atual, estoque_minimo, preco_venda'),
         supabase.from('vendas_itens').select('produto_id, quantidade, preco_unitario, produtos(nome)').gte('created_at', start).lte('created_at', endDateTime),
-        supabase.from('financeiro_lancamentos').select('tipo, valor, status, data_vencimento').gte('data_vencimento', `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-01`).lte('data_vencimento', end),
-        supabase.from('clientes').select('id, nome, created_at', { count: 'exact' }),
         supabase.from('financeiro_lancamentos').select('id, descricao, data_vencimento, valor, tipo, status').gte('data_vencimento', new Date().toISOString().split('T')[0]).lte('data_vencimento', (() => { const d = new Date(); d.setDate(d.getDate() + 5); return d.toISOString().split('T')[0]; })()).eq('status', 'Pendente')
       ])
 
       const vendas = vendasRes.data || []
       const vendasPrev = (vendasPrevRes as any).data || []
-      const produtos = produtosRes.data || []
       const itens = itensRes.data || []
-      const financMes = financRes.data || []
-      const clientes = (clientesRes as any).data || []
       const contas = contasRes.data || []
 
-      // KPIs
-      const vendasValidas = vendas.filter(v => v.status !== 'Cancelado')
-      const faturamento = vendasValidas.reduce((acc, v) => acc + (v.total || 0), 0)
-      const vendasCount = vendasValidas.length
-      const ticketMedio = vendasCount > 0 ? faturamento / vendasCount : 0
+      // Atribuição de KPIs do RPC
+      const faturamento = rpcStats.faturamento
+      const vendasCount = rpcStats.vendas_count
+      const estoqueBaixo = rpcStats.estoque_critico
+      const mlFaturamento = rpcStats.ml_faturamento
+      const vendasHoje = rpcStats.vendas_hoje
+      const clientesTotal = rpcStats.clientes_total
+      const despesasMes = rpcStats.despesas_mes
 
+      // Cálculo de Comparativos (Período Anterior)
       const vendasPrevValidas = vendasPrev.filter((v: any) => v.status !== 'Cancelado')
       const faturamentoPrev = vendasPrevValidas.reduce((acc: number, v: any) => acc + (v.total || 0), 0)
       const vendasCountPrev = vendasPrevValidas.length
       const ticketMedioPrev = vendasCountPrev > 0 ? faturamentoPrev / vendasCountPrev : 0
-
-      const mlFaturamento = vendasValidas.filter(v => v.origem_ml).reduce((acc, v) => acc + (v.total || 0), 0)
-      const estoqueBaixo = produtos.filter(p => p.estoque_atual <= p.estoque_minimo).length
-
-      // Vendas hoje
-      const todayStr = new Date().toISOString().split('T')[0]
-      const vendasHoje = vendas.filter(v => v.data_venda?.startsWith(todayStr) && v.status !== 'Cancelado').reduce((acc, v) => acc + (v.total || 0), 0)
-
-      // Despesas do mês
-      const despesasMes = financMes.filter(f => f.tipo === 'Despesa').reduce((acc, f) => acc + (f.valor || 0), 0)
+      const ticketMedio = vendasCount > 0 ? faturamento / vendasCount : 0
 
       // Recent orders
       const recentOrders = [...vendas]
@@ -195,7 +195,7 @@ export function Dashboard() {
 
       // Top Clientes
       const cliMap: Record<string, { nome: string; total: number; qtd: number }> = {}
-      vendasValidas.forEach(v => {
+      vendas.filter(v => v.status !== 'Cancelado').forEach(v => {
         const nome = (v as any).clientes?.nome || 'Consumidor Final'
         if (!cliMap[nome]) cliMap[nome] = { nome, total: 0, qtd: 0 }
         cliMap[nome].total += v.total || 0
@@ -203,19 +203,23 @@ export function Dashboard() {
       })
       const topClientes = Object.values(cliMap).sort((a, b) => b.total - a.total).slice(0, 5)
 
-      // Sales by Month chart (last 6 months)
+      // Sales by Month chart (LIMITADO aos últimos 8 meses para performance)
       const monthMap: Record<string, { name: string; receita: number; despesa: number }> = {}
-      // Get all vendas for monthly chart (doesn't depend on period)
-      const { data: allVendas } = await supabase.from('vendas').select('data_venda, total, status').order('data_venda', { ascending: true })
-      const { data: allFinanc } = await supabase.from('financeiro_lancamentos').select('data_vencimento, valor, tipo').order('data_vencimento', { ascending: true })
+      const eightMonthsAgo = new Date(); eightMonthsAgo.setMonth(eightMonthsAgo.getMonth() - 8);
+      const startLimit = eightMonthsAgo.toISOString().substring(0, 7) + '-01';
 
-        ; (allVendas || []).filter(v => v.status !== 'Cancelado').forEach(v => {
+      const [historyVendas, historyFinanc] = await Promise.all([
+        supabase.from('vendas').select('data_venda, total, status').gte('data_venda', startLimit),
+        supabase.from('financeiro_lancamentos').select('data_vencimento, valor, tipo').gte('data_vencimento', startLimit)
+      ])
+
+        ; (historyVendas.data || []).filter(v => v.status !== 'Cancelado').forEach(v => {
           if (!v.data_venda) return
           const m = v.data_venda.substring(0, 7)
           if (!monthMap[m]) monthMap[m] = { name: new Date(m + '-15').toLocaleString('pt-BR', { month: 'short', year: '2-digit' }), receita: 0, despesa: 0 }
           monthMap[m].receita += v.total || 0
         });
-      (allFinanc || []).filter(f => f.tipo === 'Despesa').forEach(f => {
+      (historyFinanc.data || []).filter(f => f.tipo === 'Despesa').forEach(f => {
         if (!f.data_vencimento) return
         const m = f.data_vencimento.substring(0, 7)
         if (!monthMap[m]) monthMap[m] = { name: new Date(m + '-15').toLocaleString('pt-BR', { month: 'short', year: '2-digit' }), receita: 0, despesa: 0 }
@@ -225,7 +229,7 @@ export function Dashboard() {
 
       // Payment Pie
       const payMap: Record<string, number> = {}
-      vendasValidas.forEach(v => {
+      vendas.filter(v => v.status !== 'Cancelado').forEach(v => {
         const key = (v as any).forma_pagamento || 'Não informado'
         payMap[key] = (payMap[key] || 0) + (v.total || 0)
       })
@@ -235,15 +239,13 @@ export function Dashboard() {
       const alertas: string[] = []
       if (estoqueBaixo > 0) alertas.push(`${estoqueBaixo} produto(s) com estoque crítico`)
       if (contas.length > 0) alertas.push(`${contas.length} conta(s) a vencer nos próximos 5 dias`)
-      const produtosSemEstoque = produtos.filter(p => p.estoque_atual === 0).length
-      if (produtosSemEstoque > 0) alertas.push(`${produtosSemEstoque} produto(s) sem estoque`)
 
       setStats({
         faturamento, faturamentoPrev, vendasCount, vendasCountPrev,
         ticketMedio, ticketMedioPrev, estoqueBaixo, mlFaturamento,
         recentOrders, topProdutos, topClientes, salesByMonth, paymentPie, alertas,
         vendasHoje, contasVencendo: contas.length,
-        clientesTotal: clientes.length, despesasMes
+        clientesTotal, despesasMes
       })
     } catch (err) {
       console.error('Dashboard error:', err)

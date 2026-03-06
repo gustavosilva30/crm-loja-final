@@ -6,8 +6,8 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import {
     Search, Plus, MoreHorizontal, MessageSquare,
-    User, DollarSign, Calendar, ChevronRight,
-    Filter, LayoutGrid as KanbanIcon, List as ListIcon
+    User, DollarSign, Calendar, ChevronRight, Pencil,
+    Filter, LayoutGrid as KanbanIcon, List as ListIcon, X
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -39,6 +39,13 @@ export function Funil() {
     const [conversas, setConversas] = useState<Conversa[]>([])
     const [searchTerm, setSearchTerm] = useState("")
     const [loading, setLoading] = useState(true)
+    const [activeColMenu, setActiveColMenu] = useState<string | null>(null)
+    const [editingColumn, setEditingColumn] = useState<any>(null)
+    const [columnLabels, setColumnLabels] = useState<Record<string, string>>(() => {
+        const labels: any = {}
+        COLUNAS.forEach(c => labels[c.id] = c.label)
+        return labels
+    })
 
     const handleDragStart = (e: React.DragEvent, id: string) => {
         e.dataTransfer.setData('cardId', id)
@@ -108,8 +115,8 @@ export function Funil() {
     }
 
     return (
-        <div className="h-full flex flex-col space-y-4">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex flex-col h-full overflow-hidden">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4 shrink-0">
                 <div>
                     <h1 className="text-2xl font-black uppercase tracking-tight flex items-center gap-2">
                         <KanbanIcon className="w-6 h-6 text-emerald-600" /> Funil de Vendas
@@ -136,36 +143,56 @@ export function Funil() {
                 </div>
             </div>
 
-            <div className="flex-1 overflow-x-auto pb-4 custom-scrollbar">
+            <div className="flex-1 overflow-x-auto pb-4 custom-scrollbar overflow-y-hidden">
                 <div className="flex gap-4 h-full min-w-max px-1">
                     {COLUNAS.map(coluna => {
                         const cards = filteredConversas.filter(c => (c.etapa_funil || 'Novo Lead') === coluna.id)
                         const totalValor = cards.reduce((acc, curr) => acc + (curr.valor_estimado || 0), 0)
 
                         return (
-                            <div key={coluna.id} className="w-[320px] flex flex-col gap-3 rounded-xl bg-muted/30 p-3 border border-border/50 shadow-inner group">
-                                <div className="flex items-center justify-between px-1">
+                            <div key={coluna.id} className="w-[320px] flex flex-col gap-3 rounded-xl bg-slate-100/80 dark:bg-slate-900/40 p-3 border border-slate-200 dark:border-slate-800 shadow-sm group h-full">
+                                <div className="flex items-center justify-between px-1 shrink-0">
                                     <div className="flex items-center gap-2">
                                         <Badge className={`font-black uppercase text-[10px] py-1 px-3 ${coluna.color}`}>
-                                            {coluna.label}
+                                            {columnLabels[coluna.id]}
                                         </Badge>
                                         <span className="text-[10px] font-bold text-muted-foreground bg-muted p-1 px-2 rounded-full">
                                             {cards.length}
                                         </span>
                                     </div>
-                                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity relative">
                                         <Search className="w-3.5 h-3.5 text-muted-foreground cursor-pointer hover:text-foreground" />
-                                        <MoreHorizontal className="w-3.5 h-3.5 text-muted-foreground cursor-pointer hover:text-foreground" />
+                                        <MoreHorizontal
+                                            className="w-3.5 h-3.5 text-muted-foreground cursor-pointer hover:text-foreground"
+                                            onClick={() => setActiveColMenu(activeColMenu === coluna.id ? null : coluna.id)}
+                                        />
+
+                                        {activeColMenu === coluna.id && (
+                                            <div className="absolute top-5 right-0 w-40 bg-card border border-border rounded-lg shadow-xl z-[100] py-1 animate-in fade-in zoom-in-95 duration-100">
+                                                <button
+                                                    className="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted font-medium transition-colors"
+                                                    onClick={() => {
+                                                        setEditingColumn({ id: coluna.id, label: columnLabels[coluna.id] })
+                                                        setActiveColMenu(null)
+                                                    }}
+                                                >
+                                                    <Pencil className="w-3 h-3" /> Editar Etapa
+                                                </button>
+                                                <button className="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted font-medium text-destructive transition-colors">
+                                                    Arrumar automação
+                                                </button>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
 
-                                <div className="px-2 py-1.5 bg-background/40 rounded-lg flex justify-between items-center border border-border/10">
+                                <div className="px-2 py-1.5 bg-slate-200/50 dark:bg-slate-800/50 rounded-lg flex justify-between items-center border border-slate-300 dark:border-slate-700 shrink-0 shadow-sm text-foreground">
                                     <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">Total:</span>
                                     <span className="text-sm font-black text-foreground">{formatarMoeda(totalValor)}</span>
                                 </div>
 
                                 <div
-                                    className="flex-1 overflow-y-auto pr-1 space-y-3 custom-scrollbar min-h-[500px]"
+                                    className="flex-1 overflow-y-auto pr-1 space-y-3 custom-scrollbar"
                                     onDrop={(e) => handleDrop(e, coluna.id)}
                                     onDragOver={handleDragOver}
                                 >
@@ -231,6 +258,48 @@ export function Funil() {
                     })}
                 </div>
             </div>
+
+            {/* Modal para Editar Etapa */}
+            {editingColumn && (
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
+                    <motion.div
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        className="bg-card border border-border rounded-xl shadow-2xl w-full max-w-md overflow-hidden"
+                    >
+                        <div className="p-4 border-b border-border flex items-center justify-between">
+                            <h3 className="font-bold flex items-center gap-2">
+                                <Pencil className="w-4 h-4 text-emerald-600" /> Editar Nome da Etapa
+                            </h3>
+                            <Button variant="ghost" size="icon" onClick={() => setEditingColumn(null)}>
+                                <X className="w-4 h-4" />
+                            </Button>
+                        </div>
+                        <div className="p-4 space-y-4">
+                            <div className="space-y-2">
+                                <label className="text-xs font-bold uppercase text-muted-foreground">Nome da Coluna</label>
+                                <Input
+                                    value={editingColumn.label}
+                                    onChange={e => setEditingColumn({ ...editingColumn, label: e.target.value })}
+                                    className="h-12 font-bold"
+                                />
+                            </div>
+                            <div className="flex justify-end gap-2 pt-2">
+                                <Button variant="outline" onClick={() => setEditingColumn(null)}>Cancelar</Button>
+                                <Button
+                                    className="bg-emerald-600 hover:bg-emerald-700 font-bold"
+                                    onClick={() => {
+                                        setColumnLabels({ ...columnLabels, [editingColumn.id]: editingColumn.label })
+                                        setEditingColumn(null)
+                                    }}
+                                >
+                                    Salvar Alteração
+                                </Button>
+                            </div>
+                        </div>
+                    </motion.div>
+                </div>
+            )}
         </div>
     )
 }
