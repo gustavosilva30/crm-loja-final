@@ -134,12 +134,16 @@ export const whatsappController = {
                     message?.documentMessage?.base64;
 
                 if (base64Str) {
-                    const cleanBase64 = base64Str.includes(',') ? base64Str.split(',')[1] : base64Str;
-                    const uploadResult = await uploadBase64ToSupabase(cleanBase64, mimeType || 'application/octet-stream');
+                    try {
+                        const cleanBase64 = base64Str.includes(',') ? base64Str.split(',')[1] : base64Str;
+                        const uploadResult = await uploadBase64ToSupabase(cleanBase64, mimeType || 'application/octet-stream');
 
-                    if (uploadResult) {
-                        mediaUrl = uploadResult.publicUrl;
-                        fileName = fileName || uploadResult.fileName;
+                        if (uploadResult) {
+                            mediaUrl = uploadResult.publicUrl;
+                            fileName = fileName || uploadResult.fileName;
+                        }
+                    } catch (storageErr) {
+                        console.error('[Supabase Storage] Erro ao subir mídia. Certifique-se que o bucket WHATSAPP_MEDIA existe:', storageErr);
                     }
                 } else {
                     console.log(`[Webhook] Mídia ${mediaType} SEM Base64 no JID ${remoteJid}`);
@@ -180,25 +184,29 @@ export const whatsappController = {
                     .single();
 
                 if (createErr) {
-                    console.error('Erro ao criar conversa:', createErr);
-                    return res.sendStatus(500);
+                    if (createErr.code === '23505') {
+                        const { data: retryConv } = await supabase.from('conversas').select('*').eq('telefone', from).maybeSingle();
+                        conversa = retryConv;
+                    } else {
+                        console.error('Erro ao criar conversa:', createErr);
+                        return res.sendStatus(500);
+                    }
+                } else {
+                    conversa = newConv;
                 }
-                conversa = newConv;
             } else {
-                // Atualizar unread_count, updated_at, foto_url e is_group se mudar
                 const updatePayload: any = {
                     is_group: isGroup,
                     unread_count: (conversa.unread_count || 0) + 1,
                     updated_at: new Date().toISOString()
                 };
 
-                // Se houver foto recebida, atualiza (especialmente se for foto do contato/grupo mudando)
                 if (profilePicUrl) {
                     updatePayload.foto_url = profilePicUrl;
                 }
 
-                // Se for grupo, GARANTE que o nome da conversa seja o nome do GRUPO (data.pushName do webhook vem do grupo em g.us)
-                if (isGroup) {
+                // Somente atualizamos o nome se NÃO for grupo (pois no grupo o pushName do webhook é da pessoa)
+                if (!isGroup) {
                     updatePayload.cliente_nome = convName;
                 }
 
