@@ -51,7 +51,7 @@ export const fetchProfilePic = async (instanceName: string, number: string): Pro
         const { data } = await axios.post(`${EVO_API_URL}/chat/fetchProfilePictureUrl/${instanceName}`, {
             number: number
         }, { headers: { apikey: EVO_API_KEY } });
-        return data?.profilePicUrl || null;
+        return data?.profilePicUrl || data?.profilePictureUrl || data?.pictureUrl || data?.url || null;
     } catch (err) {
         return null;
     }
@@ -148,7 +148,7 @@ const whatsappController = {
                 if (groupName) actualConvName = groupName;
             }
 
-            let profilePicUrl = data.profilePicUrl || data.message?.profilePicUrl || null;
+            let profilePicUrl = data.profilePicUrl || data.pictureUrl || data.profilePictureUrl || data.message?.profilePicUrl || data.message?.pictureUrl || null;
 
             if (!profilePicUrl) {
                 profilePicUrl = await fetchProfilePic(instanceName, remoteJid);
