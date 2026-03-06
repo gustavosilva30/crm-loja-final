@@ -507,6 +507,24 @@ const whatsappController = {
             const { data: existingDbInstance } = await supabase.from('whatsapp_instancias').select('*').eq('atendente_id', atendente_id).maybeSingle();
 
             if (existingDbInstance) {
+                // Mesmo que exista no banco, vamos garantir que o webhook esteja certo na Evolution
+                const instance_name = existingDbInstance.instance_name;
+                const WEBHOOK_URL = process.env.WEBHOOK_URL;
+                if (WEBHOOK_URL) {
+                    try {
+                        await axios.post(`${EVO_API_URL}/webhook/set/${instance_name}`, {
+                            url: WEBHOOK_URL,
+                            webhook_by_events: false,
+                            webhook_base64: true,
+                            events: [
+                                "MESSAGES_UPSERT",
+                                "MESSAGES_UPDATE",
+                                "SEND_MESSAGE",
+                                "CONNECTION_UPDATE"
+                            ]
+                        }, { headers: { apikey: EVO_API_KEY } });
+                    } catch (e) { }
+                }
                 return res.status(200).json(existingDbInstance);
             }
 
