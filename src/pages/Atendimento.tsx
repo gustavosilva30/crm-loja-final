@@ -32,6 +32,7 @@ interface Conversa {
     is_group?: boolean
     unread_count?: number
     foto_url?: string
+    is_pinned?: boolean
 }
 
 interface Mensagem {
@@ -255,6 +256,12 @@ export function Atendimento() {
             if (activeFilter === 'groups') return c.is_group === true
 
             return true
+        }).sort((a, b) => {
+            // Se fixado, fica em cima
+            if (a.is_pinned && !b.is_pinned) return -1
+            if (!a.is_pinned && b.is_pinned) return 1
+            // Senão, por data da última mensagem (descendente)
+            return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
         })
     }, [conversas, searchTerm, activeFilter])
 
@@ -612,11 +619,6 @@ export function Atendimento() {
                                 <div className={cn(conv.foto_url ? "hidden" : "block")}>
                                     {conv.is_group ? <Users className="w-6 h-6 text-[#adb5bd]" /> : <User className="w-7 h-7 text-[#adb5bd]" />}
                                 </div>
-                                {conv.unread_count && conv.unread_count > 0 ? (
-                                    <span className="absolute -top-0.5 -right-0.5 bg-emerald-500 text-white text-[9px] font-bold min-w-[18px] h-[18px] rounded-full flex items-center justify-center border-2 border-white dark:border-[#111b21] z-10">
-                                        {conv.unread_count}
-                                    </span>
-                                ) : null}
                             </div>
                             <div className="flex-1 min-w-0">
                                 <div className="flex justify-between items-center">
@@ -629,9 +631,11 @@ export function Atendimento() {
                                     <span className="text-[11px] text-[#667781] dark:text-[#8696a0] truncate flex-1">
                                         {conv.telefone}
                                     </span>
-                                    {conv.etapa_funil && (
-                                        <div className={cn("w-2 h-2 rounded-full ml-2", ETAPAS_FUNIL.find(e => e.label === conv.etapa_funil)?.color)} title={conv.etapa_funil} />
-                                    )}
+                                    {conv.unread_count && conv.unread_count > 0 ? (
+                                        <div className="bg-emerald-500 text-white text-[10px] font-black min-w-[20px] h-[20px] rounded-full flex items-center justify-center animate-in zoom-in duration-300">
+                                            {conv.unread_count}
+                                        </div>
+                                    ) : null}
                                 </div>
                             </div>
                         </div>

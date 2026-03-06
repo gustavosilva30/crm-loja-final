@@ -319,6 +319,9 @@ export const whatsappController = {
                 return res.status(500).json({ error: 'Failed to save outgoing message' });
             }
 
+            // Atualiza o updated_at da conversa para ela subir no funil/lista
+            await supabase.from('conversas').update({ updated_at: new Date().toISOString() }).eq('id', conversa_id);
+
             return res.status(200).json(data);
         } catch (err: any) {
             console.error('Error sending message via Evolution API:', err.response?.data || err.message);
