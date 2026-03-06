@@ -45,6 +45,7 @@ interface Mensagem {
     file_name?: string
     mime_type?: string
     lida?: boolean
+    atendente_nome?: string
 }
 
 interface Contato {
@@ -219,6 +220,7 @@ export function Atendimento() {
             conversa_id: selectedConversa.id,
             telefone: selectedConversa.telefone,
             atendente_id: atendente?.id,
+            atendente_nome: atendente?.nome,
             mediaBase64: base64,
             mediaMimeType: 'audio/ogg; codecs=opus',
             mediaFileName: `audio-${Date.now()}.ogg`
@@ -233,6 +235,7 @@ export function Atendimento() {
             telefone: selectedConversa.telefone,
             conteudo: newMessage,
             atendente_id: atendente?.id,
+            atendente_nome: atendente?.nome,
             mediaBase64: fileBase64 || undefined,
             mediaMimeType: selectedFile?.type || undefined,
             mediaFileName: selectedFile?.name || undefined
@@ -437,6 +440,14 @@ export function Atendimento() {
                                     <div key={msg.id} className={`flex w-full ${isSent ? 'justify-end' : 'justify-start'}`}>
                                         <div className={`max-w-[75%] px-2.5 py-1.5 rounded-lg shadow-sm text-sm relative transition-all hover:scale-[1.01] 
                                             ${isSent ? 'bg-[#dcf8c6] dark:bg-[#005c4b] rounded-tr-none' : 'bg-white dark:bg-[#202c33] rounded-tl-none'}`}>
+
+                                            {isSent && msg.atendente_nome && (
+                                                <div className="text-[10px] font-black text-emerald-700 dark:text-emerald-300 mb-0.5 uppercase tracking-wider flex items-center gap-1.5">
+                                                    <div className="w-1 h-1 bg-current rounded-full" />
+                                                    {msg.atendente_nome}
+                                                </div>
+                                            )}
+
                                             {renderMedia(msg)}
                                             <div className="whitespace-pre-wrap text-[#111b21] dark:text-[#e9edef] pr-16 min-h-[1.2rem]">{msg.conteudo || msg.mensagem}</div>
                                             <div className="absolute bottom-1 right-1.5 flex items-center gap-1 text-[9px] text-[#667781] dark:text-[#8696a0b3] font-mono">

@@ -178,7 +178,7 @@ export const whatsappController = {
     },
 
     sendMessage: async (req: Request, res: Response) => {
-        const { conversa_id, telefone, conteudo, mediaBase64, mediaMimeType, mediaFileName } = req.body;
+        const { conversa_id, telefone, conteudo, mediaBase64, mediaMimeType, mediaFileName, atendente_nome } = req.body;
 
         if (!telefone) {
             return res.status(400).json({ error: 'telefone é obrigatório' });
@@ -238,7 +238,8 @@ export const whatsappController = {
                         media_url: mediaUrl,
                         media_type: mediaType,
                         mime_type: mediaMimeType,
-                        file_name: mediaFileName
+                        file_name: mediaFileName,
+                        atendente_nome: atendente_nome || null
                     },
                 ])
                 .select();
