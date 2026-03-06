@@ -87,9 +87,11 @@ const whatsappController = {
             const from = remoteJid?.split('@')[0];
             const isGroup = remoteJid?.endsWith('@g.us');
 
-            if (!from || key?.fromMe) {
+            if (!from) {
                 return res.sendStatus(200);
             }
+
+            const isFromMe = key?.fromMe || false;
 
             const participant = data.participant || key?.participant || data.message?.participant;
             const actualSender = isGroup && participant ? participant.split('@')[0] : from;
@@ -176,7 +178,7 @@ const whatsappController = {
                         cliente_nome: convName,
                         status_aberto: true,
                         is_group: isGroup,
-                        unread_count: 1,
+                        unread_count: isFromMe ? 0 : 1,
                         last_message_at: new Date().toISOString(),
                         updated_at: new Date().toISOString(),
                         foto_url: profilePicUrl
@@ -198,7 +200,7 @@ const whatsappController = {
             } else {
                 const updatePayload: any = {
                     is_group: isGroup,
-                    unread_count: (conversa.unread_count || 0) + 1,
+                    unread_count: isFromMe ? (conversa.unread_count || 0) : (conversa.unread_count || 0) + 1,
                     last_message_at: new Date().toISOString(),
                     updated_at: new Date().toISOString()
                 };
@@ -218,17 +220,17 @@ const whatsappController = {
             const { error: msgError } = await supabase.from('mensagens').insert([
                 {
                     conversa_id: conversa.id,
-                    remetente: senderName,
+                    remetente: isFromMe ? 'Celular' : senderName,
                     mensagem: text,
                     conteudo: text,
                     tipo: mediaType || 'texto',
-                    tipo_envio: 'received',
+                    tipo_envio: isFromMe ? 'sent' : 'received',
                     wa_message_id: key?.id || null,
                     media_url: mediaUrl,
                     media_type: mediaType,
                     mime_type: mimeType,
                     file_name: fileName,
-                    remetente_foto: isGroup ? profilePicUrl : null
+                    remetente_foto: isGroup && !isFromMe ? profilePicUrl : null
                 },
             ]);
 
