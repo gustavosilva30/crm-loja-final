@@ -28,7 +28,12 @@ app.get('/health', (_req: Request, res: Response) => {
 app.get('/webhook', whatsappController.verifyWebhook);
 app.post('/webhook', whatsappController.receiveMessage);
 app.post('/api/whatsapp/send', whatsappController.sendMessage);
-
+app.post('/api/whatsapp/delete', whatsappController.deleteMessage);
+app.post('/api/whatsapp/reaction', whatsappController.sendReaction);
+app.post('/api/whatsapp/location', whatsappController.sendLocation);
+app.get('/api/whatsapp/status', whatsappController.getConnectionStatus);
+app.get('/api/whatsapp/qr', whatsappController.getQrCode);
+app.post('/api/whatsapp/disconnect', whatsappController.disconnect);
 app.use((_req: Request, res: Response) => {
     res.status(404).json({
         error: 'Route not found',

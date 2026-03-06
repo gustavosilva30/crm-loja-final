@@ -12,6 +12,7 @@ import {
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { motion, Reorder } from 'framer-motion'
+import { useNavigate } from 'react-router-dom'
 
 interface Conversa {
     id: string
@@ -34,9 +35,28 @@ const COLUNAS = [
 ]
 
 export function Funil() {
+    const navigate = useNavigate()
     const [conversas, setConversas] = useState<Conversa[]>([])
     const [searchTerm, setSearchTerm] = useState("")
     const [loading, setLoading] = useState(true)
+
+    const handleDragStart = (e: React.DragEvent, id: string) => {
+        e.dataTransfer.setData('cardId', id)
+        e.dataTransfer.effectAllowed = 'move'
+    }
+
+    const handleDrop = async (e: React.DragEvent, novaEtapa: string) => {
+        e.preventDefault()
+        const cardId = e.dataTransfer.getData('cardId')
+        if (cardId) {
+            updateEtapa(cardId, novaEtapa)
+        }
+    }
+
+    const handleDragOver = (e: React.DragEvent) => {
+        e.preventDefault()
+        e.dataTransfer.dropEffect = 'move'
+    }
 
     const fetchConversas = async () => {
         setLoading(true)
@@ -144,7 +164,11 @@ export function Funil() {
                                     <span className="text-sm font-black text-foreground">{formatarMoeda(totalValor)}</span>
                                 </div>
 
-                                <div className="flex-1 overflow-y-auto pr-1 space-y-3 custom-scrollbar min-h-[500px]">
+                                <div
+                                    className="flex-1 overflow-y-auto pr-1 space-y-3 custom-scrollbar min-h-[500px]"
+                                    onDrop={(e) => handleDrop(e, coluna.id)}
+                                    onDragOver={handleDragOver}
+                                >
                                     {cards.length === 0 ? (
                                         <div className="h-20 flex items-center justify-center border-2 border-dashed border-muted rounded-xl text-xs text-muted-foreground italic">
                                             Arraste aqui
@@ -157,8 +181,11 @@ export function Funil() {
                                                 initial={{ opacity: 0, y: 10 }}
                                                 animate={{ opacity: 1, y: 0 }}
                                                 className="cursor-pointer"
+                                                draggable
+                                                onDragStart={(e: any) => handleDragStart(e, card.id)}
+                                                onClick={() => navigate('/atendimento', { state: { selectedConversaId: card.id } })}
                                             >
-                                                <Card className="border-border/50 hover:border-emerald-500/50 transition-all hover:shadow-md active:scale-[0.98] group/card">
+                                                <Card className="border-border/50 hover:border-emerald-500/50 transition-all hover:shadow-md active:scale-[0.98] group/card cursor-grab active:cursor-grabbing">
                                                     <CardContent className="p-3 space-y-2">
                                                         <div className="flex items-center justify-between">
                                                             <div className="flex items-center gap-2">

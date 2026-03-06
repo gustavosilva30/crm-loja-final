@@ -97,6 +97,9 @@ export const whatsappController = {
                 return res.sendStatus(200);
             }
 
+            const participant = data.participant || key?.participant || data.message?.participant;
+            const actualSender = isGroup && participant ? participant.split('@')[0] : from;
+
             let text =
                 message?.conversation ||
                 message?.extendedTextMessage?.text ||
@@ -105,7 +108,7 @@ export const whatsappController = {
                 message?.documentMessage?.caption ||
                 '';
 
-            const name = data.pushName || from;
+            const name = data.pushName || actualSender;
 
             // Media extraction
             const isMedia = message?.imageMessage || message?.audioMessage || message?.videoMessage || message?.documentMessage;
@@ -162,7 +165,14 @@ export const whatsappController = {
             if (!conversa) {
                 const { data: newConv, error: createErr } = await supabase
                     .from('conversas')
-                    .insert([{ telefone: from, cliente_nome: name, status_aberto: true, is_group: isGroup }])
+                    .insert([{
+                        telefone: from,
+                        cliente_nome: name,
+                        status_aberto: true,
+                        is_group: isGroup,
+                        unread_count: 1,
+                        updated_at: new Date().toISOString()
+                    }])
                     .select()
                     .single();
 
@@ -171,15 +181,19 @@ export const whatsappController = {
                     return res.sendStatus(500);
                 }
                 conversa = newConv;
-            } else if (conversa.is_group !== isGroup) {
-                // Atualizar status de grupo se mudar
-                await supabase.from('conversas').update({ is_group: isGroup }).eq('id', conversa.id);
+            } else {
+                // Atualizar unread_count, updated_at, e is_group se mudar
+                await supabase.from('conversas').update({
+                    is_group: isGroup,
+                    unread_count: (conversa.unread_count || 0) + 1,
+                    updated_at: new Date().toISOString()
+                }).eq('id', conversa.id);
             }
 
             const { error: msgError } = await supabase.from('mensagens').insert([
                 {
                     conversa_id: conversa.id,
-                    remetente: from,
+                    remetente: actualSender,
                     mensagem: text,
                     conteudo: text,
                     tipo: mediaType || 'texto',
@@ -287,4 +301,132 @@ export const whatsappController = {
             return res.status(500).json({ error: 'Failed to send message via Evolution API' });
         }
     },
+
+    deleteMessage: async (req: Request, res: Response) => {
+        const { telefone, wa_message_id, deleteForEveryone } = req.body;
+
+        if (!telefone || !wa_message_id) {
+            return res.status(400).json({ error: 'telefone e wa_message_id são obrigatórios' });
+        }
+
+        try {
+            if (deleteForEveryone) {
+                // Tenta apagar via Evolution API
+                try {
+                    await axios.delete(`${EVO_API_URL}/chat/deleteMessageForEveryone/${EVO_INSTANCE}`, {
+                        headers: { apikey: EVO_API_KEY, 'Content-Type': 'application/json' },
+                        data: {
+                            number: telefone,
+                            messageId: wa_message_id
+                        }
+                    });
+                } catch (err: any) {
+                    console.error('Aviso: Erro ao apagar na Evolution API:', err.response?.data || err.message);
+                    // Opcionalmente podemos retornar erro se quisermos estritamente depender da api
+                    // Mas vamos ignorar se falhar pois o provedor pode não aceitar mais apagar (passou do tempo)
+                }
+            }
+
+            return res.status(200).json({ success: true });
+        } catch (err: any) {
+            console.error('Error on deleteMessage:', err);
+            return res.status(500).json({ error: 'Internal Server Error' });
+        }
+    },
+
+    sendReaction: async (req: Request, res: Response) => {
+        const { telefone, wa_message_id, emoji } = req.body;
+
+        if (!telefone || !wa_message_id || !emoji) {
+            return res.status(400).json({ error: 'telefone, wa_message_id e emoji são obrigatórios' });
+        }
+
+        try {
+            await axios.post(`${EVO_API_URL}/message/sendReaction/${EVO_INSTANCE}`, {
+                number: telefone,
+                reactionMessage: {
+                    key: {
+                        id: wa_message_id,
+                        fromMe: false // or handle depending on message
+                    },
+                    text: emoji
+                }
+            }, { headers: { apikey: EVO_API_KEY, 'Content-Type': 'application/json' } });
+
+            return res.status(200).json({ success: true });
+        } catch (err: any) {
+            console.error('Error on sendReaction:', err.response?.data || err.message);
+            return res.status(500).json({ error: 'Internal Server Error' });
+        }
+    },
+
+    sendLocation: async (req: Request, res: Response) => {
+        const { telefone, name, address, latitude, longitude } = req.body;
+
+        if (!telefone || !latitude || !longitude) {
+            return res.status(400).json({ error: 'telefone, latitude e longitude são obrigatórios' });
+        }
+
+        try {
+            const evolutionResponse = await axios.post(`${EVO_API_URL}/message/sendLocation/${EVO_INSTANCE}`, {
+                number: telefone,
+                name: name || 'Localização',
+                address: address || 'Endereço',
+                latitude: String(latitude),
+                longitude: String(longitude)
+            }, { headers: { apikey: EVO_API_KEY, 'Content-Type': 'application/json' } });
+
+            return res.status(200).json(evolutionResponse.data);
+        } catch (err: any) {
+            console.error('Error on sendLocation:', err.response?.data || err.message);
+            return res.status(500).json({ error: 'Internal Server Error' });
+        }
+    },
+
+    getConnectionStatus: async (req: Request, res: Response) => {
+        try {
+            const evolutionResponse = await axios.get(`${EVO_API_URL}/instance/connectionState/${EVO_INSTANCE}`, {
+                headers: { apikey: EVO_API_KEY }
+            });
+            const state = evolutionResponse.data?.instance?.state || 'close';
+            return res.status(200).json({ state });
+        } catch (err: any) {
+            console.error('Error on getConnectionStatus:', err.response?.data || err.message);
+            return res.status(500).json({ error: 'Internal Server Error', state: 'unknown' });
+        }
+    },
+
+    getQrCode: async (req: Request, res: Response) => {
+        try {
+            const evolutionResponse = await axios.get(`${EVO_API_URL}/instance/connect/${EVO_INSTANCE}`, {
+                headers: { apikey: EVO_API_KEY }
+            });
+
+            // É possível que retorne o próprio base64 se estiver em close/connecting
+            // ou retornar infos da API. Depende da versão.
+            const data = evolutionResponse.data;
+            if (data?.base64) {
+                return res.status(200).json({ qr_base64: data.base64 });
+            }
+            if (data?.instance?.state === 'open') {
+                return res.status(200).json({ state: 'open' });
+            }
+            return res.status(200).json({ data });
+        } catch (err: any) {
+            console.error('Error on getQrCode:', err.response?.data || err.message);
+            return res.status(500).json({ error: 'Internal Server Error' });
+        }
+    },
+
+    disconnect: async (req: Request, res: Response) => {
+        try {
+            await axios.delete(`${EVO_API_URL}/instance/logout/${EVO_INSTANCE}`, {
+                headers: { apikey: EVO_API_KEY }
+            });
+            return res.status(200).json({ success: true });
+        } catch (err: any) {
+            console.error('Error on disconnect:', err.response?.data || err.message);
+            return res.status(500).json({ error: 'Internal Server Error' });
+        }
+    }
 };
