@@ -1,5 +1,6 @@
 import { Outlet, useLocation } from "react-router-dom"
 import { Sidebar } from "./Sidebar"
+import { CommandMenu } from "./CommandMenu"
 import { motion } from "framer-motion"
 import { useUIStore } from "@/store/uiStore"
 import { cn } from "@/lib/utils"
@@ -11,6 +12,7 @@ export function Layout() {
 
   return (
     <div className="flex min-h-screen bg-background text-foreground overflow-hidden">
+      <CommandMenu />
       <div className={cn(
         "transition-all duration-300 ease-in-out shrink-0",
         sidebarOpen ? "w-64" : "w-0 overflow-hidden"

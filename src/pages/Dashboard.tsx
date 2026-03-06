@@ -327,114 +327,116 @@ export function Dashboard() {
 
       {/* KPIs Principais */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Card className="border-border bg-card shadow-sm">
+        <Card className="border-border/50 bg-card/50 backdrop-blur-xl shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300 cursor-default">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Receita Total</CardTitle>
+            <CardTitle className="text-sm font-bold text-muted-foreground uppercase tracking-widest">Receita Total</CardTitle>
             <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center">
               <DollarSign className="h-4 w-4 text-emerald-500" />
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{loading ? '—' : fmt(stats.faturamento)}</div>
-            <div className="flex items-center gap-2 mt-1">
+            <div className="text-3xl font-black">{loading ? '—' : fmt(stats.faturamento)}</div>
+            <div className="flex items-center gap-2 mt-2">
               <GrowthBadge current={stats.faturamento} prev={stats.faturamentoPrev} />
-              <span className="text-xs text-muted-foreground">vs período anterior</span>
+              <span className="text-[10px] text-muted-foreground uppercase font-bold">vs período anterior</span>
             </div>
           </CardContent>
         </Card>
 
-        <Card className="border-border bg-card shadow-sm">
+        <Card className="border-border/50 bg-card/50 backdrop-blur-xl shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300 cursor-default">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Vendas Realizadas</CardTitle>
+            <CardTitle className="text-sm font-bold text-muted-foreground uppercase tracking-widest">Vendas Realizadas</CardTitle>
             <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center">
               <ShoppingBag className="h-4 w-4 text-blue-500" />
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{loading ? '—' : stats.vendasCount}</div>
-            <div className="flex items-center gap-2 mt-1">
+            <div className="text-3xl font-black">{loading ? '—' : stats.vendasCount}</div>
+            <div className="flex items-center gap-2 mt-2">
               <GrowthBadge current={stats.vendasCount} prev={stats.vendasCountPrev} />
-              <span className="text-xs text-muted-foreground">vs período anterior</span>
+              <span className="text-[10px] text-muted-foreground uppercase font-bold">vs período anterior</span>
             </div>
           </CardContent>
         </Card>
 
-        <Card className="border-border bg-card shadow-sm">
+        <Card className="border-border/50 bg-card/50 backdrop-blur-xl shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300 cursor-default">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Ticket Médio</CardTitle>
+            <CardTitle className="text-sm font-bold text-muted-foreground uppercase tracking-widest">Ticket Médio</CardTitle>
             <div className="w-8 h-8 rounded-lg bg-violet-500/10 flex items-center justify-center">
               <Percent className="h-4 w-4 text-violet-500" />
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{loading ? '—' : fmt(stats.ticketMedio)}</div>
-            <div className="flex items-center gap-2 mt-1">
+            <div className="text-3xl font-black">{loading ? '—' : fmt(stats.ticketMedio)}</div>
+            <div className="flex items-center gap-2 mt-2">
               <GrowthBadge current={stats.ticketMedio} prev={stats.ticketMedioPrev} />
-              <span className="text-xs text-muted-foreground">vs período anterior</span>
+              <span className="text-[10px] text-muted-foreground uppercase font-bold">vs período anterior</span>
             </div>
           </CardContent>
         </Card>
 
-        <Card className="border-border bg-card shadow-sm">
+        <Card className="border-border/50 bg-card/50 backdrop-blur-xl shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300 cursor-default">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Estoque Crítico</CardTitle>
+            <CardTitle className="text-sm font-bold text-muted-foreground uppercase tracking-widest">Estoque Crítico</CardTitle>
             <div className="w-8 h-8 rounded-lg bg-rose-500/10 flex items-center justify-center">
               <PackageOpen className="h-4 w-4 text-rose-500" />
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-rose-500">{loading ? '—' : `${stats.estoqueBaixo} itens`}</div>
-            <p className="text-xs text-muted-foreground mt-1">Abaixo do mínimo</p>
+            <div className="text-3xl font-black text-rose-500">{loading ? '—' : `${stats.estoqueBaixo} itens`}</div>
+            <p className="text-[10px] text-muted-foreground mt-2 uppercase font-bold">Abaixo do mínimo</p>
           </CardContent>
         </Card>
       </div>
+
 
       {/* KPIs Secundários */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Card className="border-border bg-card shadow-sm">
+        <Card className="border-border/50 bg-card/30 backdrop-blur-md shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Receita Hoje</CardTitle>
+            <CardTitle className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Receita Hoje</CardTitle>
             <Calendar className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-xl font-bold text-emerald-500">{loading ? '—' : fmt(stats.vendasHoje)}</div>
-            <p className="text-xs text-muted-foreground mt-1">Vendas do dia</p>
+            <div className="text-2xl font-black text-emerald-500">{loading ? '—' : fmt(stats.vendasHoje)}</div>
+            <p className="text-[10px] text-muted-foreground mt-1 uppercase font-bold">Vendas do dia</p>
           </CardContent>
         </Card>
 
-        <Card className="border-border bg-card shadow-sm">
+        <Card className="border-border/50 bg-card/30 backdrop-blur-md shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Despesas do Mês</CardTitle>
+            <CardTitle className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Despesas do Mês</CardTitle>
             <TrendingDown className="h-4 w-4 text-rose-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-xl font-bold text-rose-500">{loading ? '—' : fmt(stats.despesasMes)}</div>
-            <p className="text-xs text-muted-foreground mt-1">Contas a pagar</p>
+            <div className="text-2xl font-black text-rose-500">{loading ? '—' : fmt(stats.despesasMes)}</div>
+            <p className="text-[10px] text-muted-foreground mt-1 uppercase font-bold">Contas a pagar</p>
           </CardContent>
         </Card>
 
-        <Card className="border-border bg-card shadow-sm">
+        <Card className="border-border/50 bg-card/30 backdrop-blur-md shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Mercado Livre</CardTitle>
+            <CardTitle className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Mercado Livre</CardTitle>
             <TrendingUp className="h-4 w-4 text-amber-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-xl font-bold text-amber-500">{loading ? '—' : fmt(stats.mlFaturamento)}</div>
-            <p className="text-xs text-muted-foreground mt-1">Canal ML</p>
+            <div className="text-2xl font-black text-amber-500">{loading ? '—' : fmt(stats.mlFaturamento)}</div>
+            <p className="text-[10px] text-muted-foreground mt-1 uppercase font-bold">Canal ML</p>
           </CardContent>
         </Card>
 
-        <Card className="border-border bg-card shadow-sm">
+        <Card className="border-border/50 bg-card/30 backdrop-blur-md shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Total de Clientes</CardTitle>
+            <CardTitle className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Total de Clientes</CardTitle>
             <Users className="h-4 w-4 text-sky-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-xl font-bold">{loading ? '—' : stats.clientesTotal}</div>
-            <p className="text-xs text-muted-foreground mt-1">Clientes cadastrados</p>
+            <div className="text-2xl font-black">{loading ? '—' : stats.clientesTotal}</div>
+            <p className="text-[10px] text-muted-foreground mt-1 uppercase font-bold">Clientes ativos</p>
           </CardContent>
         </Card>
       </div>
+
 
       {/* Gráfico principal + Pedidos recentes */}
       <div className="grid gap-4 lg:grid-cols-7">

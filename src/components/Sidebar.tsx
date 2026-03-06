@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom"
-import { LayoutDashboard, Package, ShoppingCart, ShoppingBag, DollarSign, Users, Truck, Settings, LogOut, FileText, Bell, BarChart, Wallet, MessageCircle, CheckCircle2, Gavel, CalendarDays, Target, RotateCcw, Users2, QrCode, Car, Zap, Map, LayoutGrid as KanbanIcon } from "lucide-react"
+import { LayoutDashboard, Package, ShoppingCart, ShoppingBag, DollarSign, Users, Truck, Settings, LogOut, FileText, Bell, BarChart, Wallet, MessageCircle, CheckCircle2, Gavel, CalendarDays, Target, RotateCcw, Users2, QrCode, Car, Zap, Map, LayoutGrid as KanbanIcon, Search } from "lucide-react"
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils"
 import { ModeToggle } from "./ModeToggle"
@@ -133,6 +133,21 @@ export function Sidebar() {
           </div>
         </div>
         <ModeToggle />
+      </div>
+
+      <div className="px-4">
+        <button
+          onClick={() => { document.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true })) }}
+          className="w-full flex items-center justify-between px-3 py-2 bg-muted/50 hover:bg-muted border border-border/50 rounded-lg text-sm text-muted-foreground transition-colors group"
+        >
+          <div className="flex items-center gap-2">
+            <Search className="w-4 h-4 group-hover:text-primary transition-colors" />
+            <span>Buscar...</span>
+          </div>
+          <kbd className="hidden sm:inline-flex h-5 items-center gap-1 rounded border bg-background px-1.5 font-mono text-[10px] font-medium text-muted-foreground opacity-100">
+            <span className="text-xs">⌘</span>K
+          </kbd>
+        </button>
       </div>
 
       <nav className="flex-1 px-4 space-y-2 overflow-y-auto mt-4">
