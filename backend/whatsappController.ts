@@ -263,41 +263,52 @@ const whatsappController = {
                 messageToClient = `*${atendente_nome}:*\n${conteudo}`;
             }
 
+            // Parallelize operations for better performance
+            const tasks: Promise<any>[] = [];
+
             if (mediaBase64) {
-                // Determine Evo API endpoint based on mime type
                 const base64Data = mediaBase64.includes(',') ? mediaBase64.split(',')[1] : mediaBase64;
                 const isAudio = mediaMimeType?.startsWith('audio/');
 
-                // Upload to Supabase to save the URL in our DB
-                const uploadResult = await uploadBase64ToSupabase(base64Data, mediaMimeType || 'application/octet-stream');
-                if (uploadResult) {
-                    mediaUrl = uploadResult.publicUrl;
-                }
+                // Task 1: Upload to Supabase
+                const uploadTask = uploadBase64ToSupabase(base64Data, mediaMimeType || 'application/octet-stream')
+                    .then(res => { if (res) mediaUrl = res.publicUrl; });
+                tasks.push(uploadTask);
 
+                // Task 2: Send to Evolution API
+                let evoTask;
                 if (isAudio && (mediaMimeType.includes('ogg') || mediaMimeType.includes('mp4'))) {
                     mediaType = 'audio';
-                    evolutionResponse = await axios.post(`${EVO_API_URL}/message/sendWhatsAppAudio/${EVO_INSTANCE}`, {
+                    evoTask = axios.post(`${EVO_API_URL}/message/sendWhatsAppAudio/${EVO_INSTANCE}`, {
                         number: telefone,
-                        audio: mediaBase64 // Evo API prefere o data URI completo ou URL
+                        audio: mediaBase64
                     }, { headers: { apikey: EVO_API_KEY, 'Content-Type': 'application/json' } });
                 } else {
                     mediaType = mediaMimeType?.startsWith('image/') ? 'image' : mediaMimeType?.startsWith('video/') ? 'video' : 'document';
-                    evolutionResponse = await axios.post(`${EVO_API_URL}/message/sendMedia/${EVO_INSTANCE}`, {
+                    evoTask = axios.post(`${EVO_API_URL}/message/sendMedia/${EVO_INSTANCE}`, {
                         number: telefone,
                         mediatype: mediaType,
                         mimetype: mediaMimeType || 'application/octet-stream',
                         caption: messageToClient || undefined,
-                        media: base64Data, // sendMedia usually uses just the base64 string
+                        media: base64Data,
                         fileName: mediaFileName || 'arquivo'
                     }, { headers: { apikey: EVO_API_KEY, 'Content-Type': 'application/json' } });
                 }
+                tasks.push(evoTask.then(res => evolutionResponse = res));
             } else {
-                evolutionResponse = await axios.post(`${EVO_API_URL}/message/sendText/${EVO_INSTANCE}`, {
+                // Just text message
+                const textTask = axios.post(`${EVO_API_URL}/message/sendText/${EVO_INSTANCE}`, {
                     number: telefone,
                     text: messageToClient,
-                }, { headers: { apikey: EVO_API_KEY, 'Content-Type': 'application/json' } });
+                }, { headers: { apikey: EVO_API_KEY, 'Content-Type': 'application/json' } })
+                    .then(res => evolutionResponse = res);
+                tasks.push(textTask);
             }
 
+            // Wait for critical tasks (API Send + Upload)
+            await Promise.all(tasks);
+
+            // Save to DB
             const { data, error } = await supabase
                 .from('mensagens')
                 .insert([
@@ -308,7 +319,7 @@ const whatsappController = {
                         conteudo: conteudo || '',
                         tipo: mediaType,
                         tipo_envio: 'sent',
-                        wa_message_id: evolutionResponse.data?.key?.id || evolutionResponse.data?.id || `manual-${Date.now()}`,
+                        wa_message_id: evolutionResponse?.data?.key?.id || evolutionResponse?.data?.id || `manual-${Date.now()}`,
                         media_url: mediaUrl,
                         media_type: mediaType,
                         mime_type: mediaMimeType,
@@ -323,11 +334,13 @@ const whatsappController = {
                 return res.status(500).json({ error: 'Failed to save outgoing message' });
             }
 
-            // Atualiza o last_message_at da conversa para ela subir no funil/lista (apenas no envio/recebimento)
-            await supabase.from('conversas').update({
+            // Background task: Update conversation timestamp (don't await)
+            supabase.from('conversas').update({
                 last_message_at: new Date().toISOString(),
                 updated_at: new Date().toISOString()
-            }).eq('id', conversa_id);
+            }).eq('id', conversa_id).then(({ error }) => {
+                if (error) console.error('Erro ao atualizar conversa em background:', error);
+            });
 
             return res.status(200).json(data);
         } catch (err: any) {

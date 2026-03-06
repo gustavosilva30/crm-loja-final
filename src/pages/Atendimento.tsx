@@ -57,6 +57,7 @@ interface Mensagem {
     is_deleted?: boolean
     is_pinned?: boolean
     remetente_foto?: string
+    status?: 'sending' | 'sent' | 'error'
 }
 
 interface Contato {
@@ -214,19 +215,57 @@ export function Atendimento() {
     useEffect(() => {
         fetchData()
         const channel = supabase.channel('whatsapp-realtime')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'mensagens' }, (payload) => {
-                if (payload.eventType === 'INSERT') {
-                    const newMsg = payload.new as Mensagem
-                    if (selectedConversa && newMsg.conversa_id === selectedConversa.id) {
-                        setMensagens(prev => [...prev, newMsg])
-                    }
+            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'mensagens' }, (payload) => {
+                const newMsg = payload.new as Mensagem
+                if (selectedConversa && newMsg.conversa_id === selectedConversa.id) {
+                    setMensagens(prev => {
+                        // Evita duplicatas se a mensagem otimista já estiver lá
+                        // Procuramos por uma mensagem 'sending' com o mesmo conteúdo
+                        const optimisticIndex = prev.findIndex(m =>
+                            m.status === 'sending' &&
+                            m.mensagem === newMsg.mensagem &&
+                            Math.abs(new Date(m.timestamp).getTime() - new Date(newMsg.timestamp).getTime()) < 10000
+                        );
+
+                        if (optimisticIndex > -1) {
+                            const newArr = [...prev];
+                            newArr[optimisticIndex] = { ...newMsg, status: 'sent' };
+                            return newArr;
+                        }
+
+                        // Se não for duplicata, apenas adiciona
+                        if (prev.some(m => m.id === newMsg.id || (m.wa_message_id && m.wa_message_id === newMsg.wa_message_id))) {
+                            return prev;
+                        }
+                        return [...prev, newMsg];
+                    });
                 }
-                fetchData()
+                // Em vez de fetchData() completo, poderíamos apenas atualizar a conversa específica na lista
+                updateConversaInList(newMsg.conversa_id, newMsg);
             })
             .on('postgres_changes', { event: '*', schema: 'public', table: 'conversas' }, () => fetchData())
             .subscribe()
         return () => { supabase.removeChannel(channel) }
     }, [selectedConversa])
+
+    const updateConversaInList = (conversaId: string, lastMsg: Mensagem) => {
+        setConversas(prev => {
+            const index = prev.findIndex(c => c.id === conversaId);
+            if (index === -1) {
+                fetchData(); // Se não achou na lista, melhor buscar tudo
+                return prev;
+            }
+            const updated = [...prev];
+            updated[index] = {
+                ...updated[index],
+                last_message_at: lastMsg.timestamp,
+                updated_at: new Date().toISOString(),
+                // Poderíamos atualizar o texto da última mensagem aqui se tivéssemos esse campo na interface Conversa
+            };
+            // Re-ordena a lista
+            return updated.sort((a, b) => new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime());
+        });
+    }
 
     // Auto-scroll e Click Outside Menu
     useEffect(() => {
@@ -337,10 +376,37 @@ export function Atendimento() {
         e.preventDefault()
         if ((!newMessage.trim() && !fileBase64) || !selectedConversa) return
 
-        // Nome do atendente prioritário: vindo do authStore, fallback para localStorage se disponível
-        // Nome do atendente prioritário: vindo do authStore
         const { user } = useAuthStore.getState();
         const nomeAtendente = atendente?.nome || atendente?.name || user?.user_metadata?.full_name || user?.email?.split('@')[0] || "Vendedor";
+
+        const tempId = `temp-${Date.now()}`;
+
+        // Mensagem otimista para feedback imediato
+        const optimisticMsg: Mensagem = {
+            id: tempId,
+            conversa_id: selectedConversa.id,
+            remetente: 'atendente',
+            atendente_nome: nomeAtendente,
+            mensagem: newMessage,
+            conteudo: newMessage,
+            tipo_envio: 'sent',
+            tipo: selectedFile?.type?.startsWith('image/') ? 'image' :
+                selectedFile?.type?.startsWith('video/') ? 'video' :
+                    selectedFile?.type?.startsWith('audio/') ? 'audio' :
+                        selectedFile ? 'document' : 'texto',
+            timestamp: new Date().toISOString(),
+            status: 'sending',
+            media_url: fileBase64 ? fileBase64 : undefined, // Preview local
+            file_name: selectedFile?.name
+        }
+
+        // Atualiza UI instantaneamente
+        setMensagens(prev => [...prev, optimisticMsg]);
+        setNewMessage("")
+        const currentFile = selectedFile;
+        const currentBase64 = fileBase64;
+        removeFile()
+        setReplyingTo(null)
 
         const payload = {
             conversa_id: selectedConversa.id,
@@ -348,21 +414,22 @@ export function Atendimento() {
             conteudo: newMessage,
             atendente_id: atendente?.id,
             atendente_nome: nomeAtendente,
-            mediaBase64: fileBase64 || undefined,
-            mediaMimeType: selectedFile?.type || undefined,
-            mediaFileName: selectedFile?.name || undefined
+            mediaBase64: currentBase64 || undefined,
+            mediaMimeType: currentFile?.type || undefined,
+            mediaFileName: currentFile?.name || undefined
         }
 
-        console.log("Enviando mensagem com atendente:", nomeAtendente);
-
-        setNewMessage("")
-        removeFile()
-        setReplyingTo(null)
         try {
             const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
-            await axios.post(`${apiUrl}/api/whatsapp/send`, payload)
+            const response = await axios.post(`${apiUrl}/api/whatsapp/send`, payload)
+
+            // Quando o servidor responder, podemos atualizar a mensagem otimista com os dados reais (opcional, pois o realtime cuidará disso)
+            // Mas para evitar duplicatas temporárias, o ideal é que o Realtime ignore se o ID (wa_message_id) já existir.
         } catch (err) {
-            alert("Erro ao enviar mensagem.")
+            console.error("Erro ao enviar:", err);
+            // Marcar como erro na UI
+            setMensagens(prev => prev.map(m => m.id === tempId ? { ...m, status: 'error' } : m));
+            alert("Erro ao enviar mensagem. Verifique sua conexão.")
         }
     }
 
