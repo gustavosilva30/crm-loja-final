@@ -72,7 +72,18 @@ const uploadBase64ToSupabase = async (base64Data: string, mimeType: string) => {
     }
 };
 
-export const whatsappController = {
+export const fetchProfilePic = async (number: string): Promise<string | null> => {
+    try {
+        const { data } = await axios.post(`${EVO_API_URL}/chat/fetchProfilePictureUrl/${EVO_INSTANCE}`, {
+            number: number
+        }, { headers: { apikey: EVO_API_KEY } });
+        return data?.profilePicUrl || null;
+    } catch (err) {
+        return null;
+    }
+};
+
+const whatsappController = {
     verifyWebhook: (_req: Request, res: Response) => {
         return res.status(200).send('Webhook is active');
     },
@@ -109,8 +120,14 @@ export const whatsappController = {
                 '';
 
             const senderName = data.pushName || actualSender;
-            const convName = isGroup ? data.pushName || from : senderName;
-            const profilePicUrl = data.profilePicUrl || data.message?.profilePicUrl || null;
+            const convName = isGroup ? (data.pushName || from) : senderName;
+
+            let profilePicUrl = data.profilePicUrl || data.message?.profilePicUrl || null;
+
+            // Se não veio foto no webhook, tentamos buscar ativamente (apenas se for nova conversa ou se quiser forçar)
+            if (!profilePicUrl) {
+                profilePicUrl = await fetchProfilePic(remoteJid);
+            }
 
             // Media extraction
             const isMedia = message?.imageMessage || message?.audioMessage || message?.videoMessage || message?.documentMessage;
@@ -462,3 +479,5 @@ export const whatsappController = {
         }
     }
 };
+
+export { whatsappController };
