@@ -165,7 +165,10 @@ export function Atendimento() {
         if (location.state?.selectedConversaId && convs) {
             const initialConv = convs.find(c => c.id === location.state.selectedConversaId)
             if (initialConv && !selectedConversa) {
-                setSelectedConversa(initialConv)
+                setSelectedConversa({ ...initialConv, unread_count: 0 })
+                if (initialConv.unread_count > 0) {
+                    setConversas(prev => prev.map(c => c.id === initialConv.id ? { ...c, unread_count: 0 } : c))
+                }
                 window.history.replaceState({}, document.title) // Clear state
             }
         }
@@ -247,7 +250,7 @@ export function Atendimento() {
     }, [selectedConversa?.id]) // Dependência específica do ID para evitar refetches ciclicos
 
     const handleOpenConversa = (conv: Conversa) => {
-        setSelectedConversa(conv);
+        setSelectedConversa({ ...conv, unread_count: 0 });
         // Atualização otimista imediata na lista para remover a bolinha verde instantaneamente
         if (conv.unread_count && conv.unread_count > 0) {
             setConversas(prev => prev.map(c => c.id === conv.id ? { ...c, unread_count: 0 } : c));
@@ -287,7 +290,9 @@ export function Atendimento() {
 
     useEffect(() => {
         fetchData()
+    }, [whatsappInstancia?.id])
 
+    useEffect(() => {
         // Canal de Mensagens (Otimizando para não recarregar lista completa)
         const channel = supabase.channel('whatsapp-realtime')
             .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'mensagens' }, (payload) => {
@@ -325,7 +330,14 @@ export function Atendimento() {
             // Apenas recarrega se houver mudança estrutural ou exclusão
             .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'conversas' }, (payload) => {
                 const updated = payload.new as Conversa;
-                setConversas(prev => prev.map(c => c.id === updated.id ? { ...c, ...updated } : c));
+                setConversas(prev => prev.map(c => {
+                    if (c.id === updated.id) {
+                        // Se for a selecionada, mantemos lida localmente para evitar flickers/race conditions
+                        const forcedUnread = (selectedConversa?.id === updated.id) ? 0 : (updated.unread_count ?? c.unread_count);
+                        return { ...c, ...updated, unread_count: forcedUnread };
+                    }
+                    return c;
+                }));
             })
             .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'conversas' }, () => fetchData())
             .subscribe()
