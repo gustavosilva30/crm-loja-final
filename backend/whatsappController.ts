@@ -226,11 +226,17 @@ export const whatsappController = {
                 const base64Data = mediaBase64.includes(',') ? mediaBase64.split(',')[1] : mediaBase64;
                 const isAudio = mediaMimeType?.startsWith('audio/');
 
-                if (isAudio && mediaMimeType.includes('ogg')) {
+                // Upload to Supabase to save the URL in our DB
+                const uploadResult = await uploadBase64ToSupabase(base64Data, mediaMimeType || 'application/octet-stream');
+                if (uploadResult) {
+                    mediaUrl = uploadResult.publicUrl;
+                }
+
+                if (isAudio && (mediaMimeType.includes('ogg') || mediaMimeType.includes('mp4'))) {
                     mediaType = 'audio';
                     evolutionResponse = await axios.post(`${EVO_API_URL}/message/sendWhatsAppAudio/${EVO_INSTANCE}`, {
                         number: telefone,
-                        audio: base64Data
+                        audio: mediaBase64 // Evo API prefere o data URI completo ou URL
                     }, { headers: { apikey: EVO_API_KEY, 'Content-Type': 'application/json' } });
                 } else {
                     mediaType = mediaMimeType?.startsWith('image/') ? 'image' : mediaMimeType?.startsWith('video/') ? 'video' : 'document';
@@ -239,15 +245,9 @@ export const whatsappController = {
                         mediatype: mediaType,
                         mimetype: mediaMimeType || 'application/octet-stream',
                         caption: messageToClient || undefined,
-                        media: base64Data,
+                        media: base64Data, // sendMedia usually uses just the base64 string
                         fileName: mediaFileName || 'arquivo'
                     }, { headers: { apikey: EVO_API_KEY, 'Content-Type': 'application/json' } });
-                }
-
-                // Upload to Supabase to save the URL in our DB
-                const uploadResult = await uploadBase64ToSupabase(base64Data, mediaMimeType || 'application/octet-stream');
-                if (uploadResult) {
-                    mediaUrl = uploadResult.publicUrl;
                 }
             } else {
                 evolutionResponse = await axios.post(`${EVO_API_URL}/message/sendText/${EVO_INSTANCE}`, {
