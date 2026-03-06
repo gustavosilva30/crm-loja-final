@@ -206,16 +206,27 @@ export function Atendimento() {
 
         // Marcar conversa como lida ao abrir
         await supabase.from('conversas').update({ unread_count: 0 }).eq('id', conversaId)
+
+        // Atualização Otimista: Zera o contador na lista local imediatamente
+        setConversas(prev => prev.map(c => c.id === conversaId ? { ...c, unread_count: 0 } : c))
     }
 
     useEffect(() => {
         if (selectedConversa) fetchMensagens(selectedConversa.id)
     }, [selectedConversa])
 
+    const handleOpenConversa = (conv: Conversa) => {
+        setSelectedConversa(conv);
+        // Atualização otimista imediata na lista para remover a bolinha verde instantaneamente
+        if (conv.unread_count && conv.unread_count > 0) {
+            setConversas(prev => prev.map(c => c.id === conv.id ? { ...c, unread_count: 0 } : c));
+        }
+    }
+
     const handleSelectContact = (contact: Contato) => {
         const existingConv = conversas.find(c => c.telefone === contact.telefone);
         if (existingConv) {
-            setSelectedConversa(existingConv);
+            handleOpenConversa(existingConv);
             setActiveFilter('tudo');
         } else {
             // Se não existe conversa, poderíamos criar uma "fake" ou apenas avisar
@@ -223,7 +234,7 @@ export function Atendimento() {
             supabase.from('conversas').select('*').eq('telefone', contact.telefone).maybeSingle()
                 .then(({ data }) => {
                     if (data) {
-                        setSelectedConversa(data);
+                        handleOpenConversa(data);
                         setActiveFilter('tudo');
                     } else {
                         // Inicia conversa "vazia" temporária
@@ -784,7 +795,7 @@ export function Atendimento() {
                     ) : filteredConversas.length === 0 ? (
                         <div className="p-10 text-center opacity-40 italic text-xs">Nenhuma conversa encontrada.</div>
                     ) : filteredConversas.map(conv => (
-                        <div key={conv.id} onClick={() => setSelectedConversa(conv)}
+                        <div key={conv.id} onClick={() => handleOpenConversa(conv)}
                             className={`flex items-center gap-3 px-3 py-3 cursor-pointer border-b border-[#f2f2f2] dark:border-[#222d34] transition-all
                                 ${selectedConversa?.id === conv.id ? 'bg-[#ebebeb] dark:bg-[#2a3942]' : 'hover:bg-[#f5f6f6] dark:hover:bg-[#202c33]'}`}>
                             <div className="w-12 h-12 rounded-full bg-[#dfe5e7] dark:bg-[#374248] flex items-center justify-center shrink-0 border border-black/5 relative overflow-hidden">
