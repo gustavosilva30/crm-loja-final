@@ -5,22 +5,22 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
+const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
 
 if (!supabaseUrl) {
-    throw new Error('SUPABASE_URL is required');
+    throw new Error('SUPABASE_URL or VITE_SUPABASE_URL is required');
 }
 
 if (!supabaseAnonKey) {
-    throw new Error('SUPABASE_ANON_KEY is required');
+    throw new Error('SUPABASE_ANON_KEY or VITE_SUPABASE_ANON_KEY is required');
 }
 
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-const EVO_API_URL = process.env.EVO_API_URL;
-const EVO_API_KEY = process.env.EVO_API_KEY;
-const EVO_INSTANCE = process.env.EVO_INSTANCE;
+const EVO_API_URL = process.env.EVO_API_URL || process.env.VITE_EVO_API_URL;
+const EVO_API_KEY = process.env.EVO_API_KEY || process.env.VITE_EVO_API_KEY;
+const EVO_INSTANCE = process.env.EVO_INSTANCE || process.env.VITE_EVO_INSTANCE;
 
 if (!EVO_API_URL) {
     throw new Error('EVO_API_URL is required');
@@ -41,15 +41,15 @@ export const whatsappController = {
 
     receiveMessage: async (req: Request, res: Response) => {
         try {
-            const event = req.body.event;
-            const data = req.body.data;
+            const { event, data } = req.body;
+            console.log(`[Webhook] Evento recebido: ${event}`);
 
             if (event === 'messages.upsert' && data) {
-                const message = data.message;
-                const key = data.key;
-
+                const { message, key, pushName } = data;
                 const remoteJid = key?.remoteJid;
                 const from = remoteJid?.split('@')[0];
+
+                console.log(`[Webhook] Mensagem de: ${from} (${pushName})`);
 
                 if (key?.fromMe) {
                     return res.sendStatus(200);
@@ -61,16 +61,17 @@ export const whatsappController = {
                     message?.imageMessage?.caption ||
                     '';
 
-                const name = data.pushName || from;
+                const name = pushName || from;
 
                 if (from && text) {
                     let { data: conversa, error: convErr } = await supabase
                         .from('conversas')
                         .select('*')
                         .eq('telefone', from)
-                        .single();
+                        .maybeSingle();
 
-                    if (convErr && convErr.code === 'PGRST116') {
+                    if (!conversa) {
+                        console.log(`[Webhook] Criando nova conversa para ${from}`);
                         const { data: newConv, error: createErr } = await supabase
                             .from('conversas')
                             .insert([
@@ -84,10 +85,9 @@ export const whatsappController = {
                             .single();
 
                         if (createErr) {
-                            console.error('Erro ao criar conversa:', createErr);
+                            console.error('[Webhook] Erro ao criar conversa:', createErr);
                             return res.sendStatus(500);
                         }
-
                         conversa = newConv;
                     }
 
@@ -102,22 +102,24 @@ export const whatsappController = {
                         ]);
 
                         if (msgError) {
-                            console.error('Erro ao salvar mensagem recebida:', msgError);
+                            console.error('[Webhook] Erro ao salvar mensagem:', msgError);
                             return res.sendStatus(500);
                         }
+                        console.log(`[Webhook] Mensagem salva com sucesso na conversa ${conversa.id}`);
                     }
                 }
             }
 
             return res.sendStatus(200);
         } catch (err) {
-            console.error('Error on Evolution API Webhook:', err);
+            console.error('[Webhook] Erro crítico no processamento:', err);
             return res.sendStatus(500);
         }
     },
 
     sendMessage: async (req: Request, res: Response) => {
         const { conversa_id, telefone, conteudo } = req.body;
+        console.log(`[API Send] Enviando para ${telefone}`);
 
         try {
             const response = await axios.post(
@@ -147,14 +149,14 @@ export const whatsappController = {
                 .select();
 
             if (error) {
-                console.error('Erro ao salvar mensagem enviada:', error);
+                console.error('[API Send] Erro ao salvar log no banco:', error);
                 return res.status(500).json({ error: 'Failed to save outgoing message' });
             }
 
             return res.status(200).json(data);
         } catch (err: any) {
             console.error(
-                'Error sending message via Evolution API:',
+                '[API Send] Erro na Evolution API:',
                 err.response?.data || err.message
             );
             return res.status(500).json({ error: 'Failed to send message via Evolution API' });
