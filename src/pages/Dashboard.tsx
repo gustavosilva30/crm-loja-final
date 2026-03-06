@@ -147,7 +147,7 @@ export function Dashboard() {
       ] = await Promise.all([
         supabase
           .from('vendas')
-          .select('id, total, status, origem_ml, data_venda, forma_pagamento, clientes(nome)')
+          .select('id, total, status, origem_ml, data_venda, forma_pagamento, clientes!cliente_id(nome)')
           .gte('data_venda', start)
           .lte('data_venda', endDateTime),
         prevStart && prevEnd

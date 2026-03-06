@@ -47,7 +47,7 @@ export function Devolucoes() {
         setLoading(true)
         const [devRes, vendasRes, cliRes] = await Promise.all([
             supabase.from('devolucoes').select('*, vendas(numero_pedido, total), clientes(nome), atendentes(nome)').order('created_at', { ascending: false }),
-            supabase.from('vendas').select('id, numero_pedido, total, cliente_id, clientes(nome)').neq('status', 'Cancelado').order('data_venda', { ascending: false }).limit(100),
+            supabase.from('vendas').select('id, numero_pedido, total, cliente_id, clientes!cliente_id(nome)').neq('status', 'Cancelado').order('data_venda', { ascending: false }).limit(100),
             supabase.from('clientes').select('id, nome')
         ])
         setDevolucoes(devRes.data || [])
