@@ -25,6 +25,9 @@ interface Conversa {
     unread_count?: number
     is_group?: boolean
     nota_interna?: string
+    last_message_text?: string
+    foto_url?: string
+    atendente_id?: string
 }
 
 const COLUNAS = [
@@ -223,34 +226,44 @@ export function Funil() {
                                                     <CardContent className="p-3 space-y-2">
                                                         <div className="flex items-center justify-between">
                                                             <div className="flex items-center gap-2">
-                                                                <div className="w-8 h-8 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center text-emerald-600 font-black text-sm uppercase">
-                                                                    {card.cliente_nome.substring(0, 1)}
-                                                                </div>
+                                                                {card.foto_url ? (
+                                                                    <div className="w-8 h-8 rounded-full border border-border overflow-hidden">
+                                                                        <img src={card.foto_url} alt="" className="w-full h-full object-cover" />
+                                                                    </div>
+                                                                ) : (
+                                                                    <div className="w-8 h-8 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center text-emerald-600 font-black text-sm uppercase">
+                                                                        {card.cliente_nome.substring(0, 1)}
+                                                                    </div>
+                                                                )}
                                                                 <div className="flex flex-col">
-                                                                    <span className="text-xs font-black truncate w-[160px]">{card.cliente_nome}</span>
+                                                                    <span className="text-xs font-black truncate max-w-[140px]">{card.cliente_nome}</span>
                                                                     <span className="text-[9px] text-muted-foreground font-mono">{card.telefone}</span>
                                                                 </div>
                                                             </div>
                                                             <div className="flex flex-col items-end">
                                                                 <span className="text-[11px] font-black text-emerald-600">{formatarMoeda(card.valor_estimado)}</span>
-                                                                <span className="text-[8px] text-muted-foreground uppercase">{format(new Date(card.updated_at), 'dd/MM', { locale: ptBR })}</span>
+                                                                <span className="text-[8px] text-muted-foreground uppercase">
+                                                                    {card.updated_at ? format(new Date(card.updated_at), 'dd/MM', { locale: ptBR }) : '--/--'}
+                                                                </span>
                                                             </div>
                                                         </div>
 
-                                                        {card.nota_interna && (
-                                                            <p className="text-[10px] text-muted-foreground line-clamp-2 bg-muted/30 p-1.5 rounded italic">
-                                                                "{card.nota_interna}"
-                                                            </p>
+                                                        {(card.last_message_text || card.nota_interna) && (
+                                                            <div className="text-[10px] text-muted-foreground line-clamp-2 bg-muted/30 p-1.5 rounded italic border-l-2 border-emerald-500/30">
+                                                                {card.last_message_text || card.nota_interna}
+                                                            </div>
                                                         )}
 
                                                         <div className="flex items-center justify-between pt-1 border-t border-border/50">
                                                             <div className="flex items-center gap-1.5">
-                                                                <MessageSquare className="w-3 h-3 text-muted-foreground" />
-                                                                <span className="text-[10px] text-muted-foreground uppercase font-medium">Contatar</span>
+                                                                <MessageSquare className="w-3 h-3 text-emerald-500" />
+                                                                <span className="text-[10px] text-muted-foreground uppercase font-medium">Chat</span>
                                                             </div>
                                                             <div className="flex items-center gap-1.5 bg-muted/50 px-2 py-0.5 rounded-full">
                                                                 <User className="w-2.5 h-2.5 text-muted-foreground" />
-                                                                <span className="text-[9px] font-bold text-muted-foreground uppercase whitespace-nowrap">Operador 1</span>
+                                                                <span className="text-[9px] font-bold text-muted-foreground uppercase whitespace-nowrap">
+                                                                    {card.atendente_id === atendente?.id ? 'Você' : 'Operador'}
+                                                                </span>
                                                             </div>
                                                             <ChevronRight className="w-3 h-3 text-muted-foreground opacity-0 group-hover/card:opacity-100 transition-opacity" />
                                                         </div>
