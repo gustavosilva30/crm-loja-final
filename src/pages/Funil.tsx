@@ -50,7 +50,7 @@ export function Funil() {
         COLUNAS.forEach(c => labels[c.id] = c.label)
         return labels
     })
-    const { atendente } = useAuthStore()
+    const { atendente, whatsappInstancia } = useAuthStore()
 
     const handleDragStart = (e: React.DragEvent, id: string) => {
         e.dataTransfer.setData('cardId', id)
@@ -74,7 +74,10 @@ export function Funil() {
         setLoading(true)
 
         let query = supabase.from('conversas').select('*').order('updated_at', { ascending: false })
-        if (!atendente?.perm_config) {
+
+        if (whatsappInstancia?.id) {
+            query = query.eq('instancia_id', whatsappInstancia.id)
+        } else if (!atendente?.perm_config) {
             if (atendente?.id) query = query.eq('atendente_id', atendente.id)
         } else {
             query = query.eq('legacy', false)
