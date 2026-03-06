@@ -103,15 +103,23 @@ export const whatsappController = {
                 else if (message?.videoMessage) { mediaType = 'video'; mimeType = message.videoMessage.mimetype; }
                 else if (message?.documentMessage) { mediaType = 'document'; mimeType = message.documentMessage.mimetype; fileName = message.documentMessage.fileName; }
 
-                if (data.message?.base64) {
-                    const base64Str = data.message.base64.includes(',') ? data.message.base64.split(',')[1] : data.message.base64;
-                    const uploadResult = await uploadBase64ToSupabase(base64Str, mimeType || 'application/octet-stream');
+                // Tentar encontrar o base64 em diferentes lugares comuns da Evolution API
+                const base64Str = data.message?.base64 ||
+                    message?.imageMessage?.base64 ||
+                    message?.audioMessage?.base64 ||
+                    message?.videoMessage?.base64 ||
+                    message?.documentMessage?.base64;
+
+                if (base64Str) {
+                    const cleanBase64 = base64Str.includes(',') ? base64Str.split(',')[1] : base64Str;
+                    const uploadResult = await uploadBase64ToSupabase(cleanBase64, mimeType || 'application/octet-stream');
 
                     if (uploadResult) {
                         mediaUrl = uploadResult.publicUrl;
                         fileName = fileName || uploadResult.fileName;
                     }
                 } else {
+                    console.log(`[Webhook] Mídia do tipo ${mediaType} recebida sem Base64. Verifique se 'webhook_base64' está ativado na Evolution API.`);
                     text = text || `[Mídia recebida: ${mediaType}]`;
                 }
             }
