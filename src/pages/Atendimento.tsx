@@ -215,12 +215,13 @@ export function Atendimento() {
 
     const sendAudioMessage = async (base64: string) => {
         if (!selectedConversa) return
+        const nomeAtendente = atendente?.nome || "Vendedor";
         const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
         await axios.post(`${apiUrl}/api/whatsapp/send`, {
             conversa_id: selectedConversa.id,
             telefone: selectedConversa.telefone,
             atendente_id: atendente?.id,
-            atendente_nome: atendente?.nome,
+            atendente_nome: nomeAtendente,
             mediaBase64: base64,
             mediaMimeType: 'audio/ogg; codecs=opus',
             mediaFileName: `audio-${Date.now()}.ogg`

@@ -75,6 +75,7 @@ export const whatsappController = {
 
             const remoteJid = key?.remoteJid;
             const from = remoteJid?.split('@')[0];
+            const isGroup = remoteJid?.endsWith('@g.us');
 
             if (!from || key?.fromMe) {
                 return res.sendStatus(200);
@@ -104,7 +105,8 @@ export const whatsappController = {
                 else if (message?.documentMessage) { mediaType = 'document'; mimeType = message.documentMessage.mimetype; fileName = message.documentMessage.fileName; }
 
                 // Tentar encontrar o base64 em diferentes lugares comuns da Evolution API
-                const base64Str = data.message?.base64 ||
+                const base64Str = data.base64 ||
+                    data.message?.base64 ||
                     message?.imageMessage?.base64 ||
                     message?.audioMessage?.base64 ||
                     message?.videoMessage?.base64 ||
@@ -119,14 +121,12 @@ export const whatsappController = {
                         fileName = fileName || uploadResult.fileName;
                     }
                 } else {
-                    console.log(`[Webhook] Mídia do tipo ${mediaType} recebida sem Base64. Verifique se 'webhook_base64' está ativado na Evolution API.`);
+                    console.log(`[Webhook] Mídia ${mediaType} SEM Base64 no JID ${remoteJid}`);
                     text = text || `[Mídia recebida: ${mediaType}]`;
                 }
             }
 
-            if (!text && !mediaUrl) {
-                return res.sendStatus(200); // Ignore empty messages without media
-            }
+            if (!text && !mediaUrl) return res.sendStatus(200);
 
             let conversa: any = null;
 
@@ -146,7 +146,7 @@ export const whatsappController = {
             if (!conversa) {
                 const { data: newConv, error: createErr } = await supabase
                     .from('conversas')
-                    .insert([{ telefone: from, cliente_nome: name, status_aberto: true }])
+                    .insert([{ telefone: from, cliente_nome: name, status_aberto: true, is_group: isGroup }])
                     .select()
                     .single();
 
@@ -155,6 +155,9 @@ export const whatsappController = {
                     return res.sendStatus(500);
                 }
                 conversa = newConv;
+            } else if (conversa.is_group !== isGroup) {
+                // Atualizar status de grupo se mudar
+                await supabase.from('conversas').update({ is_group: isGroup }).eq('id', conversa.id);
             }
 
             const { error: msgError } = await supabase.from('mensagens').insert([
