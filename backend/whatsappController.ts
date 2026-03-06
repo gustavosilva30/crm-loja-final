@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import axios from 'axios';
 import { createClient } from '@supabase/supabase-js';
-import dotenv from 'dotenv';
+import * as dotenv from 'dotenv';
 import { Buffer } from 'buffer';
 
 dotenv.config();

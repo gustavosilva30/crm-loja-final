@@ -2,7 +2,7 @@ import express, { Request, Response } from 'express';
 import bodyParser from 'body-parser';
 import cors from 'cors';
 import { whatsappController } from './whatsappController';
-import dotenv from 'dotenv';
+import * as dotenv from 'dotenv';
 
 dotenv.config();
 
