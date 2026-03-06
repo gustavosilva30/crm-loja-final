@@ -144,9 +144,15 @@ export function Atendimento() {
         setLoadingConv(true)
 
         let query = supabase.from('conversas').select('*').order('updated_at', { ascending: false })
-        if (!atendente?.perm_config) {
+
+        // Se o atendente tiver uma instância vinculada, mostra apenas as conversas dela
+        if (whatsappInstancia?.id) {
+            query = query.eq('instancia_id', whatsappInstancia.id)
+        } else if (!atendente?.perm_config) {
+            // Fallback para segurança caso não tenha instância mas não seja admin
             if (atendente?.id) query = query.eq('atendente_id', atendente.id)
         } else {
+            // Admin vê tudo que não é legado (se não tiver instância própria)
             query = query.eq('legacy', false)
         }
 
