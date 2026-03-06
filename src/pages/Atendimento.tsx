@@ -11,7 +11,8 @@ import {
     StopCircle, Filter, Users, LayoutDashboard, Target,
     CheckCircle2, Clock, AlertCircle, TrendingUp, Menu,
     Check, CheckCheck, ChevronDown, CornerUpLeft, Copy, SmilePlus,
-    Download, Forward, Pin, Star, ThumbsDown, Trash2, Plus, Link as LinkIcon, MapPin, Camera, Video
+    Download, Forward, Pin, Star, ThumbsDown, Trash2, Plus, Link as LinkIcon, MapPin, Camera, Video,
+    Tag, Zap, Megaphone, Briefcase
 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import axios from "axios"
@@ -30,6 +31,7 @@ interface Conversa {
     etapa_funil?: string
     is_group?: boolean
     unread_count?: number
+    foto_url?: string
 }
 
 interface Mensagem {
@@ -52,6 +54,7 @@ interface Mensagem {
     reactions?: Record<string, string>
     is_deleted?: boolean
     is_pinned?: boolean
+    remetente_foto?: string
 }
 
 interface Contato {
@@ -59,6 +62,7 @@ interface Contato {
     nome: string
     telefone: string
     email?: string
+    foto_url?: string
 }
 
 const ETAPAS_FUNIL = [
@@ -128,6 +132,7 @@ export function Atendimento() {
     const [waConnectionState, setWaConnectionState] = useState<'open' | 'connecting' | 'close' | 'unknown'>('unknown')
     const [qrBase64, setQrBase64] = useState<string | null>(null)
     const [isCheckingConnection, setIsCheckingConnection] = useState(false)
+    const [showMoreMenu, setShowMoreMenu] = useState(false)
 
     // 1. Buscar Conversas e Contatos
     const fetchData = async () => {
@@ -221,10 +226,21 @@ export function Atendimento() {
         return () => { supabase.removeChannel(channel) }
     }, [selectedConversa])
 
-    // Auto-scroll
+    // Auto-scroll e Click Outside Menu
     useEffect(() => {
         if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight
     }, [mensagens])
+
+    useEffect(() => {
+        const handleClickOutside = (e: MouseEvent) => {
+            const target = e.target as HTMLElement
+            if (showMoreMenu && !target.closest('.more-menu-container')) {
+                setShowMoreMenu(false)
+            }
+        }
+        document.addEventListener('mousedown', handleClickOutside)
+        return () => document.removeEventListener('mousedown', handleClickOutside)
+    }, [showMoreMenu])
 
     // Filtragem de conversas
     const filteredConversas = useMemo(() => {
@@ -479,19 +495,60 @@ export function Atendimento() {
                         </div>
                     </div>
                     <div className="flex items-center gap-1">
-                        <Button variant="ghost" size="icon" className="rounded-full text-[#54656f] dark:text-[#aebac1]" onClick={() => {
-                            setShowConnectionModal(true)
-                            fetchWaStatus()
-                            if (waConnectionState !== 'open') fetchQrCode()
-                        }} title="Conexão WhatsApp">
-                            <Phone className="w-5 h-5" />
-                        </Button>
                         <Button variant="ghost" size="icon" className="rounded-full text-[#54656f] dark:text-[#aebac1]" onClick={() => setShowNewContactModal(true)} title="Novo Contato">
                             <UserPlus className="w-5 h-5" />
                         </Button>
-                        <Button variant="ghost" size="icon" className="rounded-full text-[#54656f] dark:text-[#aebac1]">
-                            <MoreVertical className="w-5 h-5" />
-                        </Button>
+                        <div className="relative more-menu-container">
+                            <Button variant="ghost" size="icon" className="rounded-full text-[#54656f] dark:text-[#aebac1]" onClick={() => setShowMoreMenu(!showMoreMenu)}>
+                                <MoreVertical className="w-5 h-5" />
+                            </Button>
+                            {showMoreMenu && (
+                                <div className="absolute top-10 right-0 w-64 bg-white dark:bg-[#233138] rounded-xl shadow-2xl py-2 z-[100] border border-black/5 dark:border-white/5 animate-in fade-in zoom-in-95 duration-200">
+                                    <button className="w-full flex items-center gap-4 px-4 py-2.5 hover:bg-[#f5f6f6] dark:hover:bg-[#182229] transition-colors text-left text-sm" onClick={() => { setShowMoreMenu(false); setShowConnectionModal(true); fetchWaStatus(); }}>
+                                        <div className="w-5 h-5 flex items-center justify-center"><Phone className="w-4 h-4 text-[#54656f] dark:text-[#aebac1]" /></div>
+                                        <span>Conectar WhatsApp</span>
+                                    </button>
+                                    <div className="border-t border-black/5 dark:border-white/5 my-1" />
+                                    <button className="w-full flex items-center gap-4 px-4 py-2.5 hover:bg-[#f5f6f6] dark:hover:bg-[#182229] transition-colors text-left text-sm" onClick={() => setShowMoreMenu(false)}>
+                                        <div className="w-5 h-5 flex items-center justify-center"><Briefcase className="w-4 h-4 text-[#54656f] dark:text-[#aebac1]" /></div>
+                                        <span>Ferramentas comerciais</span>
+                                    </button>
+                                    <button className="w-full flex items-center gap-4 px-4 py-2.5 hover:bg-[#f5f6f6] dark:hover:bg-[#182229] transition-colors text-left text-sm" onClick={() => setShowMoreMenu(false)}>
+                                        <div className="w-5 h-5 flex items-center justify-center"><UserPlus className="w-4 h-4 text-[#54656f] dark:text-[#aebac1]" /></div>
+                                        <span>Novo grupo</span>
+                                    </button>
+                                    <button className="w-full flex items-center gap-4 px-4 py-2.5 hover:bg-[#f5f6f6] dark:hover:bg-[#182229] transition-colors text-left text-sm" onClick={() => setShowMoreMenu(false)}>
+                                        <div className="w-5 h-5 flex items-center justify-center"><Megaphone className="w-4 h-4 text-[#54656f] dark:text-[#aebac1]" /></div>
+                                        <span>Anunciar no Facebook</span>
+                                    </button>
+                                    <button className="w-full flex items-center gap-4 px-4 py-2.5 hover:bg-[#f5f6f6] dark:hover:bg-[#182229] transition-colors text-left text-sm" onClick={() => setShowMoreMenu(false)}>
+                                        <div className="w-5 h-5 flex items-center justify-center"><Package className="w-4 h-4 text-[#54656f] dark:text-[#aebac1]" /></div>
+                                        <span>Catálogo</span>
+                                    </button>
+                                    <button className="w-full flex items-center gap-4 px-4 py-2.5 hover:bg-[#f5f6f6] dark:hover:bg-[#182229] transition-colors text-left text-sm" onClick={() => setShowMoreMenu(false)}>
+                                        <div className="w-5 h-5 flex items-center justify-center"><ShoppingCart className="w-4 h-4 text-[#54656f] dark:text-[#aebac1]" /></div>
+                                        <span>Cobranças</span>
+                                    </button>
+                                    <button className="w-full flex items-center gap-4 px-4 py-2.5 hover:bg-[#f5f6f6] dark:hover:bg-[#182229] transition-colors text-left text-sm" onClick={() => setShowMoreMenu(false)}>
+                                        <div className="w-5 h-5 flex items-center justify-center"><Zap className="w-4 h-4 text-[#54656f] dark:text-[#aebac1]" /></div>
+                                        <span>Respostas rápidas</span>
+                                    </button>
+                                    <button className="w-full flex items-center gap-4 px-4 py-2.5 hover:bg-[#f5f6f6] dark:hover:bg-[#182229] transition-colors text-left text-sm" onClick={() => setShowMoreMenu(false)}>
+                                        <div className="w-5 h-5 flex items-center justify-center"><Star className="w-4 h-4 text-[#54656f] dark:text-[#aebac1]" /></div>
+                                        <span>Mensagens favoritas</span>
+                                    </button>
+                                    <button className="w-full flex items-center gap-4 px-4 py-2.5 hover:bg-[#f5f6f6] dark:hover:bg-[#182229] transition-colors text-left text-sm" onClick={() => setShowMoreMenu(false)}>
+                                        <div className="w-5 h-5 flex items-center justify-center"><Tag className="w-4 h-4 text-[#54656f] dark:text-[#aebac1]" /></div>
+                                        <span>Etiquetas</span>
+                                    </button>
+                                    <div className="border-t border-black/5 dark:border-white/5 my-1" />
+                                    <button className="w-full flex items-center gap-4 px-4 py-2.5 hover:bg-[#f5f6f6] dark:hover:bg-[#182229] transition-colors text-left text-sm" onClick={() => setShowMoreMenu(false)}>
+                                        <div className="w-5 h-5 flex items-center justify-center"><Check className="w-4 h-4 text-[#54656f] dark:text-[#aebac1]" /></div>
+                                        <span>Marcar todas como lidas</span>
+                                    </button>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
 
@@ -545,10 +602,18 @@ export function Atendimento() {
                         <div key={conv.id} onClick={() => setSelectedConversa(conv)}
                             className={`flex items-center gap-3 px-3 py-3 cursor-pointer border-b border-[#f2f2f2] dark:border-[#222d34] transition-all
                                 ${selectedConversa?.id === conv.id ? 'bg-[#ebebeb] dark:bg-[#2a3942]' : 'hover:bg-[#f5f6f6] dark:hover:bg-[#202c33]'}`}>
-                            <div className="w-12 h-12 rounded-full bg-[#dfe5e7] dark:bg-[#374248] flex items-center justify-center shrink-0 border border-black/5 relative">
-                                {conv.is_group ? <Users className="w-6 h-6 text-[#adb5bd]" /> : <User className="w-7 h-7 text-[#adb5bd]" />}
+                            <div className="w-12 h-12 rounded-full bg-[#dfe5e7] dark:bg-[#374248] flex items-center justify-center shrink-0 border border-black/5 relative overflow-visible">
+                                {conv.foto_url ? (
+                                    <img src={conv.foto_url} className="w-full h-full rounded-full object-cover" onError={(e) => {
+                                        (e.target as HTMLImageElement).style.display = 'none';
+                                        (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden');
+                                    }} />
+                                ) : null}
+                                <div className={cn(conv.foto_url ? "hidden" : "block")}>
+                                    {conv.is_group ? <Users className="w-6 h-6 text-[#adb5bd]" /> : <User className="w-7 h-7 text-[#adb5bd]" />}
+                                </div>
                                 {conv.unread_count && conv.unread_count > 0 ? (
-                                    <span className="absolute -top-0.5 -right-0.5 bg-emerald-500 text-white text-[9px] font-bold min-w-[18px] h-[18px] rounded-full flex items-center justify-center border-2 border-white dark:border-[#111b21]">
+                                    <span className="absolute -top-0.5 -right-0.5 bg-emerald-500 text-white text-[9px] font-bold min-w-[18px] h-[18px] rounded-full flex items-center justify-center border-2 border-white dark:border-[#111b21] z-10">
                                         {conv.unread_count}
                                     </span>
                                 ) : null}
@@ -580,8 +645,16 @@ export function Atendimento() {
                     <>
                         <div className="h-[60px] bg-[#f0f2f5] dark:bg-[#202c33] px-4 flex items-center justify-between shrink-0 z-10 border-b border-black/5">
                             <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-full bg-[#dfe5e7] dark:bg-[#374248] flex items-center justify-center shrink-0">
-                                    {selectedConversa.is_group ? <Users className="w-5 h-5 text-[#adb5bd]" /> : <User className="w-6 h-6 text-[#adb5bd]" />}
+                                <div className="w-10 h-10 rounded-full bg-[#dfe5e7] dark:bg-[#374248] flex items-center justify-center shrink-0 border border-black/5">
+                                    {selectedConversa.foto_url ? (
+                                        <img src={selectedConversa.foto_url} className="w-full h-full rounded-full object-cover" onError={(e) => {
+                                            (e.target as HTMLImageElement).style.display = 'none';
+                                            (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden');
+                                        }} />
+                                    ) : null}
+                                    <div className={cn(selectedConversa.foto_url ? "hidden" : "block")}>
+                                        {selectedConversa.is_group ? <Users className="w-5 h-5 text-[#adb5bd]" /> : <User className="w-6 h-6 text-[#adb5bd]" />}
+                                    </div>
                                 </div>
                                 <div>
                                     <div className="font-bold text-[#111b21] dark:text-[#e9edef] leading-tight text-sm md:text-base">{selectedConversa.cliente_nome}</div>
@@ -695,6 +768,17 @@ export function Atendimento() {
                                                 <div className="text-[10px] font-black text-emerald-700 dark:text-emerald-300 mb-0.5 uppercase tracking-wider flex items-center gap-1.5">
                                                     <div className="w-1 h-1 bg-current rounded-full" />
                                                     {msg.atendente_nome}
+                                                </div>
+                                            )}
+
+                                            {!isSent && selectedConversa?.is_group && (
+                                                <div className="text-[10px] font-black text-blue-600 dark:text-blue-400 mb-0.5 uppercase tracking-wider flex items-center gap-1.5">
+                                                    {msg.remetente_foto ? (
+                                                        <img src={msg.remetente_foto} className="w-4 h-4 rounded-full" />
+                                                    ) : (
+                                                        <div className="w-4 h-4 bg-black/10 rounded-full flex items-center justify-center"><User className="w-2.5 h-2.5" /></div>
+                                                    )}
+                                                    {msg.remetente}
                                                 </div>
                                             )}
 
@@ -1018,6 +1102,54 @@ export function Atendimento() {
                                 }}><Plus className="w-4 h-4" /></Button>
                             </div>
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* MODAL CONEXÃO WHATSAPP */}
+            {showConnectionModal && (
+                <div className="fixed inset-0 bg-black/70 backdrop-blur-xl z-[100] flex items-center justify-center p-4 animate-in fade-in duration-300">
+                    <div className="bg-card w-full max-w-sm rounded-[32px] shadow-2xl p-8 border border-white/10 relative overflow-hidden flex flex-col items-center text-center">
+                        <div className="flex justify-between items-center w-full mb-6">
+                            <h3 className="text-xl font-black tracking-tight">Conectar WhatsApp</h3>
+                            <Button variant="ghost" size="icon" className="rounded-full h-8 w-8" onClick={() => setShowConnectionModal(false)}><X className="w-4 h-4" /></Button>
+                        </div>
+
+                        {waConnectionState === 'open' ? (
+                            <div className="space-y-6">
+                                <div className="w-20 h-20 rounded-full bg-emerald-500/20 flex items-center justify-center mx-auto">
+                                    <CheckCircle2 className="w-10 h-10 text-emerald-500 animate-in zoom-in" />
+                                </div>
+                                <div>
+                                    <h4 className="font-bold text-lg">WhatsApp Conectado</h4>
+                                    <p className="text-sm text-gray-500 mt-1">Seu aparelho está pareado e pronto para o uso.</p>
+                                </div>
+                                <Button variant="destructive" className="w-full h-12 rounded-xl font-bold" onClick={handleDisconnectWa}>
+                                    DESCONECTAR APARELHO
+                                </Button>
+                            </div>
+                        ) : (
+                            <div className="space-y-6 flex flex-col items-center">
+                                {qrBase64 ? (
+                                    <div className="bg-white p-4 rounded-3xl shadow-lg">
+                                        <img src={`data:image/png;base64,${qrBase64}`} className="w-56 h-56" alt="QR Code" />
+                                    </div>
+                                ) : (
+                                    <div className="w-56 h-56 bg-muted/30 rounded-3xl flex items-center justify-center border-2 border-dashed border-muted">
+                                        {isCheckingConnection ? <Loader2 className="animate-spin text-primary" /> : <p className="text-xs opacity-50">Aguardando QR Code...</p>}
+                                    </div>
+                                )}
+                                <div>
+                                    <h4 className="font-bold text-lg">Parear Aparelho</h4>
+                                    <p className="text-xs text-gray-500 mt-2 max-w-xs">
+                                        Abra o WhatsApp no seu celular {'>'} Configurações {'>'} Aparelhos Conectados {'>'} Conectar um Aparelho.
+                                    </p>
+                                </div>
+                                <Button variant="outline" className="w-full h-12 rounded-xl font-bold" onClick={fetchQrCode} disabled={isCheckingConnection}>
+                                    {isCheckingConnection ? <Loader2 className="animate-spin mr-2" /> : "GERAR NOVO QR CODE"}
+                                </Button>
+                            </div>
+                        )}
                     </div>
                 </div>
             )}

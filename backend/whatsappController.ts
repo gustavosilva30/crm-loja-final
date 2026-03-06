@@ -108,7 +108,9 @@ export const whatsappController = {
                 message?.documentMessage?.caption ||
                 '';
 
-            const name = data.pushName || actualSender;
+            const senderName = data.pushName || actualSender;
+            const convName = isGroup ? data.pushName || from : senderName;
+            const profilePicUrl = data.profilePicUrl || data.message?.profilePicUrl || null;
 
             // Media extraction
             const isMedia = message?.imageMessage || message?.audioMessage || message?.videoMessage || message?.documentMessage;
@@ -167,11 +169,12 @@ export const whatsappController = {
                     .from('conversas')
                     .insert([{
                         telefone: from,
-                        cliente_nome: name,
+                        cliente_nome: convName,
                         status_aberto: true,
                         is_group: isGroup,
                         unread_count: 1,
-                        updated_at: new Date().toISOString()
+                        updated_at: new Date().toISOString(),
+                        foto_url: profilePicUrl
                     }])
                     .select()
                     .single();
@@ -182,18 +185,30 @@ export const whatsappController = {
                 }
                 conversa = newConv;
             } else {
-                // Atualizar unread_count, updated_at, e is_group se mudar
-                await supabase.from('conversas').update({
+                // Atualizar unread_count, updated_at, foto_url e is_group se mudar
+                const updatePayload: any = {
                     is_group: isGroup,
                     unread_count: (conversa.unread_count || 0) + 1,
                     updated_at: new Date().toISOString()
-                }).eq('id', conversa.id);
+                };
+
+                // Se houver foto recebida, atualiza (especialmente se for foto do contato/grupo mudando)
+                if (profilePicUrl) {
+                    updatePayload.foto_url = profilePicUrl;
+                }
+
+                // Se for grupo, GARANTE que o nome da conversa seja o nome do GRUPO (data.pushName do webhook vem do grupo em g.us)
+                if (isGroup) {
+                    updatePayload.cliente_nome = convName;
+                }
+
+                await supabase.from('conversas').update(updatePayload).eq('id', conversa.id);
             }
 
             const { error: msgError } = await supabase.from('mensagens').insert([
                 {
                     conversa_id: conversa.id,
-                    remetente: actualSender,
+                    remetente: senderName,
                     mensagem: text,
                     conteudo: text,
                     tipo: mediaType || 'texto',
@@ -202,7 +217,8 @@ export const whatsappController = {
                     media_url: mediaUrl,
                     media_type: mediaType,
                     mime_type: mimeType,
-                    file_name: fileName
+                    file_name: fileName,
+                    remetente_foto: isGroup ? profilePicUrl : null
                 },
             ]);
 
