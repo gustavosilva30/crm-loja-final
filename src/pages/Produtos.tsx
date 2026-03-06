@@ -1069,112 +1069,115 @@ export function Produtos() {
           {loading ? (
             <div className="flex items-center justify-center p-8 text-muted-foreground">Carregando produtos...</div>
           ) : viewMode === "list" ? (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[40px]">
-                    <input
-                      type="checkbox"
-                      onChange={(e) => {
-                        if (e.target.checked) setSelectedIds(paginatedProdutos.map(p => p.id))
-                        else setSelectedIds([])
-                      }}
-                      checked={selectedIds.length === paginatedProdutos.length && paginatedProdutos.length > 0}
-                    />
-                  </TableHead>
-                  <TableHead>SKU</TableHead>
-                  <TableHead>Produto</TableHead>
-                  <TableHead>Estoque</TableHead>
-                  <TableHead>Preço</TableHead>
-                  <TableHead>MELI ID</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Ações</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {paginatedProdutos.length === 0 ? (
-                  <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Nenhum produto encontrado.</TableCell></TableRow>
-                ) : paginatedProdutos.map((produto) => (
-                  <TableRow key={produto.id} className={selectedIds.includes(produto.id) ? "bg-primary/5" : ""}>
-                    <TableCell>
-                      <input
-                        type="checkbox"
-                        checked={selectedIds.includes(produto.id)}
-                        onChange={() => {
-                          setSelectedIds(prev => prev.includes(produto.id) ? prev.filter(id => id !== produto.id) : [...prev, produto.id])
-                        }}
-                      />
-                    </TableCell>
-                    <TableCell className="font-mono text-xs">{produto.sku}</TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-3">
-                        <div
-                          className="w-10 h-10 rounded border bg-muted overflow-hidden flex items-center justify-center shrink-0 cursor-zoom-in group/img relative"
-                          onClick={() => {
-                            const imgs = produto.imagem_urls && produto.imagem_urls.length > 0 ? produto.imagem_urls : (produto.imagem_url ? [produto.imagem_url] : [])
-                            if (imgs.length > 0) {
-                              setSelectedImages(imgs)
-                              setInitialViewerIndex(0)
-                              setIsViewerOpen(true)
-                            }
+            <div className="rounded-xl border border-border overflow-hidden bg-card/50 backdrop-blur-sm shadow-sm relative">
+              <div className="max-h-[600px] overflow-auto custom-scrollbar">
+                <Table className="relative">
+                  <TableHeader className="sticky top-0 z-10 bg-muted/80 backdrop-blur-md shadow-sm">
+                    <TableRow className="border-b border-border/50 hover:bg-transparent">
+                      <TableHead className="w-[50px] px-4">
+                        <input
+                          type="checkbox"
+                          className="rounded border-input text-primary focus:ring-primary w-4 h-4 cursor-pointer"
+                          onChange={(e) => {
+                            if (e.target.checked) setSelectedIds(paginatedProdutos.map(p => p.id))
+                            else setSelectedIds([])
                           }}
-                        >
-                          {produto.imagem_url ? (
-                            <>
-                              <img src={produto.imagem_url} alt={produto.nome} className="w-full h-full object-contain transition-transform group-hover/img:scale-110" />
-                              <div className="absolute inset-0 bg-black/20 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center">
-                                <Maximize2 className="w-4 h-4 text-white" />
+                          checked={selectedIds.length === paginatedProdutos.length && paginatedProdutos.length > 0}
+                        />
+                      </TableHead>
+                      <TableHead className="font-black text-xs uppercase tracking-widest text-muted-foreground whitespace-nowrap">SKU</TableHead>
+                      <TableHead className="font-black text-xs uppercase tracking-widest text-muted-foreground">Produto Info</TableHead>
+                      <TableHead className="font-black text-xs uppercase tracking-widest text-muted-foreground whitespace-nowrap">Estoque</TableHead>
+                      <TableHead className="font-black text-xs uppercase tracking-widest text-muted-foreground whitespace-nowrap">Preço Un.</TableHead>
+                      <TableHead className="font-black text-xs uppercase tracking-widest text-muted-foreground whitespace-nowrap max-w-[100px]">MELI</TableHead>
+                      <TableHead className="font-black text-xs uppercase tracking-widest text-muted-foreground whitespace-nowrap">Status</TableHead>
+                      <TableHead className="font-black text-xs uppercase tracking-widest text-muted-foreground text-right sticky right-0 bg-muted/80 backdrop-blur-md px-4">Ações</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {paginatedProdutos.length === 0 ? (
+                      <TableRow><TableCell colSpan={8} className="text-center py-12 text-muted-foreground font-medium">Nenhum produto encontrado com os filtros atuais.</TableCell></TableRow>
+                    ) : paginatedProdutos.map((produto) => (
+                      <TableRow key={produto.id} className={`group border-b border-border/40 transition-colors hover:bg-muted/50 ${selectedIds.includes(produto.id) ? "bg-primary/5 hover:bg-primary/10" : ""}`}>
+                        <TableCell className="px-4">
+                          <input
+                            type="checkbox"
+                            className="rounded border-input text-primary focus:ring-primary w-4 h-4 cursor-pointer"
+                            checked={selectedIds.includes(produto.id)}
+                            onChange={() => {
+                              setSelectedIds(prev => prev.includes(produto.id) ? prev.filter(id => id !== produto.id) : [...prev, produto.id])
+                            }}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <span className="font-mono text-xs px-2 py-0.5 rounded-md bg-muted/80 font-semibold border border-border/50 shadow-sm">{produto.sku}</span>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-4">
+                            <div
+                              className="w-12 h-12 rounded-lg border border-border bg-card overflow-hidden flex items-center justify-center shrink-0 cursor-zoom-in group/img relative shadow-sm"
+                              onClick={() => {
+                                const imgs = produto.imagem_urls && produto.imagem_urls.length > 0 ? produto.imagem_urls : (produto.imagem_url ? [produto.imagem_url] : [])
+                                if (imgs.length > 0) {
+                                  setSelectedImages(imgs)
+                                  setInitialViewerIndex(0)
+                                  setIsViewerOpen(true)
+                                }
+                              }}
+                            >
+                              {produto.imagem_url ? (
+                                <>
+                                  <img src={produto.imagem_url} alt={produto.nome} className="w-full h-full object-contain transition-transform group-hover/img:scale-110 duration-300" />
+                                  <div className="absolute inset-0 bg-background/40 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-[1px]">
+                                    <Maximize2 className="w-4 h-4 text-foreground drop-shadow-md" />
+                                  </div>
+                                </>
+                              ) : <Package className="w-6 h-6 text-muted-foreground/30" />}
+                            </div>
+                            <div className="flex flex-col max-w-[300px]">
+                              <div className="font-bold text-sm truncate" title={produto.nome}>{produto.nome}</div>
+                              <div className="flex items-center gap-2 mt-1">
+                                {produto.marca ? <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded font-black tracking-widest uppercase truncate">{produto.marca}</span> : null}
+                                <span className="text-[10px] text-muted-foreground truncate">{produto.part_number ? `PN: ${produto.part_number}` : 'S/ PN'}</span>
                               </div>
-                            </>
-                          ) : <Package className="w-5 h-5 text-muted-foreground/40" />}
-                        </div>
-                        <div>
-                          <div className="font-medium flex items-center gap-2">
-                            {produto.nome}
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-col items-start gap-1">
+                            <span className={`font-black text-sm px-2 py-0.5 rounded-md ${produto.estoque_atual <= produto.estoque_minimo ? "bg-rose-500/10 text-rose-500" : "bg-emerald-500/10 text-emerald-600"}`}>
+                              {produto.estoque_atual} un
+                            </span>
                             {(produto.quantidade_orcamento !== undefined && produto.quantidade_orcamento > 0) && (
-                              <Badge variant="outline" className="text-[9px] h-4 border-blue-500 text-blue-500 bg-blue-500/10 px-1">{produto.quantidade_orcamento} em orç.</Badge>
+                              <span className="text-[9px] font-bold text-blue-500 bg-blue-500/10 px-1.5 py-0.5 rounded">{produto.quantidade_orcamento} em orc.</span>
                             )}
                           </div>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-6 text-[9px] px-2 text-primary hover:text-primary hover:bg-primary/10 mt-1 border border-primary/20"
-                            onClick={() => {
-                              setSelectedCompat(produto.compatibilidade || "Nenhuma compatibilidade cadastrada")
-                              setIsCompatModalOpen(true)
-                            }}
-                          >
-                            Mostrar Compatibilidades
-                          </Button>
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <span className={produto.estoque_atual <= produto.estoque_minimo ? "text-destructive font-bold" : ""}>{produto.estoque_atual} un</span>
-                    </TableCell>
-                    <TableCell className="font-bold">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(produto.preco)}</TableCell>
-                    <TableCell>{produto.meli_id ? <Badge variant="secondary" className="text-[10px] bg-yellow-500/10 text-yellow-700 border-yellow-500/20">{produto.meli_id}</Badge> : <span className="text-xs text-muted-foreground">-</span>}</TableCell>
-                    <TableCell>
-                      <Badge variant={produto.estoque_atual > produto.estoque_minimo ? 'default' : produto.estoque_atual > 0 ? 'secondary' : 'destructive'}>
-                        {produto.estoque_atual > produto.estoque_minimo ? 'Ativo' : produto.estoque_atual > 0 ? 'Baixo Estoque' : 'Sem Estoque'}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-1">
-                        <Button variant="outline" size="sm" title="Precificação IA" onClick={() => { setSelectedProductForAI(produto); setIsAIPricingOpen(true); }} className="gap-1 h-8 px-2 border-purple-200 text-purple-600 hover:bg-purple-50">
-                          <Brain className="w-3.5 h-3.5" />
-                          <span className="text-[10px] font-bold uppercase">Precificar</span>
-                        </Button>
-                        <Button variant="ghost" size="icon" title="Enviar para Orçamento" onClick={() => handleAddToCart(produto, 'orcamento')}><FileText className="w-4 h-4 text-blue-500" /></Button>
-                        <Button variant="ghost" size="icon" title="Enviar para Carrinho (Venda)" onClick={() => handleAddToCart(produto, 'venda')}><ShoppingCart className="w-4 h-4 text-emerald-500" /></Button>
-                        <Button variant="ghost" size="icon" title="Editar" onClick={() => startEdit(produto)}><Pencil className="w-4 h-4 text-muted-foreground" /></Button>
-                        <Button variant="ghost" size="icon" title="Excluir" onClick={() => handleDelete(produto.id)}><Trash2 className="w-4 h-4 text-destructive" /></Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                        </TableCell>
+                        <TableCell className="font-mono font-bold text-sm tracking-tight">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(produto.preco)}</TableCell>
+                        <TableCell className="max-w-[100px] truncate">
+                          {produto.meli_id ? <Badge variant="secondary" className="text-[10px] font-mono bg-yellow-500/10 text-yellow-700 border border-yellow-500/20 truncate max-w-full" title={produto.meli_id}>{produto.meli_id}</Badge> : <span className="text-xs text-muted-foreground/50 opacity-0 group-hover:opacity-100 transition-opacity">-</span>}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={produto.estoque_atual > produto.estoque_minimo ? 'default' : produto.estoque_atual > 0 ? 'secondary' : 'destructive'}
+                            className="text-[10px] font-bold uppercase tracking-widest rounded-sm shadow-sm">
+                            {produto.estoque_atual > produto.estoque_minimo ? 'Em Linha' : produto.estoque_atual > 0 ? 'Atenção' : 'Esgotado'}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right p-0 align-middle sticky right-0 bg-background/50 backdrop-blur-md px-4 border-l border-border/40 transition-colors group-hover:bg-muted/80">
+                          <div className="flex justify-end gap-1.5">
+                            <Button variant="ghost" size="icon" title="Enviar para Orçamento" className="h-8 w-8 hover:bg-blue-500/10 hover:text-blue-500 transition-colors" onClick={() => handleAddToCart(produto, 'orcamento')}><FileText className="w-4 h-4" /></Button>
+                            <Button variant="ghost" size="icon" title="Enviar para Carrinho (Venda)" className="h-8 w-8 hover:bg-emerald-500/10 hover:text-emerald-500 transition-colors" onClick={() => handleAddToCart(produto, 'venda')}><ShoppingCart className="w-4 h-4" /></Button>
+                            <Button variant="ghost" size="icon" title="Editar" className="h-8 w-8 hover:bg-primary/10 hover:text-primary transition-colors" onClick={() => startEdit(produto)}><Pencil className="w-4 h-4" /></Button>
+                            <Button variant="ghost" size="icon" title="Excluir" className="h-8 w-8 hover:bg-rose-500/10 hover:text-rose-500 transition-colors opacity-0 group-hover:opacity-100" onClick={() => handleDelete(produto.id)}><Trash2 className="w-4 h-4" /></Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {paginatedProdutos.map((produto) => (
