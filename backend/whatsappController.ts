@@ -73,6 +73,9 @@ const whatsappController = {
 
     receiveMessage: async (req: Request, res: Response) => {
         try {
+            console.log(`[Webhook] Recebido evento: ${req.body.event} da instância: ${req.body.instance}`);
+            // console.log('[Webhook] Body completo:', JSON.stringify(req.body, null, 2));
+
             const event = req.body.event;
             const data = req.body.data;
             const instanceName = req.body.instance;
