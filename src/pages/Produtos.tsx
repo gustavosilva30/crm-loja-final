@@ -1266,8 +1266,8 @@ export function Produtos() {
                     <h3 className="font-bold text-sm line-clamp-2 mb-1 h-10 tracking-tight">{produto.nome}</h3>
                     <Button variant="outline" size="sm" className="w-full text-[10px] h-7 mb-3 border-primary/30 text-foreground hover:bg-primary/10" onClick={() => { setSelectedCompat(produto.compatibilidade || "Nenhuma compatibilidade cadastrada"); setIsCompatModalOpen(true); }}>Mostrar Compatibilidades</Button>
                     <div className="flex items-center justify-between mb-3"><span className="font-black text-lg text-foreground">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(produto.preco)}</span></div>
-                    <div className="flex items-center justify-between pt-3 border-t border-border/10">
-                      <div className="flex gap-2">
+                    <div className="flex flex-wrap items-center justify-between pt-3 border-t border-border/10 gap-y-2">
+                      <div className="flex flex-wrap gap-1.5">
                         <button onClick={() => { setSelectedProductForAI(produto); setIsAIPricingOpen(true); }} title="Precificação IA" className="flex items-center gap-1.5 px-2 py-1 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-all font-bold text-[10px] uppercase shadow-sm">
                           <Brain className="w-3.5 h-3.5" />
                           Precificar

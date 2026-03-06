@@ -1536,7 +1536,7 @@ export function Vendas() {
                                             {selectedVendaForReceipt.entrega && (
                                                 <div className="mt-2 pt-1 border-t border-black" style={{ backgroundColor: '#f9f9f9' }}>
                                                     <p className="font-bold text-center underline mb-1">ENTREGA</p>
-                                                    <p className="text-black"><span className="font-bold">Recebedor:</span> {selectedVendaForReceipt.entrega.recebedor_nome || selectedVendaForReceipt.clientes?.nome || 'N/A'}</p>
+                                                    <p className="text-black"><span className="font-bold">Recebedor:</span> {selectedVendaForReceipt.entrega.recebedor_nome || selectedVendaForReceipt.clientes?.nome || 'CONSUMIDOR FINAL'}</p>
                                                     <p className="text-black"><span className="font-bold">Telefone:</span> {selectedVendaForReceipt.entrega.cliente_contato || selectedVendaForReceipt.clientes?.telefone || 'N/A'}</p>
                                                     <p className="text-black"><span className="font-bold">End:</span> {selectedVendaForReceipt.entrega.rua}, {selectedVendaForReceipt.entrega.numero}</p>
                                                     <p className="text-black"><span className="font-bold">Bairro:</span> {selectedVendaForReceipt.entrega.bairro}</p>
@@ -1644,7 +1644,7 @@ export function Vendas() {
                                                         </p>
                                                     </div>
                                                     <div className="grid grid-cols-2 text-[11px] gap-x-4">
-                                                        <p><span className="font-bold">Recebedor:</span> {selectedVendaForReceipt.entrega.recebedor_nome || selectedVendaForReceipt.clientes?.nome || 'N/A'}</p>
+                                                        <p><span className="font-bold">Recebedor:</span> {selectedVendaForReceipt.entrega.recebedor_nome || selectedVendaForReceipt.clientes?.nome || 'CONSUMIDOR FINAL'}</p>
                                                         <p><span className="font-bold">Telefone:</span> {selectedVendaForReceipt.entrega.cliente_contato || selectedVendaForReceipt.clientes?.telefone || 'N/A'}</p>
                                                         <p><span className="font-bold">Rua:</span> {selectedVendaForReceipt.entrega.rua}, {selectedVendaForReceipt.entrega.numero}</p>
                                                         <p><span className="font-bold">Bairro:</span> {selectedVendaForReceipt.entrega.bairro}</p>
