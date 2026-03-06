@@ -33,7 +33,7 @@ const uploadBase64ToSupabase = async (base64Data: string, mimeType: string) => {
         const extension = mimeType.split('/')[1]?.split(';')[0] || 'bin';
         const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${extension}`;
 
-        const BUCKET_NAME = 'WHATSAPP_MEDIA';
+        const BUCKET_NAME = 'whatsapp_media';
 
         const { data, error } = await supabase.storage
             .from(BUCKET_NAME)
@@ -44,30 +44,13 @@ const uploadBase64ToSupabase = async (base64Data: string, mimeType: string) => {
 
         if (error) {
             console.error(`[Supabase Storage] Erro ao subir para o bucket ${BUCKET_NAME}:`, error);
-            // Tentar em minúsculas se falhar
-            const { data: data2, error: error2 } = await supabase.storage
-                .from('whatsapp_media')
-                .upload(fileName, buffer, {
-                    contentType: mimeType,
-                    upsert: false
-                });
-
-            if (error2) {
-                console.error('[Supabase Storage] Falha em ambas as tentativas de bucket.');
-                return null;
-            }
-
-            const { data: { publicUrl } } = supabase.storage.from('whatsapp_media').getPublicUrl(fileName);
-            return { publicUrl, fileName };
+            return null;
         }
 
-        const { data: { publicUrl } } = supabase.storage
-            .from(BUCKET_NAME)
-            .getPublicUrl(fileName);
-
+        const { data: { publicUrl } } = supabase.storage.from(BUCKET_NAME).getPublicUrl(fileName);
         return { publicUrl, fileName };
     } catch (err) {
-        console.error('Erro fatal no uploadBase64ToSupabase:', err);
+        console.error('[Supabase Storage] Crítico:', err);
         return null;
     }
 };
