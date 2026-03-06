@@ -434,6 +434,17 @@ const whatsappController = {
             supabase.from('whatsapp_instancias').update({ status_conexao: state, updated_at: new Date().toISOString() })
                 .eq('instance_name', instance_name).then();
 
+            // Auto-heal: Ensure webhook is set if WEBHOOK_URL exists
+            const WEBHOOK_URL = process.env.WEBHOOK_URL;
+            if (WEBHOOK_URL) {
+                axios.post(`${EVO_API_URL}/webhook/set/${instance_name}`, {
+                    url: WEBHOOK_URL,
+                    webhook_by_events: false,
+                    webhook_base64: true,
+                    events: ["MESSAGES_UPSERT", "MESSAGES_UPDATE", "SEND_MESSAGE", "CONNECTION_UPDATE"]
+                }, { headers: { apikey: EVO_API_KEY } }).catch(() => { });
+            }
+
             return res.status(200).json({ state });
         } catch (err: any) {
             return res.status(500).json({ error: 'Internal Server Error', state: 'unknown' });
