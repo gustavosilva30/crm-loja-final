@@ -8,10 +8,5 @@ build
 .next
 .vite
 coverage
-*.log
-backend/app/
-backend/requirements.txt
-backend/Procfile
-backend/runtime.txt
-backend/start.sh
-render.yaml
+backend/__pycache__
+backend/*.pyc
