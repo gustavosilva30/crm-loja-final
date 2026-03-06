@@ -17,6 +17,7 @@ import { Relatorios } from "./pages/Relatorios"
 import { Caixa } from "./pages/Caixa"
 import { Fiscal } from "./pages/Fiscal"
 import { Atendimento } from "./pages/Atendimento"
+import { Funil } from "./pages/Funil"
 import { Leiloes } from "./pages/Leiloes"
 import { Agenda } from "./pages/Agenda"
 import { MetasVendedores } from "./pages/MetasVendedores"
@@ -75,6 +76,7 @@ export default function App() {
                 <Route path="caixa" element={<Caixa />} />
                 <Route path="fiscal" element={<Fiscal />} />
                 <Route path="atendimento" element={<Atendimento />} />
+                <Route path="funil" element={<Funil />} />
                 <Route path="leiloes" element={<Leiloes />} />
                 <Route path="agenda" element={<Agenda />} />
                 <Route path="metas" element={<MetasVendedores />} />
