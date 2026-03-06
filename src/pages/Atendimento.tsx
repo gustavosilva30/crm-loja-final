@@ -1396,7 +1396,7 @@ export function Atendimento() {
                                 <div className="space-y-6 flex flex-col items-center">
                                     {qrBase64 ? (
                                         <div className="bg-white p-4 rounded-3xl shadow-lg">
-                                            <img src={`data:image/png;base64,${qrBase64}`} className="w-56 h-56" alt="QR Code" />
+                                            <img src={qrBase64.startsWith('data:image') ? qrBase64 : `data:image/png;base64,${qrBase64}`} className="w-56 h-56" alt="QR Code" />
                                         </div>
                                     ) : (
                                         <div className="w-56 h-56 bg-muted/30 rounded-3xl flex items-center justify-center border-2 border-dashed border-muted">
