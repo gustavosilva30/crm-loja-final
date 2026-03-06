@@ -12,7 +12,7 @@ import {
     CheckCircle2, Clock, AlertCircle, TrendingUp, Menu,
     Check, CheckCheck, ChevronDown, CornerUpLeft, Copy, SmilePlus,
     Download, Forward, Pin, Star, ThumbsDown, Trash2, Plus, Link as LinkIcon, MapPin, Camera, Video,
-    Tag, Zap, Megaphone, Briefcase
+    Tag, Zap, Megaphone, Briefcase, RefreshCw
 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import axios from "axios"
@@ -774,13 +774,13 @@ export function Atendimento() {
                     <div className="flex items-center gap-1">
                         <Button
                             variant="ghost"
-                            size="icon"
-                            className={cn("rounded-full text-[#54656f] dark:text-[#aebac1]", isSyncingAll && "text-emerald-500 animate-pulse")}
+                            className={cn("rounded-md text-[#54656f] dark:text-[#aebac1] flex items-center gap-1 hover:bg-black/5 dark:hover:bg-white/5", isSyncingAll && "text-emerald-500 animate-pulse")}
                             onClick={handleSyncAllPhotos}
                             disabled={isSyncingAll}
                             title="Sincronizar todas as fotos"
                         >
-                            {isSyncingAll ? <Loader2 className="w-5 h-5 animate-spin" /> : <Camera className="w-5 h-5" />}
+                            {isSyncingAll ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                            <span className="text-xs font-medium hidden md:inline">Sincronizar</span>
                         </Button>
                         <Button variant="ghost" size="icon" className="rounded-full text-[#54656f] dark:text-[#aebac1]" onClick={() => setShowNewContactModal(true)} title="Novo Contato">
                             <UserPlus className="w-5 h-5" />
@@ -901,7 +901,7 @@ export function Atendimento() {
                                 className={`flex items-center gap-3 px-3 py-3 cursor-pointer border-b border-[#f2f2f2] dark:border-[#222d34] transition-all hover:bg-[#f5f6f6] dark:hover:bg-[#202c33]`}>
                                 <div className="w-12 h-12 rounded-full bg-[#dfe5e7] dark:bg-[#374248] flex items-center justify-center shrink-0 border border-black/5 relative overflow-hidden">
                                     {contact.foto_url ? (
-                                        <img src={contact.foto_url} className="w-full h-full rounded-full object-cover" onError={(e) => {
+                                        <img src={contact.foto_url} referrerPolicy="no-referrer" className="w-full h-full rounded-full object-cover" onError={(e) => {
                                             (e.target as HTMLImageElement).style.display = 'none';
                                             (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden');
                                         }} />
@@ -928,7 +928,7 @@ export function Atendimento() {
                                 ${selectedConversa?.id === conv.id ? 'bg-[#ebebeb] dark:bg-[#2a3942]' : 'hover:bg-[#f5f6f6] dark:hover:bg-[#202c33]'}`}>
                             <div className="w-12 h-12 rounded-full bg-[#dfe5e7] dark:bg-[#374248] flex items-center justify-center shrink-0 border border-black/5 relative overflow-hidden">
                                 {conv.foto_url ? (
-                                    <img src={conv.foto_url} className="w-full h-full rounded-full object-cover" onError={(e) => {
+                                    <img src={conv.foto_url} referrerPolicy="no-referrer" className="w-full h-full rounded-full object-cover" onError={(e) => {
                                         (e.target as HTMLImageElement).style.display = 'none';
                                         (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden');
                                     }} />
@@ -974,7 +974,7 @@ export function Atendimento() {
                             <div className="flex items-center gap-3">
                                 <div className="w-10 h-10 rounded-full bg-[#dfe5e7] dark:bg-[#374248] flex items-center justify-center shrink-0 border border-black/5">
                                     {selectedConversa.foto_url ? (
-                                        <img src={selectedConversa.foto_url} className="w-full h-full rounded-full object-cover" onError={(e) => {
+                                        <img src={selectedConversa.foto_url} referrerPolicy="no-referrer" className="w-full h-full rounded-full object-cover" onError={(e) => {
                                             (e.target as HTMLImageElement).style.display = 'none';
                                             (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden');
                                         }} />

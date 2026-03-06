@@ -13,6 +13,7 @@ import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { motion, Reorder } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
+import { cn } from "@/lib/utils"
 import { useAuthStore } from '@/store/authStore'
 
 interface Conversa {
@@ -231,13 +232,15 @@ export function Funil() {
                                                             <div className="flex items-center gap-2">
                                                                 {card.foto_url ? (
                                                                     <div className="w-8 h-8 rounded-full border border-border overflow-hidden">
-                                                                        <img src={card.foto_url} alt="" className="w-full h-full object-cover" />
+                                                                        <img src={card.foto_url} alt="" referrerPolicy="no-referrer" className="w-full h-full object-cover" onError={(e) => {
+                                                                            (e.target as HTMLImageElement).style.display = 'none';
+                                                                            (e.target as HTMLImageElement).parentElement!.nextElementSibling?.classList.remove('hidden');
+                                                                        }} />
                                                                     </div>
-                                                                ) : (
-                                                                    <div className="w-8 h-8 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center text-emerald-600 font-black text-sm uppercase">
-                                                                        {card.cliente_nome.substring(0, 1)}
-                                                                    </div>
-                                                                )}
+                                                                ) : null}
+                                                                <div className={cn("w-8 h-8 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center text-emerald-600 font-black text-sm uppercase shrink-0", card.foto_url ? "hidden" : "flex")}>
+                                                                    {card.cliente_nome.substring(0, 1)}
+                                                                </div>
                                                                 <div className="flex flex-col">
                                                                     <span className="text-xs font-black truncate max-w-[140px]">{card.cliente_nome}</span>
                                                                     <span className="text-[9px] text-muted-foreground font-mono">{card.telefone}</span>
