@@ -120,7 +120,7 @@ export function Sidebar() {
   })
 
   return (
-    <aside className="w-64 border-r border-border bg-card flex flex-col h-screen sticky top-0">
+    <aside className="w-full border-r border-border bg-card flex flex-col h-screen sticky top-0">
       <div className="p-6 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center shadow-sm border border-border">
