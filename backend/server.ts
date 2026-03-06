@@ -27,6 +27,7 @@ app.get('/health', (_req: Request, res: Response) => {
 
 app.get('/webhook', whatsappController.verifyWebhook);
 app.post('/webhook', whatsappController.receiveMessage);
+app.post('/webhook/:event', whatsappController.receiveMessage);
 app.post('/api/whatsapp/send', whatsappController.sendMessage);
 app.post('/api/whatsapp/delete', whatsappController.deleteMessage);
 app.post('/api/whatsapp/reaction', whatsappController.sendReaction);

@@ -73,8 +73,12 @@ const whatsappController = {
 
     receiveMessage: async (req: Request, res: Response) => {
         try {
-            const event = req.body.event;
-            const data = req.body.data;
+            let event = req.body.event || req.params.event;
+            // Evolution replaces dots with dashes in URLs when webhook_by_events is true
+            if (typeof event === 'string') {
+                event = event.replace('-', '.');
+            }
+            const data = req.body.data || req.body;
             const instanceName = req.body.instance || req.body.instanceName; // Suporte a campos variados da Evolution
 
             console.log(`[Webhook] Evento: ${event} | Instância: ${instanceName} | Keys: ${Object.keys(req.body).join(', ')}`);
