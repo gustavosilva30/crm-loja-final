@@ -189,6 +189,11 @@ export const whatsappController = {
             let mediaUrl = null;
             let mediaType = 'texto';
 
+            let messageToClient = conteudo;
+            if (atendente_nome) {
+                messageToClient = `*${atendente_nome}:*\n${conteudo}`;
+            }
+
             if (mediaBase64) {
                 // Determine Evo API endpoint based on mime type
                 const base64Data = mediaBase64.includes(',') ? mediaBase64.split(',')[1] : mediaBase64;
@@ -206,7 +211,7 @@ export const whatsappController = {
                         number: telefone,
                         mediatype: mediaType,
                         mimetype: mediaMimeType || 'application/octet-stream',
-                        caption: conteudo || undefined,
+                        caption: messageToClient || undefined,
                         media: base64Data,
                         fileName: mediaFileName || 'arquivo'
                     }, { headers: { apikey: EVO_API_KEY, 'Content-Type': 'application/json' } });
@@ -220,7 +225,7 @@ export const whatsappController = {
             } else {
                 evolutionResponse = await axios.post(`${EVO_API_URL}/message/sendText/${EVO_INSTANCE}`, {
                     number: telefone,
-                    text: conteudo,
+                    text: messageToClient,
                 }, { headers: { apikey: EVO_API_KEY, 'Content-Type': 'application/json' } });
             }
 
