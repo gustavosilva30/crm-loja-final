@@ -145,15 +145,15 @@ export function Atendimento() {
 
         let query = supabase.from('conversas').select('*').order('updated_at', { ascending: false })
 
-        // Se o atendente tiver uma instância vinculada, mostra apenas as conversas dela
-        if (whatsappInstancia?.id) {
-            query = query.eq('instancia_id', whatsappInstancia.id)
-        } else if (!atendente?.perm_config) {
-            // Fallback para segurança caso não tenha instância mas não seja admin
-            if (atendente?.id) query = query.eq('atendente_id', atendente.id)
-        } else {
-            // Admin vê tudo que não é legado (se não tiver instância própria)
+        if (atendente?.perm_config) {
+            // Admin vê tudo
             query = query.eq('legacy', false)
+        } else if (whatsappInstancia?.id) {
+            // Atendente normal vê só a sua instância
+            query = query.eq('instancia_id', whatsappInstancia.id)
+        } else if (atendente?.id) {
+            // Fallback para segurança caso não tenha instância
+            query = query.eq('atendente_id', atendente.id)
         }
 
         const { data: convs } = await query
@@ -340,7 +340,13 @@ export function Atendimento() {
                 // Se não está na lista (conversa nova), busca no banco o registro completo
                 supabase.from('conversas').select('*').eq('id', conversaId).single()
                     .then(({ data }) => {
-                        if (data) setConversas(old => [data, ...old]);
+                        if (data) {
+                            if (!atendente?.perm_config) {
+                                if (whatsappInstancia?.id && data.instancia_id !== whatsappInstancia.id) return;
+                                if (!whatsappInstancia?.id && atendente?.id && data.atendente_id !== atendente.id) return;
+                            }
+                            setConversas(old => [data, ...old]);
+                        }
                     });
                 return prev;
             }

@@ -76,12 +76,12 @@ export function Funil() {
 
         let query = supabase.from('conversas').select('*').order('updated_at', { ascending: false })
 
-        if (whatsappInstancia?.id) {
-            query = query.eq('instancia_id', whatsappInstancia.id)
-        } else if (!atendente?.perm_config) {
-            if (atendente?.id) query = query.eq('atendente_id', atendente.id)
-        } else {
+        if (atendente?.perm_config) {
             query = query.eq('legacy', false)
+        } else if (whatsappInstancia?.id) {
+            query = query.eq('instancia_id', whatsappInstancia.id)
+        } else if (atendente?.id) {
+            query = query.eq('atendente_id', atendente.id)
         }
 
         const { data, error } = await query
