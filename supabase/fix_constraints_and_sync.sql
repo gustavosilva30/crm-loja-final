@@ -1,54 +1,26 @@
--- 1. Remover restrições órfas ou incorretas que apontam para a tabela "usuarios" (que está vazia)
+-- 1. CORREÇÃO DA TABELA CLIENTES (Problema das Tags)
+ALTER TABLE public.clientes 
+  ALTER COLUMN tags TYPE text[] USING tags::text[],
+  ALTER COLUMN tags SET DEFAULT '{}';
+
+-- 2. CORREÇÃO DA TABELA PRODUTOS (Imagens)
+ALTER TABLE public.produtos 
+  ALTER COLUMN imagem_urls TYPE text[] USING imagem_urls::text[],
+  ALTER COLUMN imagem_urls SET DEFAULT '{}';
+
+-- 3. CORREÇÃO DA TABELA SUCATAS E PEÇAS
+ALTER TABLE public.sucatas 
+  ALTER COLUMN fotos TYPE text[] USING fotos::text[],
+  ALTER COLUMN fotos SET DEFAULT '{}';
+
+ALTER TABLE public.sucatas_pecas 
+  ALTER COLUMN fotos TYPE text[] USING fotos::text[],
+  ALTER COLUMN fotos SET DEFAULT '{}';
+
+-- 4. RESOLUÇÃO DAS FOTOS DOS CONTATOS
 DO $$ 
-BEGIN
-    -- Remove da tabela conversas
-    IF EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE constraint_name = 'conversas_atendente_id_fkey') THEN
-        ALTER TABLE public.conversas DROP CONSTRAINT conversas_atendente_id_fkey;
-    END IF;
-
-    -- Remove da tabela mensagens
-    IF EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE constraint_name = 'mensagens_atendente_id_fkey') THEN
-        ALTER TABLE public.mensagens DROP CONSTRAINT mensagens_atendente_id_fkey;
+BEGIN 
+    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='contatos' AND COLUMN_NAME='foto_url') THEN
+        ALTER TABLE public.contatos ADD COLUMN foto_url text;
     END IF;
 END $$;
-
--- 2. Adicionar as restrições corretas apontando para a tabela "atendentes" (onde os dados realmente estão)
-ALTER TABLE public.conversas 
-    ADD CONSTRAINT conversas_atendente_id_atendentes_fkey 
-    FOREIGN KEY (atendente_id) REFERENCES public.atendentes(id) ON DELETE SET NULL;
-
-ALTER TABLE public.mensagens 
-    ADD CONSTRAINT mensagens_atendente_id_atendentes_fkey 
-    FOREIGN KEY (atendente_id) REFERENCES public.atendentes(id) ON DELETE SET NULL;
-
--- 3. Limpeza Geral: Vincular dados órfãos à instância principal encontrada
-DO $$
-DECLARE
-    v_instancia_id UUID;
-    v_atendente_id UUID;
-BEGIN
-    -- Busca a primeira instância válida
-    SELECT id, atendente_id INTO v_instancia_id, v_atendente_id FROM public.whatsapp_instancias LIMIT 1;
-
-    IF v_instancia_id IS NOT NULL THEN
-        -- Atualiza conversas que não têm instância
-        UPDATE public.conversas 
-        SET instancia_id = v_instancia_id, 
-            atendente_id = v_atendente_id,
-            legacy = false
-        WHERE instancia_id IS NULL;
-
-        -- Atualiza mensagens que não têm instância
-        UPDATE public.mensagens 
-        SET instancia_id = v_instancia_id, 
-            atendente_id = v_atendente_id
-        WHERE instancia_id IS NULL;
-        
-        RAISE NOTICE 'Sincronização concluída para instância %', v_instancia_id;
-    ELSE
-        RAISE NOTICE 'Nenhuma instância encontrada para vincular dados órfãos.';
-    END IF;
-END $$;
-
--- 4. Notificar PostgREST
-NOTIFY pgrst, 'reload schema';

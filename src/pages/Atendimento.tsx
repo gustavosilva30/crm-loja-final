@@ -540,6 +540,42 @@ export function Atendimento() {
     }
 
     const [syncingPhoto, setSyncingPhoto] = useState(false)
+    const [isSyncingAll, setIsSyncingAll] = useState(false)
+
+    const handleSyncAllPhotos = async () => {
+        if (isSyncingAll || conversas.length === 0) return
+        if (!confirm(`Deseja tentar sincronizar as fotos de ${conversas.length} conversas? Isso pode levar um momento.`)) return
+
+        setIsSyncingAll(true)
+        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
+
+        let successCount = 0
+        for (const conv of conversas) {
+            // Apenas tenta se não tiver foto ou para atualizar
+            try {
+                const { data } = await axios.post(`${apiUrl}/api/whatsapp/fetch-profile-pic`, {
+                    telefone: conv.telefone,
+                    instancia_id: conv.instancia_id || whatsappInstancia?.id
+                });
+
+                if (data.success && data.profilePicUrl) {
+                    setConversas(prev => prev.map(c => c.id === conv.id ? { ...c, foto_url: data.profilePicUrl } : c));
+                    setContatos(prev => prev.map(c => c.telefone === conv.telefone ? { ...c, foto_url: data.profilePicUrl } : c));
+                    if (selectedConversa?.id === conv.id) {
+                        setSelectedConversa(prev => prev ? { ...prev, foto_url: data.profilePicUrl } : null);
+                    }
+                    successCount++
+                }
+                // Pequeno delay para não sobrecarregar
+                await new Promise(resolve => setTimeout(resolve, 500))
+            } catch (err) {
+                console.error(`Erro ao sincronizar foto de ${conv.telefone}:`, err)
+            }
+        }
+
+        setIsSyncingAll(false)
+        alert(`Sincronização concluída! ${successCount} fotos atualizadas.`)
+    }
 
     const handleSyncPhoto = async () => {
         if (!selectedConversa) return
@@ -719,6 +755,16 @@ export function Atendimento() {
                         </div>
                     </div>
                     <div className="flex items-center gap-1">
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className={cn("rounded-full text-[#54656f] dark:text-[#aebac1]", isSyncingAll && "text-emerald-500 animate-pulse")}
+                            onClick={handleSyncAllPhotos}
+                            disabled={isSyncingAll}
+                            title="Sincronizar todas as fotos"
+                        >
+                            {isSyncingAll ? <Loader2 className="w-5 h-5 animate-spin" /> : <Camera className="w-5 h-5" />}
+                        </Button>
                         <Button variant="ghost" size="icon" className="rounded-full text-[#54656f] dark:text-[#aebac1]" onClick={() => setShowNewContactModal(true)} title="Novo Contato">
                             <UserPlus className="w-5 h-5" />
                         </Button>
@@ -788,40 +834,40 @@ export function Atendimento() {
                         />
                     </div>
 
-                    <div className="flex items-center gap-1.5 overflow-x-auto py-1 no-scrollbar">
+                    <div className="flex flex-wrap items-center gap-1.5 py-1">
                         <Badge
                             variant={activeFilter === 'tudo' ? 'default' : 'outline'}
-                            className="cursor-pointer rounded-full text-[10px] px-3 py-1 uppercase font-bold"
+                            className="cursor-pointer rounded-full text-[10px] px-2.5 py-1 uppercase font-bold transition-all hover:bg-primary/10"
                             onClick={() => setActiveFilter('tudo')}
                         >Tudo</Badge>
                         <Badge
                             variant={activeFilter === 'individual' ? 'default' : 'outline'}
-                            className="cursor-pointer rounded-full text-[10px] px-3 py-1 uppercase font-bold"
+                            className="cursor-pointer rounded-full text-[10px] px-2.5 py-1 uppercase font-bold transition-all hover:bg-primary/10"
                             onClick={() => setActiveFilter('individual')}
-                        >N/ Grupos</Badge>
+                        >Privadas</Badge>
                         <Badge
                             variant={activeFilter === 'unread' ? 'default' : 'outline'}
-                            className="cursor-pointer rounded-full text-[10px] px-3 py-1 uppercase font-bold flex gap-1 items-center"
+                            className="cursor-pointer rounded-full text-[10px] px-2.5 py-1 uppercase font-bold flex gap-1 items-center transition-all hover:bg-primary/10"
                             onClick={() => setActiveFilter('unread')}
                         >
                             Não Lidas
                             {conversas.filter(c => (c.unread_count || 0) > 0).length > 0 &&
-                                <span className="bg-emerald-500 w-2 h-2 rounded-full" />
+                                <span className="bg-emerald-500 w-1.5 h-1.5 rounded-full animate-pulse" />
                             }
                         </Badge>
                         <Badge
                             variant={activeFilter === 'read' ? 'default' : 'outline'}
-                            className="cursor-pointer rounded-full text-[10px] px-3 py-1 uppercase font-bold"
+                            className="cursor-pointer rounded-full text-[10px] px-2.5 py-1 uppercase font-bold transition-all hover:bg-primary/10"
                             onClick={() => setActiveFilter('read')}
                         >Lidas</Badge>
                         <Badge
                             variant={activeFilter === 'groups' ? 'default' : 'outline'}
-                            className="cursor-pointer rounded-full text-[10px] px-3 py-1 uppercase font-bold"
+                            className="cursor-pointer rounded-full text-[10px] px-2.5 py-1 uppercase font-bold transition-all hover:bg-primary/10"
                             onClick={() => setActiveFilter('groups')}
                         >Grupos</Badge>
                         <Badge
                             variant={activeFilter === 'contacts' ? 'default' : 'outline'}
-                            className="cursor-pointer rounded-full text-[10px] px-3 py-1 uppercase font-bold"
+                            className="cursor-pointer rounded-full text-[10px] px-2.5 py-1 uppercase font-bold transition-all hover:bg-primary/10"
                             onClick={() => setActiveFilter('contacts')}
                         >Contatos</Badge>
                     </div>
