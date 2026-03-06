@@ -217,6 +217,17 @@ const whatsappController = {
                 await supabase.from('conversas').update(updatePayload).eq('id', conversa.id);
             }
 
+            // Sempre tentamos atualizar/sincronizar a foto na tabela de contatos também
+            if (profilePicUrl && !isGroup) {
+                // Background update for contacts table
+                supabase.from('contatos').update({
+                    foto_url: profilePicUrl,
+                    updated_at: new Date().toISOString()
+                }).eq('telefone', from).then(({ error }) => {
+                    if (error) console.log('[Sync] Contato não encontrado para atualização de foto, ou erro:', error.message);
+                });
+            }
+
             const { error: msgError } = await supabase.from('mensagens').insert([
                 {
                     conversa_id: conversa.id,
@@ -473,6 +484,36 @@ const whatsappController = {
             return res.status(200).json({ success: true });
         } catch (err: any) {
             console.error('Error on disconnect:', err.response?.data || err.message);
+            return res.status(500).json({ error: 'Internal Server Error' });
+        }
+    },
+
+    syncProfilePic: async (req: Request, res: Response) => {
+        const { telefone } = req.body;
+        if (!telefone) return res.status(400).json({ error: 'telefone é obrigatório' });
+
+        try {
+            const jid = telefone.includes('@') ? telefone : `${telefone}@s.whatsapp.net`;
+            const profilePicUrl = await fetchProfilePic(jid);
+
+            if (profilePicUrl) {
+                // Update both tables
+                const updatePayload = {
+                    foto_url: profilePicUrl,
+                    updated_at: new Date().toISOString()
+                };
+
+                const [res1, res2] = await Promise.all([
+                    supabase.from('conversas').update(updatePayload).eq('telefone', telefone.split('@')[0]),
+                    supabase.from('contatos').update(updatePayload).eq('telefone', telefone.split('@')[0])
+                ]);
+
+                return res.status(200).json({ success: true, profilePicUrl });
+            }
+
+            return res.status(200).json({ success: false, message: 'Nenhuma foto encontrada' });
+        } catch (err: any) {
+            console.error('Error on syncProfilePic:', err.message);
             return res.status(500).json({ error: 'Internal Server Error' });
         }
     }

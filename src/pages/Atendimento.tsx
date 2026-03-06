@@ -93,7 +93,7 @@ export function Atendimento() {
 
     // Filtros e Busca
     const [searchTerm, setSearchTerm] = useState("")
-    const [activeFilter, setActiveFilter] = useState<'tudo' | 'unread' | 'read' | 'groups' | 'individual'>('tudo')
+    const [activeFilter, setActiveFilter] = useState<'tudo' | 'unread' | 'read' | 'groups' | 'individual' | 'contacts'>('tudo')
     const [activeMenuMsgId, setActiveMenuMsgId] = useState<string | null>(null)
 
     // UI State
@@ -212,6 +212,37 @@ export function Atendimento() {
         if (selectedConversa) fetchMensagens(selectedConversa.id)
     }, [selectedConversa])
 
+    const handleSelectContact = (contact: Contato) => {
+        const existingConv = conversas.find(c => c.telefone === contact.telefone);
+        if (existingConv) {
+            setSelectedConversa(existingConv);
+            setActiveFilter('tudo');
+        } else {
+            // Se não existe conversa, poderíamos criar uma "fake" ou apenas avisar
+            // Para simplicidade, vamos ver se conseguimos achar por telefone no Supabase de novo
+            supabase.from('conversas').select('*').eq('telefone', contact.telefone).maybeSingle()
+                .then(({ data }) => {
+                    if (data) {
+                        setSelectedConversa(data);
+                        setActiveFilter('tudo');
+                    } else {
+                        // Inicia conversa "vazia" temporária
+                        const tempConv: Conversa = {
+                            id: `temp-${contact.telefone}`,
+                            cliente_nome: contact.nome,
+                            telefone: contact.telefone,
+                            status_aberto: true,
+                            updated_at: new Date().toISOString(),
+                            last_message_at: new Date().toISOString(),
+                            foto_url: contact.foto_url
+                        };
+                        setSelectedConversa(tempConv);
+                        setActiveFilter('tudo');
+                    }
+                });
+        }
+    }
+
     useEffect(() => {
         fetchData()
         const channel = supabase.channel('whatsapp-realtime')
@@ -285,6 +316,7 @@ export function Atendimento() {
 
     // Filtragem de conversas
     const filteredConversas = useMemo(() => {
+        if (activeFilter === 'contacts') return [];
         return conversas.filter(c => {
             const matchesSearch = c.cliente_nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 c.telefone.includes(searchTerm)
@@ -305,6 +337,15 @@ export function Atendimento() {
             return new Date(b.last_message_at || b.updated_at).getTime() - new Date(a.last_message_at || a.updated_at).getTime()
         })
     }, [conversas, searchTerm, activeFilter])
+
+    const filteredContacts = useMemo(() => {
+        if (activeFilter !== 'contacts') return [];
+        return contatos.filter(c =>
+            c.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            c.telefone.includes(searchTerm) ||
+            (c.email && c.email.toLowerCase().includes(searchTerm.toLowerCase()))
+        ).sort((a, b) => a.nome.localeCompare(b.nome));
+    }, [contatos, searchTerm, activeFilter])
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0]
@@ -433,6 +474,30 @@ export function Atendimento() {
         }
     }
 
+    const [syncingPhoto, setSyncingPhoto] = useState(false)
+
+    const handleSyncPhoto = async () => {
+        if (!selectedConversa) return
+        setSyncingPhoto(true)
+        try {
+            const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
+            const { data } = await axios.post(`${apiUrl}/api/whatsapp/fetch-profile-pic`, {
+                telefone: selectedConversa.telefone
+            });
+            if (data.success) {
+                // local update
+                setSelectedConversa(prev => prev ? { ...prev, foto_url: data.profilePicUrl } : null);
+                setConversas(prev => prev.map(c => c.id === selectedConversa.id ? { ...c, foto_url: data.profilePicUrl } : c));
+                setContatos(prev => prev.map(c => c.telefone === selectedConversa.telefone ? { ...c, foto_url: data.profilePicUrl } : c));
+            } else {
+                alert("Nenhuma foto pública encontrada para este número.");
+            }
+        } catch (err) {
+            alert("Erro ao sincronizar foto.");
+        }
+        setSyncingPhoto(false)
+    }
+
     const handleReact = async (msg: Mensagem, emoji: string) => {
         try {
             const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
@@ -519,11 +584,16 @@ export function Atendimento() {
         try {
             const { data: convData } = await supabase.from('conversas').upsert({ telefone: tel, cliente_nome: newContact.nome, status_aberto: true }, { onConflict: 'telefone' }).select().single()
             await supabase.from('contatos').upsert({ nome: newContact.nome, telefone: tel, email: newContact.email })
+
+            // Trigger background fetch for profile picture via backend
+            const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
+            axios.post(`${apiUrl}/api/whatsapp/fetch-profile-pic`, { telefone: tel }).catch(() => { });
+
             setShowNewContactModal(false)
             setNewContact({ nome: "", telefone: "", email: "" })
             fetchData()
             if (convData) setSelectedConversa(convData)
-        } catch (err) { alert("Erro contato") }
+        } catch (err) { alert("Erro ao criar contato") }
     }
 
     const updateFunnelStage = async (stage: string) => {
@@ -673,19 +743,51 @@ export function Atendimento() {
                             className="cursor-pointer rounded-full text-[10px] px-3 py-1 uppercase font-bold"
                             onClick={() => setActiveFilter('groups')}
                         >Grupos</Badge>
+                        <Badge
+                            variant={activeFilter === 'contacts' ? 'default' : 'outline'}
+                            className="cursor-pointer rounded-full text-[10px] px-3 py-1 uppercase font-bold"
+                            onClick={() => setActiveFilter('contacts')}
+                        >Contatos</Badge>
                     </div>
                 </div>
 
                 <div className="flex-1 overflow-y-auto custom-scrollbar">
                     {loadingConv ? (
                         <div className="p-10 text-center"><Loader2 className="animate-spin inline text-primary" /></div>
+                    ) : activeFilter === 'contacts' ? (
+                        filteredContacts.length === 0 ? (
+                            <div className="p-10 text-center opacity-40 italic text-xs">Nenhum contato encontrado.</div>
+                        ) : filteredContacts.map(contact => (
+                            <div key={contact.id} onClick={() => handleSelectContact(contact)}
+                                className={`flex items-center gap-3 px-3 py-3 cursor-pointer border-b border-[#f2f2f2] dark:border-[#222d34] transition-all hover:bg-[#f5f6f6] dark:hover:bg-[#202c33]`}>
+                                <div className="w-12 h-12 rounded-full bg-[#dfe5e7] dark:bg-[#374248] flex items-center justify-center shrink-0 border border-black/5 relative overflow-hidden">
+                                    {contact.foto_url ? (
+                                        <img src={contact.foto_url} className="w-full h-full rounded-full object-cover" onError={(e) => {
+                                            (e.target as HTMLImageElement).style.display = 'none';
+                                            (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden');
+                                        }} />
+                                    ) : null}
+                                    <div className={cn(contact.foto_url ? "hidden" : "block")}>
+                                        <User className="w-7 h-7 text-[#adb5bd]" />
+                                    </div>
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex justify-between items-center">
+                                        <span className="font-bold truncate text-[#111b21] dark:text-[#e9edef] text-sm">{contact.nome}</span>
+                                    </div>
+                                    <div className="text-[11px] text-[#667781] dark:text-[#8696a0] truncate mt-0.5">
+                                        {contact.telefone}
+                                    </div>
+                                </div>
+                            </div>
+                        ))
                     ) : filteredConversas.length === 0 ? (
                         <div className="p-10 text-center opacity-40 italic text-xs">Nenhuma conversa encontrada.</div>
                     ) : filteredConversas.map(conv => (
                         <div key={conv.id} onClick={() => setSelectedConversa(conv)}
                             className={`flex items-center gap-3 px-3 py-3 cursor-pointer border-b border-[#f2f2f2] dark:border-[#222d34] transition-all
                                 ${selectedConversa?.id === conv.id ? 'bg-[#ebebeb] dark:bg-[#2a3942]' : 'hover:bg-[#f5f6f6] dark:hover:bg-[#202c33]'}`}>
-                            <div className="w-12 h-12 rounded-full bg-[#dfe5e7] dark:bg-[#374248] flex items-center justify-center shrink-0 border border-black/5 relative overflow-visible">
+                            <div className="w-12 h-12 rounded-full bg-[#dfe5e7] dark:bg-[#374248] flex items-center justify-center shrink-0 border border-black/5 relative overflow-hidden">
                                 {conv.foto_url ? (
                                     <img src={conv.foto_url} className="w-full h-full rounded-full object-cover" onError={(e) => {
                                         (e.target as HTMLImageElement).style.display = 'none';
@@ -1026,6 +1128,10 @@ export function Atendimento() {
                                 </Button>
                                 <Button onClick={() => navigate('/orcamentos')} variant="outline" className="h-24 flex-col gap-2 rounded-2xl border-purple-500/20 bg-purple-500/5 hover:bg-purple-500/10 text-purple-700 dark:text-purple-400 group transition-all hover:scale-[1.03]">
                                     <FileText className="w-6 h-6 group-hover:scale-110 transition-transform" /> <span className="text-[11px] font-black">GERAR ORÇAMENTO</span>
+                                </Button>
+                                <Button onClick={handleSyncPhoto} disabled={syncingPhoto} variant="outline" className="h-24 flex-col gap-2 rounded-2xl border-blue-500/20 bg-blue-500/5 hover:bg-blue-500/10 text-blue-700 dark:text-blue-400 group transition-all hover:scale-[1.03]">
+                                    {syncingPhoto ? <Loader2 className="w-6 h-6 animate-spin" /> : <Camera className="w-6 h-6 group-hover:scale-110 transition-transform" />}
+                                    <span className="text-[11px] font-black uppercase text-center leading-none">Sincronizar<br />Foto</span>
                                 </Button>
                             </div>
                         </div>

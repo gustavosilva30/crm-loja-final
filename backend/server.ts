@@ -34,6 +34,7 @@ app.post('/api/whatsapp/location', whatsappController.sendLocation);
 app.get('/api/whatsapp/status', whatsappController.getConnectionStatus);
 app.get('/api/whatsapp/qr', whatsappController.getQrCode);
 app.post('/api/whatsapp/disconnect', whatsappController.disconnect);
+app.post('/api/whatsapp/fetch-profile-pic', whatsappController.syncProfilePic);
 app.use((_req: Request, res: Response) => {
     res.status(404).json({
         error: 'Route not found',
