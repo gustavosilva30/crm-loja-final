@@ -91,7 +91,7 @@ export function Atendimento() {
 
     // Filtros e Busca
     const [searchTerm, setSearchTerm] = useState("")
-    const [activeFilter, setActiveFilter] = useState<'tudo' | 'unread' | 'read' | 'groups'>('tudo')
+    const [activeFilter, setActiveFilter] = useState<'tudo' | 'unread' | 'read' | 'groups' | 'individual'>('tudo')
     const [activeMenuMsgId, setActiveMenuMsgId] = useState<string | null>(null)
 
     // UI State
@@ -254,6 +254,7 @@ export function Atendimento() {
             if (activeFilter === 'unread') return (c.unread_count || 0) > 0
             if (activeFilter === 'read') return (c.unread_count || 0) === 0
             if (activeFilter === 'groups') return c.is_group === true
+            if (activeFilter === 'individual') return !c.is_group
 
             return true
         }).sort((a, b) => {
@@ -577,6 +578,11 @@ export function Atendimento() {
                             className="cursor-pointer rounded-full text-[10px] px-3 py-1 uppercase font-bold"
                             onClick={() => setActiveFilter('tudo')}
                         >Tudo</Badge>
+                        <Badge
+                            variant={activeFilter === 'individual' ? 'default' : 'outline'}
+                            className="cursor-pointer rounded-full text-[10px] px-3 py-1 uppercase font-bold"
+                            onClick={() => setActiveFilter('individual')}
+                        >N/ Grupos</Badge>
                         <Badge
                             variant={activeFilter === 'unread' ? 'default' : 'outline'}
                             className="cursor-pointer rounded-full text-[10px] px-3 py-1 uppercase font-bold flex gap-1 items-center"
