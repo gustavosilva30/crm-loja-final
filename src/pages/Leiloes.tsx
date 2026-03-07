@@ -11,6 +11,7 @@ import {
     RefreshCcw, X, Building2, Calendar, Tag, Pencil, Trash2
 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
+import { fmtDate } from "@/lib/format"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -38,9 +39,6 @@ interface AuctionLot {
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-const fmtDate = (d: string | null) =>
-    d ? new Date(d).toLocaleDateString("pt-BR") : "—"
 
 const ScrapBadge = ({ type }: { type: string }) =>
     type === "aproveitavel" ? (

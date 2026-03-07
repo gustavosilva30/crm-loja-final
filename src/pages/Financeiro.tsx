@@ -671,7 +671,8 @@ export function Financeiro() {
                             <Select value={newEntry.forma_pagamento} onChange={e => setNewEntry({ ...newEntry, forma_pagamento: e.target.value })}>
                                 <option value="Dinheiro">Dinheiro</option>
                                 <option value="Pix">PIX</option>
-                                <option value="Cartão">Cartão</option>
+                                <option value="Cartão Crédito">Cartão Crédito</option>
+                                <option value="Cartão Débito">Cartão Débito</option>
                                 <option value="Boleto">Boleto</option>
                                 <option value="Cheque">Cheque</option>
                                 <option value="Haver Cliente">Haver Cliente</option>

@@ -10,26 +10,7 @@ import { Modal } from "@/components/ui/modal"
 import { Search, Filter, Trash2, Printer, Plus, X, UserPlus, PackagePlus, DollarSign, ShoppingCart, Truck, Package, Pencil } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { useAuthStore } from "@/store/authStore"
-
-const fmtDate = (d: any) => {
-    if (!d) return '---'
-    try {
-        const date = new Date(d)
-        if (isNaN(date.getTime())) return '---'
-        return new Intl.DateTimeFormat('pt-BR').format(date)
-    } catch { return '---' }
-}
-
-const fmtDateTime = (d: any) => {
-    if (!d) return '---'
-    try {
-        const date = new Date(d)
-        if (isNaN(date.getTime())) return '---'
-        return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(date)
-    } catch { return '---' }
-}
-
-const formatNumPedido = (n: any) => n ? n.toString().padStart(6, '0') : '000000'
+import { fmtDate, fmtDateTime, formatNumPedido } from "@/lib/format"
 
 interface Venda {
     id: string
@@ -147,7 +128,7 @@ export function Vendas() {
         try {
             const { data: vData, error: vError } = await supabase
                 .from('vendas')
-                .select('*, clientes!cliente_id(*), atendentes!vendas_atendente_id_fkey(nome), vendedor:vendedor_id(nome)')
+                .select('*, clientes!cliente_id(*), atendentes!atendente_id(nome), vendedor:atendentes!vendedor_id(nome)')
                 .order('data_venda', { ascending: false })
 
             if (vError) throw vError
@@ -156,11 +137,11 @@ export function Vendas() {
             const vendaIds = rows.map(v => v.id)
 
             if (vendaIds.length > 0) {
-                const { data: itemsRes } = await supabase.from('vendas_itens').select('*, produtos(nome, sku)').in('venda_id', vendaIds)
+                const { data: itemsRes } = await supabase.from('vendas_itens').select('*, produtos!produto_id(nome, sku)').in('venda_id', vendaIds)
                 const itemsMap: Record<string, any[]> = {}
                 itemsRes?.forEach(i => {
                     if (!itemsMap[i.venda_id]) itemsMap[i.venda_id] = []
-                    itemsMap[i.venda_id].push(i)
+                    itemsMap[i.venda_id].push({ ...i, produtos: (i as any).produtos || (i as any).produto || {} })
                 })
 
                 setVendas(rows.map(v => ({
@@ -198,7 +179,7 @@ export function Vendas() {
         try {
             const { data: cartItems, error } = await supabase
                 .from('carrinho_itens')
-                .select('*, produtos(nome, preco, sku)')
+                .select('*, produtos!produto_id(nome, preco, sku)')
                 .eq('atendente_id', atendente.id)
 
             if (error) throw error
@@ -258,9 +239,9 @@ export function Vendas() {
             forma_pagamento: venda.forma_pagamento || 'Dinheiro'
         })
 
-        const { data: itens } = await supabase.from('vendas_itens').select('*, produtos(nome)').eq('venda_id', venda.id)
+        const { data: itens } = await supabase.from('vendas_itens').select('*, produtos!produto_id(nome, sku)').eq('venda_id', venda.id)
         if (itens) {
-            setVendaItems(itens.map(i => ({ ...i, _search: (i.produtos as any)?.nome || '' })))
+            setVendaItems(itens.map(i => ({ ...i, _search: ((i as any).produtos || (i as any).produto)?.nome || '' })))
         }
 
         const { data: entrega } = await supabase.from('entregas').select('*').eq('venda_id', venda.id).maybeSingle()
@@ -308,7 +289,7 @@ export function Vendas() {
         const newItems = [...vendaItems]
         newItems[index][field] = value
         if (field === 'produto_id') {
-            const prod = produtos.find(p => p.id === value)
+            const prod = produtos.find(p => String(p.id) === String(value))
             if (prod) {
                 newItems[index].preco_unitario = prod.preco
                 newItems[index].quantidade = newItems[index].quantidade || 1
@@ -331,6 +312,9 @@ export function Vendas() {
         e.preventDefault()
         setSubmitting(true)
         try {
+            if (vendaItems.some(i => !i.produto_id)) {
+                throw new Error('Selecione um produto para cada item do pedido.')
+            }
             const total = calculateTotal()
             let vendaId = editingVendaId
 
@@ -409,7 +393,11 @@ export function Vendas() {
 
         setSubmitting(true)
         try {
-            await supabase.from('vendas').update({ status: finalizarForm.status, forma_pagamento: finalizarForm.pagamentos[0].forma }).eq('id', vendaParaFinalizar.id)
+            const { error: updateError } = await supabase
+                .from('vendas')
+                .update({ status: finalizarForm.status, forma_pagamento: finalizarForm.pagamentos[0].forma })
+                .eq('id', vendaParaFinalizar.id)
+            if (updateError) throw updateError
 
             for (const pg of finalizarForm.pagamentos) {
                 const valorParcela = pg.valor / pg.parcelas
@@ -423,7 +411,7 @@ export function Vendas() {
                         if (c) await supabase.from('clientes').update({ saldo_haver: (c.saldo_haver || 0) - valorParcela }).eq('id', vendaParaFinalizar.cliente_id)
                     }
 
-                    await supabase.from('financeiro_lancamentos').insert([{
+                    const { error: insertError } = await supabase.from('financeiro_lancamentos').insert([{
                         tipo: 'Receita',
                         valor: valorParcela,
                         data_vencimento: venc.toISOString().split('T')[0],
@@ -433,16 +421,18 @@ export function Vendas() {
                         venda_id: vendaParaFinalizar.id,
                         descricao: `Venda #${formatNumPedido(vendaParaFinalizar.numero_pedido)} - ${pg.forma} ${i + 1}/${pg.parcelas}`
                     }])
+                    if (insertError) throw insertError
                 }
             }
 
             if (finalizarForm.criar_entrega) {
-                await supabase.from('entregas').upsert({
+                const { error: entregaError } = await supabase.from('entregas').upsert({
                     venda_id: vendaParaFinalizar.id,
                     cliente_nome: vendaParaFinalizar.clientes?.nome,
                     ...finalizarForm.entrega,
                     status: 'Preparando'
                 }, { onConflict: 'venda_id' })
+                if (entregaError) throw entregaError
             }
 
             setIsFinalizarModalOpen(false)
@@ -451,15 +441,17 @@ export function Vendas() {
                 handleOpenReceipt(vendaParaFinalizar.id)
                 setPrintAfterSave(false)
             }
-        } catch (err: any) { alert(err.message) }
-        finally { setSubmitting(false) }
+        } catch (err: any) {
+            const msg = err?.message || err?.error_description || (typeof err === 'string' ? err : 'Erro ao finalizar venda. Tente novamente.')
+            alert(msg)
+        } finally { setSubmitting(false) }
     }
 
     const handleOpenReceipt = async (id: string) => {
-        const { data: v } = await supabase.from('vendas').select('*, clientes!cliente_id(*), atendentes!vendas_atendente_id_fkey(nome)').eq('id', id).single()
-        const { data: it } = await supabase.from('vendas_itens').select('*, produtos(nome, sku)').eq('venda_id', id)
+        const { data: v } = await supabase.from('vendas').select('*, clientes!cliente_id(*), atendentes!atendente_id(nome)').eq('id', id).single()
+        const { data: it } = await supabase.from('vendas_itens').select('*, produtos!produto_id(nome, sku)').eq('venda_id', id)
         const { data: en } = await supabase.from('entregas').select('*').eq('venda_id', id).maybeSingle()
-        setSelectedVendaForReceipt({ ...v, itens: it || [], entrega: en })
+        setSelectedVendaForReceipt({ ...v, itens: (it || []).map(i => ({ ...i, produtos: (i as any).produtos || (i as any).produto || {} })), entrega: en })
         setIsReceiptModalOpen(true)
     }
 
@@ -598,6 +590,7 @@ export function Vendas() {
                                 <TableHead>Pedido</TableHead>
                                 <TableHead>Data</TableHead>
                                 <TableHead>Cliente</TableHead>
+                                <TableHead className="max-w-[200px]">Produtos</TableHead>
                                 <TableHead>Total</TableHead>
                                 <TableHead>Atendente</TableHead>
                                 <TableHead>Status</TableHead>
@@ -606,9 +599,9 @@ export function Vendas() {
                         </TableHeader>
                         <TableBody>
                             {loading ? (
-                                <TableRow><TableCell colSpan={8} className="text-center py-10">Carregando...</TableCell></TableRow>
+                                <TableRow><TableCell colSpan={9} className="text-center py-10">Carregando...</TableCell></TableRow>
                             ) : filteredVendas.length === 0 ? (
-                                <TableRow><TableCell colSpan={8} className="text-center py-10">Nenhuma venda encontrada.</TableCell></TableRow>
+                                <TableRow><TableCell colSpan={9} className="text-center py-10">Nenhuma venda encontrada.</TableCell></TableRow>
                             ) : filteredVendas.map((v) => (
                                 <TableRow key={v.id} className="hover:bg-muted/50 transition-colors">
                                     <TableCell onClick={e => e.stopPropagation()}><input type="checkbox" checked={selectedIds.includes(v.id)} onChange={() => toggleSelect(v.id)} /></TableCell>
@@ -617,6 +610,9 @@ export function Vendas() {
                                     <TableCell>
                                         <div className="font-medium text-sm">{v.clientes?.nome || 'Consumidor Final'}</div>
                                         <div className="text-[10px] text-muted-foreground">{v.clientes?.documento || '---'}</div>
+                                    </TableCell>
+                                    <TableCell className="max-w-[200px] truncate text-xs" title={v.vendas_itens?.map((i: any) => (i.produtos || i.produto)?.nome).filter(Boolean).join(', ')}>
+                                        {v.vendas_itens?.length ? v.vendas_itens.map((i: any) => (i.produtos || i.produto)?.nome).filter(Boolean).join(', ') || '—' : '—'}
                                     </TableCell>
                                     <TableCell className="font-bold">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v.total)}</TableCell>
                                     <TableCell className="text-[10px] italic">{v.atendentes?.nome || 'N/A'}</TableCell>
@@ -707,6 +703,7 @@ export function Vendas() {
                                         <option value="Dinheiro">Dinheiro</option>
                                         <option value="Pix">PIX</option>
                                         <option value="Cartão Crédito">Cartão Crédito</option>
+                                        <option value="Cartão Débito">Cartão Débito</option>
                                         <option value="Boleto">Boleto</option>
                                         <option value="Haver Cliente">Haver Cliente</option>
                                     </select>
@@ -889,7 +886,7 @@ export function Vendas() {
                                             <tbody>
                                                 {selectedVendaForReceipt.itens.map((i: any, idx: number) => (
                                                     <tr key={idx}>
-                                                        <td>{i.produtos?.nome}</td>
+                                                        <td>{(i.produtos || i.produto)?.nome || `Produto #${i.produto_id || idx + 1}`}</td>
                                                         <td className="text-center">{i.quantidade}</td>
                                                         <td className="text-right">{new Intl.NumberFormat('pt-BR').format(i.preco_unitario)}</td>
                                                         <td className="text-right">{new Intl.NumberFormat('pt-BR').format(i.subtotal)}</td>
@@ -975,8 +972,8 @@ export function Vendas() {
                                                 {selectedVendaForReceipt.itens.map((i: any, idx: number) => (
                                                     <tr key={idx}>
                                                         <td className="text-center opacity-60">{idx + 1}</td>
-                                                        <td className="font-bold">{i.produtos?.nome}</td>
-                                                        <td className="text-center opacity-60">{i.produtos?.sku || '---'}</td>
+                                                        <td className="font-bold">{(i.produtos || i.produto)?.nome || `Produto #${i.produto_id || idx + 1}`}</td>
+                                                        <td className="text-center opacity-60">{(i.produtos || i.produto)?.sku || '---'}</td>
                                                         <td className="text-center font-bold">{i.quantidade}</td>
                                                         <td className="text-right">{new Intl.NumberFormat('pt-BR').format(i.preco_unitario)}</td>
                                                         <td className="text-right font-black">{new Intl.NumberFormat('pt-BR').format(i.subtotal)}</td>
@@ -1044,18 +1041,18 @@ export function Vendas() {
             {/* MODAL FINALIZAR VENDA */}
             <Modal isOpen={isFinalizarModalOpen} onClose={() => setIsFinalizarModalOpen(false)} title="Finalizar Pagamento" className="max-w-md">
                 <form onSubmit={handleFinalizarVenda} className="space-y-4">
-                    <div className="p-4 bg-muted/30 border rounded-lg text-center"><div className="text-xs uppercase opacity-70">Total a Receber</div><div className="text-3xl font-black">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(vendaParaFinalizar?.total || 0)}</div></div>
+                    <div className="p-4 bg-muted/30 border rounded-lg text-center"><div className="text-xs uppercase opacity-70">Total a Receber</div><div className="text-3xl font-black">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(vendaParaFinalizar?.total || 0)}</div>{finalizarForm.pagamentos[0]?.forma === 'Dinheiro' && <p className="text-xs text-amber-600 mt-2">Pagamento em dinheiro exige caixa do dia aberto.</p>}</div>
                     <div className="space-y-4">
                         <div className="flex justify-between items-center"><Label className="font-bold">Formas de Pagamento</Label><Button type="button" variant="outline" size="sm" onClick={() => setFinalizarForm({ ...finalizarForm, pagamentos: [...finalizarForm.pagamentos, { id: Math.random().toString(36).substr(2, 9), forma: 'Pix', valor: 0, parcelas: 1, primeiro_vencimento: new Date().toISOString().split('T')[0], intervalo: 30 }] })}><Plus className="w-3 h-3 hmr-1" /> Add</Button></div>
                         {finalizarForm.pagamentos.map((pg, idx) => (
                             <div key={pg.id} className="p-3 border rounded-lg bg-muted/20 space-y-2 relative group">
                                 <div className="grid grid-cols-2 gap-2">
                                     <select className="h-9 px-2 rounded-md border text-xs bg-background" value={pg.forma} onChange={e => { const n = [...finalizarForm.pagamentos]; n[idx].forma = e.target.value; setFinalizarForm({ ...finalizarForm, pagamentos: n }) }}>
-                                        <option value="Dinheiro">Dinheiro</option><option value="Pix">PIX</option><option value="Cartão Crédito">Cartão Crédito</option><option value="Boleto">Boleto</option><option value="Haver Cliente">Haver Cliente</option>
+                                        <option value="Dinheiro">Dinheiro</option><option value="Pix">PIX</option><option value="Cartão Crédito">Cartão Crédito</option><option value="Cartão Débito">Cartão Débito</option><option value="Boleto">Boleto</option><option value="Haver Cliente">Haver Cliente</option>
                                     </select>
                                     <Input type="number" step="0.01" className="h-9 font-bold" value={pg.valor} onChange={e => { const n = [...finalizarForm.pagamentos]; n[idx].valor = parseFloat(e.target.value) || 0; setFinalizarForm({ ...finalizarForm, pagamentos: n }) }} />
                                 </div>
-                                {(pg.forma === 'Boleto' || pg.forma === 'Cartão Crédito') && (
+                                {(pg.forma === 'Boleto' || pg.forma === 'Cartão Crédito' || pg.forma === 'Cartão Débito') && (
                                     <div className="grid grid-cols-2 gap-2 pt-2 border-t border-dashed">
                                         <div className="space-y-1"><Label className="text-[10px]">Parcelas</Label><Input type="number" className="h-8 text-xs" value={pg.parcelas} onChange={e => { const n = [...finalizarForm.pagamentos]; n[idx].parcelas = parseInt(e.target.value) || 1; setFinalizarForm({ ...finalizarForm, pagamentos: n }) }} /></div>
                                         <div className="space-y-1"><Label className="text-[10px]">Vencimento</Label><Input type="date" className="h-8 text-xs" value={pg.primeiro_vencimento} onChange={e => { const n = [...finalizarForm.pagamentos]; n[idx].primeiro_vencimento = e.target.value; setFinalizarForm({ ...finalizarForm, pagamentos: n }) }} /></div>

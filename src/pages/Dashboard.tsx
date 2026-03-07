@@ -12,9 +12,7 @@ import {
   BarChart, Bar, PieChart, Pie, Cell, Legend
 } from "recharts"
 import { supabase } from "@/lib/supabase"
-
-const fmt = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v)
-const fmtDate = (d: string) => new Date(d + 'T00:00:00').toLocaleDateString('pt-BR')
+import { fmt, fmtDate } from "@/lib/format"
 
 type PeriodKey = 'hoje' | '7d' | '30d' | 'mes' | '90d' | 'ano'
 
@@ -153,7 +151,7 @@ export function Dashboard() {
         prevStart && prevEnd
           ? supabase.from('vendas').select('id, total, status').gte('data_venda', prevStart).lte('data_venda', prevEnd + 'T23:59:59')
           : Promise.resolve({ data: [] }),
-        supabase.from('vendas_itens').select('produto_id, quantidade, preco_unitario, produtos(nome)').gte('created_at', start).lte('created_at', endDateTime),
+        supabase.from('vendas_itens').select('produto_id, quantidade, preco_unitario, produtos!produto_id(nome), vendas!venda_id!inner(data_venda)').gte('vendas.data_venda', start).lte('vendas.data_venda', endDateTime),
         supabase.from('financeiro_lancamentos').select('id, descricao, data_vencimento, valor, tipo, status').gte('data_vencimento', new Date().toISOString().split('T')[0]).lte('data_vencimento', (() => { const d = new Date(); d.setDate(d.getDate() + 5); return d.toISOString().split('T')[0]; })()).eq('status', 'Pendente')
       ])
 
@@ -249,6 +247,8 @@ export function Dashboard() {
       })
     } catch (err) {
       console.error('Dashboard error:', err)
+      setStats(emptyStats)
+      alert('Falha ao carregar o dashboard. Verifique a conexão e tente novamente.')
     } finally {
       setLoading(false)
     }

@@ -6,28 +6,10 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Select } from "@/components/ui/select"
 import { Modal } from "@/components/ui/modal"
 import { Search, Filter, MoreHorizontal, ShoppingCart, TrendingUp, Trash2, Printer, Truck, Pencil, Package, DollarSign } from "lucide-react"
 import { supabase } from "@/lib/supabase"
-
-const fmtDate = (d: any) => {
-    if (!d) return '---'
-    try {
-        const date = new Date(d)
-        if (isNaN(date.getTime())) return '---'
-        return new Intl.DateTimeFormat('pt-BR').format(date)
-    } catch { return '---' }
-}
-
-const fmtDateTime = (d: any) => {
-    if (!d) return '---'
-    try {
-        const date = new Date(d)
-        if (isNaN(date.getTime())) return '---'
-        return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(date)
-    } catch { return '---' }
-}
+import { fmt, fmtDate, fmtDateTime, formatNumPedido } from "@/lib/format"
 
 interface Venda {
     id: string
@@ -104,10 +86,12 @@ export function VendasConcluidas() {
     const fetchVendas = async () => {
         setLoading(true)
         try {
-            // Step 1: Fetch raw vendas
+            // Buscar apenas vendas concluídas (excluir Pendente) para garantir que a página mostre todas
+            const statusConcluidos = ['Pago', 'Enviado', 'Entregue', 'Cancelado']
             const { data: vData, error: vError } = await supabase
                 .from('vendas')
                 .select('*')
+                .in('status', statusConcluidos)
                 .order('data_venda', { ascending: false })
 
             if (vError) throw vError
@@ -177,13 +161,16 @@ export function VendasConcluidas() {
     }
 
     const fetchResources = async () => {
-        const { data: clients } = await supabase.from('clientes').select('id, nome, endereco, telefone, saldo_haver')
-        const { data: carriers } = await supabase.from('transportadoras').select('id, nome')
-        const { data: comp } = await supabase.from('configuracoes_empresa').select('*').maybeSingle()
-
-        if (clients) setClientes(clients)
-        if (carriers) setTransportadoras(carriers)
-        if (comp) setCompany(comp)
+        try {
+            const { data: clients } = await supabase.from('clientes').select('id, nome, endereco, telefone, saldo_haver')
+            const { data: carriers } = await supabase.from('transportadoras').select('id, nome')
+            const { data: comp } = await supabase.from('configuracoes_empresa').select('*').maybeSingle()
+            if (clients) setClientes(clients)
+            if (carriers) setTransportadoras(carriers)
+            if (comp) setCompany(comp)
+        } catch (err: any) {
+            console.error('Erro ao carregar recursos (clientes/transportadoras/empresa):', err)
+        }
     }
 
     useEffect(() => {
@@ -258,7 +245,7 @@ export function VendasConcluidas() {
             let venda: any = null
             const { data: v1, error: e1 } = await supabase
                 .from('vendas')
-                .select(`*, clientes!cliente_id (id, nome, documento, email, telefone, endereco), atendentes:atendente_id (nome), vendedor:vendedor_id (nome)`)
+                .select(`*, clientes!cliente_id (id, nome, documento, email, telefone, endereco), atendente:atendentes!atendente_id (nome), vendedor:atendentes!vendedor_id (nome)`)
                 .eq('id', vendaId)
                 .single()
 
@@ -274,10 +261,10 @@ export function VendasConcluidas() {
                 venda = v1
             }
 
-            const { data: itens } = await supabase.from('vendas_itens').select(`*, produtos (nome, sku)`).eq('venda_id', vendaId)
-            const { data: entrega } = await supabase.from('entregas').select(`*, transportadoras (nome)`).eq('venda_id', vendaId).maybeSingle()
+            const { data: itens } = await supabase.from('vendas_itens').select('*, produtos!produto_id(nome, sku)').eq('venda_id', vendaId)
+            const { data: entrega } = await supabase.from('entregas').select('*, transportadoras(nome)').eq('venda_id', vendaId).maybeSingle()
 
-            setSelectedVendaForReceipt({ ...venda, itens: itens || [], entrega: entrega || null })
+            setSelectedVendaForReceipt({ ...venda, itens: (itens || []).map(i => ({ ...i, produtos: (i as any).produtos || (i as any).produto || {} })), entrega: entrega || null })
             setIsReceiptModalOpen(true)
         } catch (err: any) {
             console.error('Error loading receipt:', err)
@@ -289,8 +276,6 @@ export function VendasConcluidas() {
 
 
 
-    const formatNumPedido = (num?: number) => num ? String(num).padStart(6, '0') : '------'
-
     const filteredVendas = vendas.filter(v => {
         const termLower = searchTerm.toLowerCase().trim();
         const numPedidoStr = v.numero_pedido ? String(v.numero_pedido).padStart(6, '0') : '';
@@ -301,12 +286,13 @@ export function VendasConcluidas() {
             (v.vendedor?.nome?.toLowerCase() || '').includes(termLower) ||
             (v.atendente?.nome?.toLowerCase() || '').includes(termLower) ||
             v.vendas_itens?.some(i => (i.produtos?.nome || '').toLowerCase().includes(termLower));
-        const matchesStatus = filterStatus === "todos" ? String(v.status).toLowerCase() !== 'pendente' : v.status === filterStatus;
+        const statusLower = String(v.status || '').toLowerCase();
+        const matchesStatus = filterStatus === "todos" ? true : statusLower === String(filterStatus).toLowerCase();
         const matchesOrigem = filterOrigem === "todos" ? true : filterOrigem === "ml" ? v.origem_ml : !v.origem_ml;
 
         let matchesPeriodo = true;
         if (filterDataInicio || filterDataFim) {
-            const dataVenda = v.data_venda.split('T')[0];
+            const dataVenda = (v.data_venda || '').split('T')[0];
             if (filterDataInicio && dataVenda < filterDataInicio) matchesPeriodo = false;
             if (filterDataFim && dataVenda > filterDataFim) matchesPeriodo = false;
         }
@@ -371,21 +357,30 @@ export function VendasConcluidas() {
                 </CardHeader>
                 <CardContent>
                     {isFilterOpen && (
-                        <div className="grid grid-cols-4 gap-4 mb-6 p-4 border rounded-lg bg-muted/20">
+                        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-4 mb-6 p-4 border rounded-lg bg-muted/20">
                             <select
                                 value={filterStatus}
                                 onChange={e => setFilterStatus(e.target.value)}
                                 className="h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                             >
-                                <option value="todos">Todos (exceto pendentes)</option>
+                                <option value="todos">Todos os status</option>
                                 <option value="Pago">Pago</option>
                                 <option value="Enviado">Enviado</option>
                                 <option value="Entregue">Entregue</option>
                                 <option value="Cancelado">Cancelado</option>
                             </select>
+                            <select
+                                value={filterOrigem}
+                                onChange={e => setFilterOrigem(e.target.value)}
+                                className="h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                            >
+                                <option value="todos">Todas as origens</option>
+                                <option value="ml">Mercado Livre</option>
+                                <option value="loja">Loja</option>
+                            </select>
                             <Input type="date" value={filterDataInicio} onChange={e => setFilterDataInicio(e.target.value)} />
                             <Input type="date" value={filterDataFim} onChange={e => setFilterDataFim(e.target.value)} />
-                            <Button variant="ghost" onClick={() => { setFilterStatus("todos"); setFilterDataInicio(""); setFilterDataFim(""); }}>Limpar</Button>
+                            <Button variant="ghost" onClick={() => { setFilterStatus("todos"); setFilterOrigem("todos"); setFilterDataInicio(""); setFilterDataFim(""); }}>Limpar</Button>
                         </div>
                     )}
 
@@ -398,6 +393,7 @@ export function VendasConcluidas() {
                                         className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
                                         checked={filteredVendas.length > 0 && selectedIds.length === filteredVendas.length}
                                         onChange={toggleSelectAll}
+                                        aria-label="Selecionar todos os pedidos"
                                     />
                                 </TableHead>
                                 <TableHead>Pedido</TableHead>
@@ -422,6 +418,7 @@ export function VendasConcluidas() {
                                             className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
                                             checked={selectedIds.includes(venda.id)}
                                             onChange={() => toggleSelect(venda.id)}
+                                            aria-label={`Selecionar pedido ${formatNumPedido(venda.numero_pedido)}`}
                                         />
                                     </TableCell>
                                     <TableCell className="font-mono">#{formatNumPedido(venda.numero_pedido)}</TableCell>
@@ -430,15 +427,15 @@ export function VendasConcluidas() {
                                     <TableCell className="max-w-[200px] truncate text-[13px] font-medium" title={venda.vendas_itens?.map((i: any) => i.produtos?.nome).join(', ')}>
                                         {venda.vendas_itens?.map((i: any) => i.produtos?.nome).join(', ') || '-'}
                                     </TableCell>
-                                    <TableCell className="font-bold">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(venda.total)}</TableCell>
+                                    <TableCell className="font-bold">{fmt(venda.total)}</TableCell>
                                     <TableCell><Badge variant={venda.status === 'Cancelado' ? 'destructive' : 'default'}>{venda.status}</Badge></TableCell>
                                     <TableCell className="text-right space-x-1 whitespace-nowrap">
-                                        <Button variant="ghost" size="icon" onClick={() => handleOpenReceipt(venda.id)} title="Imprimir"><Printer className="w-4 h-4" /></Button>
-                                        <Button variant="ghost" size="icon" className="text-blue-500" onClick={() => navigate(`/vendas?edit=${venda.id}`)} title="Editar"><Pencil className="w-4 h-4" /></Button>
+                                        <Button variant="ghost" size="icon" onClick={() => handleOpenReceipt(venda.id)} title="Imprimir" aria-label="Imprimir recibo"><Printer className="w-4 h-4" /></Button>
+                                        <Button variant="ghost" size="icon" className="text-blue-500" onClick={() => navigate(`/vendas?edit=${venda.id}`)} title="Editar" aria-label="Editar venda"><Pencil className="w-4 h-4" /></Button>
                                         {venda.status !== 'Cancelado' && (
-                                            <Button variant="ghost" size="icon" className="text-amber-500" onClick={() => handleCancelVenda(venda.id)} title="Cancelar Venda"><TrendingUp className="w-4 h-4 rotate-180" /></Button>
+                                            <Button variant="ghost" size="icon" className="text-amber-500" onClick={() => handleCancelVenda(venda.id)} title="Cancelar Venda" aria-label="Cancelar venda"><TrendingUp className="w-4 h-4 rotate-180" /></Button>
                                         )}
-                                        <Button variant="ghost" size="icon" className="text-destructive" onClick={() => handleExcluirVenda(venda.id)} title="Excluir Definitivo"><Trash2 className="w-4 h-4" /></Button>
+                                        <Button variant="ghost" size="icon" className="text-destructive" onClick={() => handleExcluirVenda(venda.id)} title="Excluir Definitivo" aria-label="Excluir venda"><Trash2 className="w-4 h-4" /></Button>
                                     </TableCell>
                                 </TableRow>
                             ))}
@@ -658,7 +655,7 @@ export function VendasConcluidas() {
                                             <tbody>
                                                 {selectedVendaForReceipt.itens?.map((i: any, idx: number) => (
                                                     <tr key={idx}>
-                                                        <td className="py-1">{i.produtos?.nome}</td>
+                                                        <td className="py-1">{(i.produtos || i.produto)?.nome || `Produto #${idx + 1}`}</td>
                                                         <td className="text-right">{i.quantidade}</td>
                                                         <td className="text-right">{Number(i.preco_unitario || (i.subtotal / (i.quantidade || 1)) || 0).toFixed(2)}</td>
                                                         <td className="text-right font-bold">{Number(i.subtotal || 0).toFixed(2)}</td>
@@ -774,8 +771,8 @@ export function VendasConcluidas() {
                                                 {selectedVendaForReceipt.itens?.map((i: any, idx: number) => (
                                                     <tr key={idx}>
                                                         <td className="text-center">{idx + 1}</td>
-                                                        <td>{i.produtos?.nome}</td>
-                                                        <td className="font-mono text-[9px]">{i.produtos?.sku}</td>
+                                                        <td>{(i.produtos || i.produto)?.nome || `Produto #${idx + 1}`}</td>
+                                                        <td className="font-mono text-[9px]">{(i.produtos || i.produto)?.sku || '---'}</td>
                                                         <td className="text-center">{i.quantidade}</td>
                                                         <td className="text-right">{new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2 }).format(i.preco_unitario || (i.subtotal / i.quantidade))}</td>
                                                         <td className="text-right font-bold">{new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2 }).format(i.subtotal)}</td>

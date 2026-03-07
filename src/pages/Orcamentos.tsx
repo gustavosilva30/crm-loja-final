@@ -10,6 +10,7 @@ import { Modal } from "@/components/ui/modal"
 import { Plus, Search, Filter, MoreHorizontal, FileText, User, Trash2, Pencil, ShoppingCart, CheckCircle2, UserPlus, PackagePlus, Printer, Package, X } from "lucide-react"
 import { useNavigate } from "react-router-dom"
 import { supabase } from "@/lib/supabase"
+import { formatNumOrcamento } from "@/lib/format"
 
 interface Orcamento {
   id: string
@@ -22,7 +23,7 @@ interface Orcamento {
   condicao_pagamento: string | null
   status: string
   clientes?: { nome: string }
-  atendentes?: { nome: string }
+  vendedor?: { nome: string }
   orcamentos_itens?: { produtos: { nome: string } }[]
 }
 
@@ -35,7 +36,6 @@ interface ItemOrcamento {
 export function Orcamentos() {
   const [searchTerm, setSearchTerm] = useState("")
   const [orcamentos, setOrcamentos] = useState<Orcamento[]>([])
-  const formatNumPedido = (num?: number) => num ? String(num) : '------'
   const [loading, setLoading] = useState(true)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [createdOrcamentoId, setCreatedOrcamentoId] = useState<string | null>(null)
@@ -83,9 +83,14 @@ export function Orcamentos() {
     try {
       const { data, error } = await supabase
         .from('orcamentos')
-        .select('*, clientes!cliente_id ( nome ), atendentes ( nome ), orcamentos_itens ( produtos ( nome ) )')
+        .select('*, clientes!cliente_id ( nome ), atendentes!vendedor_id ( nome ), orcamentos_itens ( produtos!produto_id ( nome ) )')
         .order('created_at', { ascending: false })
 
+      if (error) {
+        console.error('Supabase Error (Orcamentos):', error)
+        setOrcamentos([])
+        return
+      }
       setOrcamentos(data || [])
     } catch (err) {
       console.error('Error:', err)
@@ -159,8 +164,10 @@ export function Orcamentos() {
   const handleOpenReceipt = async (orcId: string) => {
     setLoading(true)
     try {
-      const { data: orc } = await supabase.from('orcamentos').select(`*, clientes!cliente_id(*), atendentes:vendedor_id(nome)`).eq('id', orcId).single()
-      const { data: itens } = await supabase.from('orcamentos_itens').select(`*, produtos(nome, sku)`).eq('orcamento_id', orcId)
+      const { data: orc, error: orcErr } = await supabase.from('orcamentos').select(`*, clientes!cliente_id(*), atendentes!vendedor_id(nome)`).eq('id', orcId).single()
+      if (orcErr) throw orcErr
+      const { data: itens, error: itErr } = await supabase.from('orcamentos_itens').select(`*, produtos!produto_id(nome, sku)`).eq('orcamento_id', orcId)
+      if (itErr) throw itErr
       setSelectedOrcamentoForReceipt({ ...orc, itens: itens || [] })
       setIsReceiptModalOpen(true)
     } catch (err) {
@@ -178,20 +185,23 @@ export function Orcamentos() {
     setItems(items.filter((_, i) => i !== index))
   }
 
-  const updateItem = (index: number, field: keyof ItemOrcamento, value: string | number) => {
-    const newItems = [...items]
-    const item = { ...newItems[index] }
+  const updateItem = (index: number, updates: Partial<ItemOrcamento>) => {
+    setItems(prev => {
+      const newItems = [...prev]
+      const item = { ...newItems[index], ...updates }
 
-    if (field === 'produto_id') {
-      item.produto_id = value as string
-      const prod = produtos.find(p => p.id === value)
-      if (prod) item.preco_unitario = prod.preco
-    } else {
-      (item as any)[field] = value
-    }
+      if (updates.produto_id !== undefined) {
+        const prod = produtos.find(p => String(p.id) === String(updates.produto_id))
+        if (prod) {
+          item.preco_unitario = (formData.condicao_pagamento === 'A Prazo' && prod.preco_prazo && prod.preco_prazo > 0)
+            ? prod.preco_prazo
+            : prod.preco
+        }
+      }
 
-    newItems[index] = item
-    setItems(newItems)
+      newItems[index] = item
+      return newItems
+    })
   }
 
   const calculateTotal = () => items.reduce((acc, item) => acc + (item.quantidade * item.preco_unitario), 0)
@@ -202,6 +212,9 @@ export function Orcamentos() {
 
     setSubmitting(true)
     try {
+      if (items.some(i => !i.produto_id)) {
+        throw new Error('Selecione um produto para todos os itens.')
+      }
       const total = calculateTotal()
 
       if (createdOrcamentoId) {
@@ -362,7 +375,8 @@ export function Orcamentos() {
     if (!confirm('Converter este orçamento em Venda?')) return;
     setSubmitting(true);
     try {
-      const { data: itens } = await supabase.from('orcamentos_itens').select('*, produtos(nome, sku)').eq('orcamento_id', orc.id);
+      const { data: itens, error: itErr } = await supabase.from('orcamentos_itens').select('*, produtos!produto_id(nome, sku)').eq('orcamento_id', orc.id);
+      if (itErr) throw itErr;
       if (!itens) throw new Error('Itens não encontrados');
 
       const cartItems = itens.map(i => ({
@@ -485,7 +499,7 @@ export function Orcamentos() {
                 ) : filteredOrcamentos.map((orcamento) => (
                   <TableRow key={orcamento.id}>
                     <TableCell className="font-extrabold text-indigo-700 text-sm">
-                      #{formatNumPedido(orcamento.numero_pedido)}
+                      #{formatNumOrcamento(orcamento.numero_pedido)}
                     </TableCell>
                     <TableCell>
                       <div className="flex flex-col gap-1 max-w-[320px]">
@@ -505,7 +519,7 @@ export function Orcamentos() {
                       </div>
                     </TableCell>
                     <TableCell className="text-xs italic text-foreground">
-                      {orcamento.atendentes?.nome || "-"}
+                      {orcamento.vendedor?.nome || "-"}
                     </TableCell>
                     <TableCell className="text-xs">
                       {orcamento.condicao_pagamento || 'À Vista'}
@@ -602,7 +616,7 @@ export function Orcamentos() {
                   setFormData({ ...formData, condicao_pagamento: newCond });
                   // Update all item prices based on new condition
                   setItems(items.map(item => {
-                    const p = produtos.find(pp => pp.id === item.produto_id);
+                    const p = produtos.find(pp => String(pp.id) === String(item.produto_id));
                     if (p) {
                       const newPrice = newCond === 'A Prazo' && p.preco_prazo && p.preco_prazo > 0 ? p.preco_prazo : p.preco;
                       return { ...item, preco_unitario: newPrice };
@@ -644,10 +658,7 @@ export function Orcamentos() {
                       value={item.produto_id}
                       onChange={e => {
                         const pid = e.target.value;
-                        const p = produtos.find(pp => pp.id === pid);
-                        const price = p ? (formData.condicao_pagamento === 'A Prazo' && p.preco_prazo && p.preco_prazo > 0 ? p.preco_prazo : p.preco) : 0;
-                        updateItem(index, 'produto_id', pid);
-                        updateItem(index, 'preco_unitario', price);
+                        updateItem(index, { produto_id: pid });
                       }}
                     >
                       <option value="">Buscar produto...</option>
@@ -660,7 +671,7 @@ export function Orcamentos() {
                       type="number"
                       min="1"
                       value={item.quantidade}
-                      onChange={e => updateItem(index, 'quantidade', parseInt(e.target.value))}
+                      onChange={e => updateItem(index, { quantidade: parseInt(e.target.value) || 0 })}
                     />
                   </div>
                   <div className="space-y-2">
@@ -669,7 +680,7 @@ export function Orcamentos() {
                       type="number"
                       step="0.01"
                       value={item.preco_unitario}
-                      onChange={e => updateItem(index, 'preco_unitario', parseFloat(e.target.value))}
+                      onChange={e => updateItem(index, { preco_unitario: parseFloat(e.target.value) || 0 })}
                     />
                   </div>
                   <Button
@@ -837,12 +848,12 @@ export function Orcamentos() {
                       <p className="text-[10px]">{company?.logradouro}, {company?.numero}</p>
                       <p className="text-[10px] TEL:">{company?.telefone || '(00) 0000-0000'}</p>
                     </div>
-                    <div className="border-y-2 border-black py-1 font-bold text-center uppercase my-2">ORÇAMENTO Nº {formatNumPedido(selectedOrcamentoForReceipt.numero_pedido)}</div>
+                    <div className="border-y-2 border-black py-1 font-bold text-center uppercase my-2">ORÇAMENTO Nº {formatNumOrcamento(selectedOrcamentoForReceipt.numero_pedido)}</div>
                     <div className="text-[11px] space-y-1 mb-2">
                       <p>Data: {new Date(selectedOrcamentoForReceipt.data_inicio || selectedOrcamentoForReceipt.created_at).toLocaleDateString()}</p>
                       <p className="font-bold text-destructive">Validade: {new Date(selectedOrcamentoForReceipt.validade).toLocaleDateString()}</p>
                       <p>Cliente: {selectedOrcamentoForReceipt.clientes?.nome || 'CONSUMIDOR'}</p>
-                      <p>Vendedor: {selectedOrcamentoForReceipt.atendentes?.nome || 'N/A'}</p>
+                      <p>Vendedor: {selectedOrcamentoForReceipt.vendedor?.nome || 'N/A'}</p>
                     </div>
                     <div className="border-b border-black text-center font-bold text-[10px] mb-1">PRODUTOS</div>
                     <table className="w-full text-[10px]">
@@ -883,7 +894,7 @@ export function Orcamentos() {
                         </div>
                       </div>
                       <div className="text-right text-[10px]">
-                        <p className="text-lg font-black italic">ORÇAMENTO #{formatNumPedido(selectedOrcamentoForReceipt.numero_pedido)}</p>
+                        <p className="text-lg font-black italic">ORÇAMENTO #{formatNumOrcamento(selectedOrcamentoForReceipt.numero_pedido)}</p>
                         <p>{new Date().toLocaleDateString('pt-BR')} {new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</p>
                       </div>
                     </div>
@@ -899,7 +910,7 @@ export function Orcamentos() {
                         <p className="formal-label">Informações</p>
                         <p>Data Emissão: {new Date(selectedOrcamentoForReceipt.data_inicio || selectedOrcamentoForReceipt.created_at).toLocaleDateString('pt-BR')}</p>
                         <p className="text-destructive font-bold">Vencimento: {new Date(selectedOrcamentoForReceipt.validade).toLocaleDateString('pt-BR')}</p>
-                        <p>Vendedor: {selectedOrcamentoForReceipt.atendentes?.nome || 'N/A'}</p>
+                        <p>Vendedor: {selectedOrcamentoForReceipt.vendedor?.nome || 'N/A'}</p>
                       </div>
                     </div>
 

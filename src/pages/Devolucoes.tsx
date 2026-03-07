@@ -10,9 +10,7 @@ import { Modal } from "@/components/ui/modal"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Plus, Search, RotateCcw, Pencil, Trash2, RefreshCw } from "lucide-react"
-
-const fmt = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v)
-const fmtDate = (d: string) => d ? new Date(d).toLocaleDateString('pt-BR') : '—'
+import { fmt, fmtDate } from "@/lib/format"
 
 const STATUS_VARIANT: Record<string, any> = {
     Pendente: 'outline',

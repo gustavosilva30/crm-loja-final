@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react"
+import { useEffect, useState, useMemo, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
@@ -10,6 +10,8 @@ import { Plus, Search, Filter, User, Mail, Phone, MapPin, Trash2, Pencil, X, Che
 import { supabase } from "@/lib/supabase"
 import { useAuthStore } from "@/store/authStore"
 import { cn } from "@/lib/utils"
+import { fmt } from "@/lib/format"
+import { useAsyncData } from "@/hooks/useAsyncData"
 
 interface Cliente {
     id: string
@@ -27,12 +29,10 @@ interface Cliente {
     vendedor?: { id: string, nome: string }
 }
 
-const fmt = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v)
-
 export function Clientes() {
     const [searchTerm, setSearchTerm] = useState("")
     const [clientes, setClientes] = useState<Cliente[]>([])
-    const [loading, setLoading] = useState(true)
+    const { run, loading, error, clearError } = useAsyncData()
     const [isModalOpen, setIsModalOpen] = useState(false)
     const [editingCliente, setEditingCliente] = useState<Cliente | null>(null)
     const [submitting, setSubmitting] = useState(false)
@@ -71,30 +71,18 @@ export function Clientes() {
         vendedor_id: ''
     })
 
-    const fetchClientes = async () => {
-        setLoading(true)
-        try {
-            let query = supabase.from('clientes').select('*, vendedor:atendentes(id, nome)')
+    const fetchClientes = useCallback(() => run(async () => {
+        let query = supabase.from('clientes').select('*, vendedor:atendentes(id, nome)')
+        if (!atendente?.perm_config) query = query.eq('vendedor_id', atendente?.id)
+        const { data, err } = await query.order('nome')
+        if (err) throw err
+        setClientes(data || [])
+        const { data: vends } = await supabase.from('atendentes').select('id, nome').order('nome')
+        if (vends) setVendedores(vends)
+    }), [run, atendente?.id, atendente?.perm_config])
 
-            // Restrição de Carteira: Vendedor só vê os seus clientes, Admin vê tudo
-            if (!atendente?.perm_config) {
-                query = query.eq('vendedor_id', atendente?.id)
-            }
-
-            const { data, error } = await query.order('nome')
-            if (!error) setClientes(data || [])
-
-            // Busca lista de vendedores para filtros e transferências
-            const { data: vends } = await supabase.from('atendentes').select('id, nome').order('nome')
-            if (vends) setVendedores(vends)
-        } catch (err) {
-            console.error('Unexpected error:', err)
-        } finally {
-            setLoading(false)
-        }
-    }
-
-    useEffect(() => { fetchClientes() }, [])
+    useEffect(() => { fetchClientes() }, [fetchClientes])
+    useEffect(() => { if (error) { alert('Falha ao carregar clientes. Tente novamente.'); clearError() } }, [error, clearError])
     useEffect(() => { setCurrentPage(1) }, [searchTerm, filterSaldoHaver, filterLimiteCredito, filterCadastroInicio, filterCadastroFim, filterTipo, filterComEmail, filterComTelefone, filterVendedorId])
 
     const searchCNPJ = async () => {
@@ -149,8 +137,12 @@ export function Clientes() {
     const handleDelete = async (id: string) => {
         if (!confirm("Deseja realmente excluir este cliente?")) return
         const { error } = await supabase.from('clientes').delete().eq('id', id)
-        if (error) alert("Erro ao excluir: verifique se o cliente possui vendas vinculadas")
-        else fetchClientes()
+        if (error) {
+            alert("Erro ao excluir: verifique se o cliente possui vendas vinculadas.")
+        } else {
+            fetchClientes()
+            alert("Cliente excluído com sucesso.")
+        }
     }
 
     const startEdit = (cliente: Cliente) => {

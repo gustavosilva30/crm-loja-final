@@ -12,9 +12,7 @@ import {
     Users2, Trophy, Settings2, Search, RefreshCw, CheckCircle2,
     XCircle, Clock, Gift, TrendingUp, Star, DollarSign
 } from "lucide-react"
-
-const fmt = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v)
-const fmtDate = (d: string) => d ? new Date(d).toLocaleDateString('pt-BR') : '—'
+import { fmt, fmtDate } from "@/lib/format"
 
 const STATUS_VARIANT: Record<string, any> = {
     Pendente: 'outline',

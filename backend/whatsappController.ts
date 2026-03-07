@@ -76,7 +76,7 @@ const whatsappController = {
             let event = req.body.event || req.params.event;
             // Evolution replaces dots with dashes in URLs when webhook_by_events is true
             if (typeof event === 'string') {
-                event = event.replace('-', '.');
+                event = event.replace(/-/g, '.'); // Evolution envia events com hífens; converter para pontos
             }
             const data = req.body.data || req.body;
             const instanceName = req.body.instance || req.body.instanceName; // Suporte a campos variados da Evolution
@@ -238,11 +238,9 @@ const whatsappController = {
                     conversa = newConv;
                 }
             } else {
-                const newUnreadCount = isFromMe ? (conversa.unread_count || 0) : (conversa.unread_count || 0) + 1;
+                // Não atualizar unread_count/nao_lidas_count aqui: o trigger na inserção da mensagem já incrementa
                 const updatePayload: any = {
                     is_group: isGroup,
-                    unread_count: newUnreadCount,
-                    nao_lidas_count: newUnreadCount,
                     last_message_at: new Date().toISOString(),
                     ultima_mensagem_em: new Date().toISOString(),
                     last_message_text: text,
@@ -327,7 +325,8 @@ const whatsappController = {
             let evolutionResponse: any;
             let mediaUrl = null;
             let mediaType = 'texto';
-            let messageToClient = atendente_nome ? `*${atendente_nome}:*\n${conteudo}` : conteudo;
+            const hasText = conteudo != null && String(conteudo).trim() !== '';
+            let messageToClient = hasText && atendente_nome ? `*${atendente_nome}:*\n${conteudo}` : (hasText ? conteudo : undefined);
 
             const tasks: Promise<any>[] = [];
 
@@ -345,11 +344,12 @@ const whatsappController = {
                     evoTask = axios.post(`${EVO_API_URL}/message/sendWhatsAppAudio/${instanceName}`, { number: formattedNumber, audio: mediaBase64 }, { headers: { apikey: EVO_API_KEY, 'Content-Type': 'application/json' } });
                 } else {
                     mediaType = mediaMimeType?.startsWith('image/') ? 'image' : mediaMimeType?.startsWith('video/') ? 'video' : 'document';
-                    evoTask = axios.post(`${EVO_API_URL}/message/sendMedia/${instanceName}`, { number: formattedNumber, mediatype: mediaType, mimetype: mediaMimeType || 'application/octet-stream', caption: messageToClient || undefined, media: base64Data, fileName: mediaFileName || 'arquivo' }, { headers: { apikey: EVO_API_KEY, 'Content-Type': 'application/json' } });
+                    evoTask = axios.post(`${EVO_API_URL}/message/sendMedia/${instanceName}`, { number: formattedNumber, mediatype: mediaType, mimetype: mediaMimeType || 'application/octet-stream', caption: messageToClient ?? undefined, media: base64Data, fileName: mediaFileName || 'arquivo' }, { headers: { apikey: EVO_API_KEY, 'Content-Type': 'application/json' } });
                 }
                 tasks.push(evoTask.then(res => evolutionResponse = res));
             } else {
-                const textTask = axios.post(`${EVO_API_URL}/message/sendText/${instanceName}`, { number: formattedNumber, text: messageToClient }, { headers: { apikey: EVO_API_KEY, 'Content-Type': 'application/json' } }).then(res => evolutionResponse = res);
+                const textToSend = messageToClient ?? conteudo ?? '';
+                const textTask = axios.post(`${EVO_API_URL}/message/sendText/${instanceName}`, { number: formattedNumber, text: textToSend }, { headers: { apikey: EVO_API_KEY, 'Content-Type': 'application/json' } }).then(res => evolutionResponse = res);
                 tasks.push(textTask);
             }
 

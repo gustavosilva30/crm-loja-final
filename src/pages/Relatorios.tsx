@@ -9,8 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge"
 import { FileText, Download, Printer, TrendingUp, Users, ShoppingBag, Wallet, ArrowDownCircle, ArrowUpCircle, RefreshCw, Box } from "lucide-react"
 
-const fmt = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v)
-const fmtDate = (d: string) => d ? new Date(d).toLocaleDateString('pt-BR') : '---'
+import { fmt, fmtDate } from "@/lib/format"
 
 type ReportType = 'vendas' | 'vendas_por_vendedor' | 'contas' | 'clientes' | 'fluxo_caixa' | 'pecas_por_usuario'
 
@@ -87,7 +86,7 @@ export function Relatorios() {
             else if (reportType === 'vendas_por_vendedor') {
                 let q = supabase
                     .from('vendas')
-                    .select(`total, status, atendentes (nome), data_venda`)
+                    .select(`total, status, atendentes!atendente_id (nome), data_venda`)
                     .neq('status', 'Cancelado')
 
                 if (filterDataInicio) q = q.gte('data_venda', filterDataInicio)
@@ -118,7 +117,7 @@ export function Relatorios() {
                     .from('financeiro_lancamentos')
                     .select(`
                         descricao, tipo, valor, status, data_vencimento, data_pagamento,
-                        clientes (nome)
+                        clientes!cliente_id (nome)
                     `)
                     .order('data_vencimento', { ascending: true })
 
@@ -175,7 +174,7 @@ export function Relatorios() {
             else if (reportType === 'pecas_por_usuario') {
                 let q = supabase
                     .from('produtos')
-                    .select(`atendente_id, atendentes (nome), created_at`)
+                    .select(`atendente_id, atendentes!atendente_id (nome), created_at`)
 
                 if (filterDataInicio) q = q.gte('created_at', filterDataInicio)
                 if (filterDataFim) q = q.lte('created_at', filterDataFim + 'T23:59:59')

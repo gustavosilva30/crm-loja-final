@@ -10,7 +10,8 @@ import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Target, TrendingUp, Plus, Pencil, ChevronLeft, ChevronRight } from "lucide-react"
 
-const fmt = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v)
+import { fmt } from "@/lib/format"
+
 const pct = (a: number, b: number) => b > 0 ? Math.min(100, (a / b) * 100).toFixed(1) : '0.0'
 
 function getMesAno(offset = 0) {

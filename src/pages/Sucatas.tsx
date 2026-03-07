@@ -14,6 +14,7 @@ import {
 import { DismantlingChecklistDialog } from "@/components/DismantlingChecklistDialog"
 import { supabase } from "@/lib/supabase"
 import { useAuthStore } from "@/store/authStore"
+import { fmt, fmtDate } from "@/lib/format"
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -90,9 +91,6 @@ const condicaoColors: Record<string, string> = {
     "Regular": "text-amber-600",
     "Danificada": "text-rose-600"
 }
-
-const fmtMoney = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
-const fmtDate = (d: string) => new Date(d + "T00:00:00").toLocaleDateString("pt-BR")
 
 // ─── Blank forms ──────────────────────────────────────────────────────────────
 
@@ -569,9 +567,9 @@ export function Sucatas() {
                         <CardContent className="pt-4">
                             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
                                 {[
-                                    ["Custo de Compra", fmtMoney(selectedSucata.valor_compra)],
-                                    ["Frete", fmtMoney(selectedSucata.valor_frete)],
-                                    ["Custo Total", fmtMoney(selectedSucata.custo_total)],
+                                    ["Custo de Compra", fmt(selectedSucata.valor_compra)],
+                                    ["Frete", fmt(selectedSucata.valor_frete)],
+                                    ["Custo Total", fmt(selectedSucata.custo_total)],
                                     ["Comprado em", fmtDate(selectedSucata.data_compra)],
                                     ["Condição", selectedSucata.condicao || "—"],
                                     ["KM Entrada", selectedSucata.km_entrada?.toLocaleString("pt-BR") || "—"],
@@ -610,11 +608,11 @@ export function Sucatas() {
                             <CardContent className="space-y-1.5 text-sm">
                                 <div className="flex justify-between">
                                     <span className="text-muted-foreground">Investimento</span>
-                                    <span className="font-bold text-rose-600">{fmtMoney(rentabilidade.custo)}</span>
+                                    <span className="font-bold text-rose-600">{fmt(rentabilidade.custo)}</span>
                                 </div>
                                 <div className="flex justify-between">
                                     <span className="text-muted-foreground">Receita Estimada</span>
-                                    <span className="font-bold text-emerald-600">{fmtMoney(rentabilidade.receitaEstimada)}</span>
+                                    <span className="font-bold text-emerald-600">{fmt(rentabilidade.receitaEstimada)}</span>
                                 </div>
                                 <div className="flex justify-between border-t border-border pt-1.5 mt-1.5">
                                     <span className="font-bold">Margem</span>
@@ -665,8 +663,8 @@ export function Sucatas() {
                                             <div className="flex items-center gap-4 mt-1 text-xs text-muted-foreground flex-wrap">
                                                 {p.part_number && <span className="font-mono">PN: {p.part_number}</span>}
                                                 <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{getLocLabel(p.localizacao_id)}</span>
-                                                <span className="flex items-center gap-1"><DollarSign className="w-3 h-3" />Custo: {fmtMoney(p.custo_estimado)}</span>
-                                                <span className="font-bold text-foreground">Venda: {fmtMoney(p.preco_venda)}</span>
+                                                <span className="flex items-center gap-1"><DollarSign className="w-3 h-3" />Custo: {fmt(p.custo_estimado)}</span>
+                                                <span className="font-bold text-foreground">Venda: {fmt(p.preco_venda)}</span>
                                             </div>
                                         </div>
                                         <div className="flex items-center gap-1 shrink-0">
@@ -799,7 +797,7 @@ export function Sucatas() {
                 {[
                     { label: "Total de Sucatas", value: stats.total, icon: Car, color: "text-blue-500" },
                     { label: "Em Desmontagem", value: stats.ativas, icon: Wrench, color: "text-amber-500" },
-                    { label: "Custo Total", value: fmtMoney(stats.custo), icon: DollarSign, color: "text-rose-500" },
+                    { label: "Custo Total", value: fmt(stats.custo), icon: DollarSign, color: "text-rose-500" },
                     { label: "Peças Registradas", value: stats.pecas, icon: Layers, color: "text-emerald-500" },
                 ].map(s => (
                     <Card key={s.label} className="hover:shadow-sm transition-shadow">
@@ -868,7 +866,7 @@ export function Sucatas() {
                                         </div>
                                         <div className="text-right shrink-0">
                                             <p className="text-xs text-muted-foreground">Custo total</p>
-                                            <p className="font-bold text-sm text-rose-600">{fmtMoney(s.custo_total)}</p>
+                                            <p className="font-bold text-sm text-rose-600">{fmt(s.custo_total)}</p>
                                         </div>
                                     </div>
                                 </CardHeader>
@@ -1010,7 +1008,7 @@ export function Sucatas() {
                             <div className="space-y-1">
                                 <Label>Custo Total Estimado</Label>
                                 <div className="h-9 flex items-center px-3 rounded-md bg-muted border border-input text-sm font-bold text-primary">
-                                    {fmtMoney(
+                                    {fmt(
                                         (parseFloat(sucataForm.valor_compra) || 0) +
                                         (parseFloat(sucataForm.valor_frete) || 0) +
                                         (parseFloat(sucataForm.outros_custos) || 0)

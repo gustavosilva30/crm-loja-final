@@ -499,18 +499,24 @@ export function Atendimento() {
 
     const sendAudioMessage = async (base64: string) => {
         if (!selectedConversa) return
-        const nomeAtendente = atendente?.nome || "Vendedor";
+        const nomeAtendente = atendente?.nome || "Vendedor"
         const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
-        await axios.post(`${apiUrl}/api/whatsapp/send`, {
-            conversa_id: selectedConversa.id,
-            telefone: selectedConversa.telefone,
-            instancia_id: selectedConversa.instancia_id || whatsappInstancia?.id,
-            atendente_id: atendente?.id,
-            atendente_nome: nomeAtendente,
-            mediaBase64: base64,
-            mediaMimeType: 'audio/ogg; codecs=opus',
-            mediaFileName: `audio-${Date.now()}.ogg`
-        })
+        try {
+            await axios.post(`${apiUrl}/api/whatsapp/send`, {
+                conversa_id: selectedConversa.id,
+                telefone: selectedConversa.telefone,
+                instancia_id: selectedConversa.instancia_id || whatsappInstancia?.id,
+                atendente_id: atendente?.id,
+                atendente_nome: nomeAtendente,
+                conteudo: '', // áudio sem texto
+                mediaBase64: base64,
+                mediaMimeType: 'audio/ogg; codecs=opus',
+                mediaFileName: `audio-${Date.now()}.ogg`
+            })
+        } catch (err) {
+            console.error('Erro ao enviar áudio:', err)
+            alert('Erro ao enviar áudio. Verifique a conexão.')
+        }
     }
 
     const handleSendMessage = async (e: React.FormEvent) => {

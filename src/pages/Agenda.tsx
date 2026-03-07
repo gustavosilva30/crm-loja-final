@@ -9,6 +9,7 @@ import { Select } from "@/components/ui/select"
 import { Modal } from "@/components/ui/modal"
 import { Badge } from "@/components/ui/badge"
 import { Plus, Calendar, ChevronLeft, ChevronRight, Clock, User, Pencil, Trash2 } from "lucide-react"
+import { fmtDateTimeShort } from "@/lib/format"
 
 const TIPO_COLORS: Record<string, string> = {
     Visita: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
@@ -332,7 +333,6 @@ export function Agenda() {
 }
 
 function AgendaCard({ item, onEdit, onDelete }: { item: any; onEdit: (item: any) => void; onDelete: (id: string) => void }) {
-    const fmt = (d: string) => new Date(d).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
     return (
         <div className="flex items-start gap-3 p-3 border border-border rounded-lg bg-card hover:bg-muted/20 transition-colors">
             <div className={`shrink-0 px-2 py-1 rounded text-xs font-bold border ${TIPO_COLORS[item.tipo] || TIPO_COLORS.Outros}`}>
@@ -341,7 +341,7 @@ function AgendaCard({ item, onEdit, onDelete }: { item: any; onEdit: (item: any)
             <div className="flex-1 min-w-0">
                 <p className="font-semibold text-sm truncate">{item.titulo}</p>
                 <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground flex-wrap">
-                    <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{fmt(item.data_inicio)}</span>
+                    <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{fmtDateTimeShort(item.data_inicio)}</span>
                     {item.clientes?.nome && <span className="flex items-center gap-1"><User className="w-3 h-3" />{item.clientes.nome}</span>}
                     {item.atendentes?.nome && <span>{item.atendentes.nome}</span>}
                 </div>

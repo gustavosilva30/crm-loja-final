@@ -21,49 +21,52 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
     signIn: async () => {
         set({ loading: true })
-        const { data: { session } } = await supabase.auth.getSession()
+        try {
+            const { data: { session } } = await supabase.auth.getSession()
 
-        if (session) {
-            // 1. Tentar buscar por auth_user_id primeiro (vínculo já existente)
-            let { data: atendente, error: fetchErr } = await supabase
-                .from('atendentes')
-                .select('*')
-                .eq('auth_user_id', session.user.id)
-                .maybeSingle()
-
-            // 2. Se não achou, tentar por e-mail (vínculo inicial) - case insensitive
-            if (!atendente && session.user.email) {
-                const { data: foundByEmail } = await supabase
+            if (session) {
+                // 1. Tentar buscar por auth_user_id primeiro (vínculo já existente)
+                let { data: atendente } = await supabase
                     .from('atendentes')
                     .select('*')
-                    .ilike('email', session.user.email)
+                    .eq('auth_user_id', session.user.id)
                     .maybeSingle()
 
-                if (foundByEmail) {
-                    // Atualiza o atendente com o ID do usuário de auth do Supabase
-                    const { data: updated } = await supabase
+                // 2. Se não achou, tentar por e-mail (vínculo inicial) - case insensitive
+                if (!atendente && session.user.email) {
+                    const { data: foundByEmail } = await supabase
                         .from('atendentes')
-                        .update({ auth_user_id: session.user.id })
-                        .eq('id', foundByEmail.id)
-                        .select()
-                        .single()
+                        .select('*')
+                        .ilike('email', session.user.email)
+                        .maybeSingle()
 
-                    atendente = updated
+                    if (foundByEmail) {
+                        const { data: updated } = await supabase
+                            .from('atendentes')
+                            .update({ auth_user_id: session.user.id })
+                            .eq('id', foundByEmail.id)
+                            .select()
+                            .single()
+                        atendente = updated
+                    }
                 }
-            }
 
-            let whatsappInstancia = null;
-            if (atendente) {
-                const { data: inst } = await supabase
-                    .from('whatsapp_instancias')
-                    .select('*')
-                    .eq('atendente_id', atendente.id)
-                    .maybeSingle()
-                whatsappInstancia = inst;
-            }
+                let whatsappInstancia = null
+                if (atendente) {
+                    const { data: inst } = await supabase
+                        .from('whatsapp_instancias')
+                        .select('*')
+                        .eq('atendente_id', atendente.id)
+                        .maybeSingle()
+                    whatsappInstancia = inst
+                }
 
-            set({ user: session.user, atendente, whatsappInstancia, loading: false, initialized: true })
-        } else {
+                set({ user: session.user, atendente, whatsappInstancia, loading: false, initialized: true })
+            } else {
+                set({ user: null, atendente: null, whatsappInstancia: null, loading: false, initialized: true })
+            }
+        } catch (err) {
+            console.error('Erro ao verificar sessão:', err)
             set({ user: null, atendente: null, whatsappInstancia: null, loading: false, initialized: true })
         }
     },

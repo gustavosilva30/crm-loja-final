@@ -55,7 +55,7 @@ export function Modal({ isOpen, onClose, title, children, className }: ModalProp
                             <button
                                 onClick={onClose}
                                 className="p-1 hover:bg-muted rounded-full transition-colors"
-                                aria-label="Fecar"
+                                aria-label="Fechar"
                             >
                                 <X className="w-5 h-5" />
                             </button>
