@@ -36,6 +36,10 @@ interface Conversa {
     foto_url?: string
     is_pinned?: boolean
     instancia_id?: string
+    atendente_id?: string
+    ultima_mensagem?: string
+    ultima_mensagem_em?: string
+    legacy?: boolean
 }
 
 interface Mensagem {
@@ -60,6 +64,8 @@ interface Mensagem {
     is_pinned?: boolean
     remetente_foto?: string
     status?: 'sending' | 'sent' | 'error'
+    direction?: 'inbound' | 'outbound'
+    status_envio?: string
 }
 
 interface Contato {
@@ -143,7 +149,7 @@ export function Atendimento() {
     const fetchData = async () => {
         setLoadingConv(true)
 
-        let query = supabase.from('conversas').select('*').order('updated_at', { ascending: false })
+        let query = supabase.from('conversas').select('*').order('last_message_at', { ascending: false })
 
         if (atendente?.perm_config) {
             // Admin vê tudo
@@ -330,14 +336,24 @@ export function Atendimento() {
             // Apenas recarrega se houver mudança estrutural ou exclusão
             .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'conversas' }, (payload) => {
                 const updated = payload.new as Conversa;
-                setConversas(prev => prev.map(c => {
-                    if (c.id === updated.id) {
-                        // Se for a selecionada, mantemos lida localmente para evitar flickers/race conditions
-                        const forcedUnread = (selectedConversa?.id === updated.id) ? 0 : (updated.unread_count ?? c.unread_count);
-                        return { ...c, ...updated, unread_count: forcedUnread };
-                    }
-                    return c;
-                }));
+                setConversas(prev => {
+                    const newConvs = prev.map(c => {
+                        if (c.id === updated.id) {
+                            const forcedUnread = (selectedConversa?.id === updated.id) ? 0 : (updated.unread_count ?? c.unread_count);
+                            return { ...c, ...updated, unread_count: forcedUnread };
+                        }
+                        return c;
+                    });
+
+                    // Ordena sempre para garantir comportamento de WhatsApp Web
+                    return [...newConvs].sort((a, b) => {
+                        if (a.is_pinned && !b.is_pinned) return -1;
+                        if (!a.is_pinned && b.is_pinned) return 1;
+                        const dateA = new Date(a.last_message_at || a.updated_at || a.ultima_mensagem_em || 0).getTime();
+                        const dateB = new Date(b.last_message_at || b.updated_at || b.ultima_mensagem_em || 0).getTime();
+                        return dateB - dateA;
+                    });
+                });
             })
             .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'conversas' }, () => fetchData())
             .subscribe()
@@ -374,7 +390,9 @@ export function Atendimento() {
             return updated.sort((a, b) => {
                 if (a.is_pinned && !b.is_pinned) return -1;
                 if (!a.is_pinned && b.is_pinned) return 1;
-                return new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime();
+                const dateA = new Date(a.last_message_at || a.updated_at || a.ultima_mensagem_em || 0).getTime();
+                const dateB = new Date(b.last_message_at || b.updated_at || b.ultima_mensagem_em || 0).getTime();
+                return dateB - dateA;
             });
         });
     }

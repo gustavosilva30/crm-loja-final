@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom"
-import { LayoutDashboard, Package, ShoppingCart, ShoppingBag, DollarSign, Users, Truck, Settings, LogOut, FileText, Bell, BarChart, Wallet, MessageCircle, CheckCircle2, Gavel, CalendarDays, Target, RotateCcw, Users2, QrCode, Car, Zap, Map, LayoutGrid as KanbanIcon, Search } from "lucide-react"
+import { LayoutDashboard, Package, ShoppingCart, ShoppingBag, DollarSign, Users, Truck, Settings, LogOut, FileText, Bell, BarChart, Wallet, MessageCircle, CheckCircle2, Gavel, CalendarDays, Target, RotateCcw, Users2, QrCode, Car, Zap, Map, LayoutGrid as KanbanIcon, Search, Database } from "lucide-react"
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils"
 import { ModeToggle } from "./ModeToggle"
@@ -11,8 +11,8 @@ const navItems = [
   { icon: LayoutDashboard, label: "Dashboard", href: "/" },
   { icon: MessageCircle, label: "Atendimento", href: "/atendimento" },
   { icon: KanbanIcon, label: "Funil de Vendas", href: "/funil" },
-  { icon: Zap, label: "Sales AI", href: "/sales-ai" },
-  { icon: Map, label: "Yard Map", href: "/yard-map" },
+  { icon: Truck, label: "Entregas", href: "/entregas" },
+  { icon: DollarSign, label: "Financeiro", href: "/financeiro" },
   { icon: Bell, label: "Lembretes", href: "/lembretes" },
   { icon: Package, label: "Estoque", href: "/produtos" },
   { icon: Car, label: "Catálogo", href: "/catalogo" },
@@ -21,11 +21,9 @@ const navItems = [
   { icon: CheckCircle2, label: "Vendas Concluídas", href: "/vendas-concluidas" },
   { icon: FileText, label: "Orçamentos", href: "/orcamentos" },
   { icon: Wallet, label: "Controle de Caixa", href: "/caixa" },
-  { icon: DollarSign, label: "Financeiro", href: "/financeiro" },
   { icon: BarChart, label: "Relatórios", href: "/relatorios" },
   { icon: FileText, label: "Fiscal", href: "/fiscal" },
   { icon: Users, label: "Clientes", href: "/clientes" },
-  { icon: Truck, label: "Entregas", href: "/entregas" },
   { icon: Gavel, label: "Leilões", href: "/leiloes" },
   { icon: Car, label: "Sucatas", href: "/sucatas" },
   { icon: CalendarDays, label: "Agenda", href: "/agenda" },

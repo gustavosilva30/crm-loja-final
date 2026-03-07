@@ -28,6 +28,7 @@ import { Sucatas } from "./pages/Sucatas"
 import { Catalogo } from "./pages/Catalogo"
 import { SalesAI } from "./pages/SalesAI"
 import { YardMap } from "./pages/YardMap"
+import { Importador } from "./pages/Importador"
 import { ThemeProvider } from "./components/ThemeProvider"
 import { supabase } from "./lib/supabase"
 import { useAuthStore } from "./store/authStore"
@@ -87,6 +88,7 @@ export default function App() {
                 <Route path="catalogo" element={<Catalogo />} />
                 <Route path="sales-ai" element={<SalesAI />} />
                 <Route path="yard-map" element={<YardMap />} />
+                <Route path="importador" element={<Importador />} />
               </Route>
             </>
           )}

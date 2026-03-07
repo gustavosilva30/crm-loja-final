@@ -6,8 +6,10 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Modal } from "@/components/ui/modal"
-import { Plus, Search, Filter, User, Mail, Phone, MapPin, Trash2, Pencil, X, ChevronDown, RefreshCw, Users, Wallet, TrendingUp, AlertTriangle } from "lucide-react"
+import { Plus, Search, Filter, User, Mail, Phone, MapPin, Trash2, Pencil, X, ChevronDown, RefreshCw, Users, Wallet, TrendingUp, AlertTriangle, Check } from "lucide-react"
 import { supabase } from "@/lib/supabase"
+import { useAuthStore } from "@/store/authStore"
+import { cn } from "@/lib/utils"
 
 interface Cliente {
     id: string
@@ -21,6 +23,8 @@ interface Cliente {
     saldo_haver: number
     limite_credito: number
     created_at: string
+    vendedor_id: string | null
+    vendedor?: { id: string, nome: string }
 }
 
 const fmt = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v)
@@ -34,6 +38,9 @@ export function Clientes() {
     const [submitting, setSubmitting] = useState(false)
     const [searchingCNPJ, setSearchingCNPJ] = useState(false)
     const [isFilterOpen, setIsFilterOpen] = useState(false)
+    const [vendedores, setVendedores] = useState<{ id: string, nome: string }[]>([])
+    const [selectedIds, setSelectedIds] = useState<string[]>([])
+    const { atendente } = useAuthStore()
 
     // Pagination
     const [currentPage, setCurrentPage] = useState(1)
@@ -47,6 +54,7 @@ export function Clientes() {
     const [filterTipo, setFilterTipo] = useState<'todos' | 'pf' | 'pj'>('todos') // PF (CPF 11 dígitos) vs PJ (CNPJ 14)
     const [filterComEmail, setFilterComEmail] = useState<'todos' | 'sim' | 'nao'>('todos')
     const [filterComTelefone, setFilterComTelefone] = useState<'todos' | 'sim' | 'nao'>('todos')
+    const [filterVendedorId, setFilterVendedorId] = useState<string>('all')
     const [sortBy, setSortBy] = useState<'nome' | 'created_at' | 'saldo_haver' | 'limite_credito'>('nome')
     const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
 
@@ -59,14 +67,26 @@ export function Clientes() {
         email: '',
         telefone: '',
         endereco: '',
-        limite_credito: 0
+        limite_credito: 0,
+        vendedor_id: ''
     })
 
     const fetchClientes = async () => {
         setLoading(true)
         try {
-            const { data, error } = await supabase.from('clientes').select('*').order('nome')
+            let query = supabase.from('clientes').select('*, vendedor:atendentes(id, nome)')
+
+            // Restrição de Carteira: Vendedor só vê os seus clientes, Admin vê tudo
+            if (!atendente?.perm_config) {
+                query = query.eq('vendedor_id', atendente?.id)
+            }
+
+            const { data, error } = await query.order('nome')
             if (!error) setClientes(data || [])
+
+            // Busca lista de vendedores para filtros e transferências
+            const { data: vends } = await supabase.from('atendentes').select('id, nome').order('nome')
+            if (vends) setVendedores(vends)
         } catch (err) {
             console.error('Unexpected error:', err)
         } finally {
@@ -75,7 +95,7 @@ export function Clientes() {
     }
 
     useEffect(() => { fetchClientes() }, [])
-    useEffect(() => { setCurrentPage(1) }, [searchTerm, filterSaldoHaver, filterLimiteCredito, filterCadastroInicio, filterCadastroFim, filterTipo, filterComEmail, filterComTelefone])
+    useEffect(() => { setCurrentPage(1) }, [searchTerm, filterSaldoHaver, filterLimiteCredito, filterCadastroInicio, filterCadastroFim, filterTipo, filterComEmail, filterComTelefone, filterVendedorId])
 
     const searchCNPJ = async () => {
         const cnpj = newCliente.documento.replace(/\D/g, '')
@@ -104,16 +124,20 @@ export function Clientes() {
         e.preventDefault()
         setSubmitting(true)
         try {
+            const dataToSave = {
+                ...newCliente,
+                vendedor_id: newCliente.vendedor_id || atendente?.id || null
+            }
             if (editingCliente) {
-                const { error } = await supabase.from('clientes').update(newCliente).eq('id', editingCliente.id)
+                const { error } = await supabase.from('clientes').update(dataToSave).eq('id', editingCliente.id)
                 if (error) throw error
             } else {
-                const { error } = await supabase.from('clientes').insert([newCliente])
+                const { error } = await supabase.from('clientes').insert([dataToSave])
                 if (error) throw error
             }
             setIsModalOpen(false)
             setEditingCliente(null)
-            setNewCliente({ nome: '', razao_social: '', documento: '', inscricao_estadual: '', email: '', telefone: '', endereco: '', limite_credito: 0 })
+            setNewCliente({ nome: '', razao_social: '', documento: '', inscricao_estadual: '', email: '', telefone: '', endereco: '', limite_credito: 0, vendedor_id: '' })
             fetchClientes()
         } catch (err: any) {
             alert('Erro ao salvar cliente: ' + (err.message || 'Verifique se o CPF/CNPJ já existe'))
@@ -139,7 +163,8 @@ export function Clientes() {
             email: cliente.email || '',
             telefone: cliente.telefone || '',
             endereco: cliente.endereco || '',
-            limite_credito: cliente.limite_credito || 0
+            limite_credito: cliente.limite_credito || 0,
+            vendedor_id: cliente.vendedor_id || ''
         })
         setIsModalOpen(true)
     }
@@ -153,6 +178,7 @@ export function Clientes() {
         setFilterTipo('todos')
         setFilterComEmail('todos')
         setFilterComTelefone('todos')
+        setFilterVendedorId('all')
         setSortBy('nome')
         setSortDir('asc')
     }
@@ -165,6 +191,7 @@ export function Clientes() {
         filterTipo !== 'todos' ? '1' : '',
         filterComEmail !== 'todos' ? '1' : '',
         filterComTelefone !== 'todos' ? '1' : '',
+        filterVendedorId !== 'all' ? '1' : '',
     ].filter(Boolean).length
 
     const filteredClientes = useMemo(() => {
@@ -209,7 +236,9 @@ export function Clientes() {
             const matchInicio = !filterCadastroInicio || cadDate >= new Date(filterCadastroInicio + 'T00:00:00').getTime()
             const matchFim = !filterCadastroFim || cadDate <= new Date(filterCadastroFim + 'T23:59:59').getTime()
 
-            return matchSearch && matchSaldo && matchLimite && matchTipo && matchEmail && matchTel && matchInicio && matchFim
+            const matchVendedor = filterVendedorId === 'all' || c.vendedor_id === filterVendedorId
+
+            return matchSearch && matchSaldo && matchLimite && matchTipo && matchEmail && matchTel && matchInicio && matchFim && matchVendedor
         })
 
         // Sort
@@ -235,6 +264,26 @@ export function Clientes() {
     const totalComLimite = clientes.filter(c => (c.limite_credito || 0) > 0).length
     const semContato = clientes.filter(c => !c.email && !c.telefone).length
 
+    const handleBulkTransfer = async () => {
+        if (selectedIds.length === 0) return
+        const targetVendedorId = prompt("Digite o ID do novo vendedor ou selecione 'OK' para confirmar a transferência para um vendedor específico (implementação visual pendente, usando prompt simplificado)")
+
+        if (!targetVendedorId) return
+
+        setLoading(true)
+        try {
+            const { error } = await supabase.from('clientes').update({ vendedor_id: targetVendedorId }).in('id', selectedIds)
+            if (error) throw error
+            alert(`${selectedIds.length} clientes transferidos com sucesso!`)
+            setSelectedIds([])
+            fetchClientes()
+        } catch (err: any) {
+            alert("Erro ao transferir carteira: " + err.message)
+        } finally {
+            setLoading(false)
+        }
+    }
+
     return (
         <div className="space-y-6">
             <div className="flex items-center justify-between">
@@ -246,7 +295,7 @@ export function Clientes() {
                     <Button variant="outline" size="icon" onClick={fetchClientes}><RefreshCw className="w-4 h-4" /></Button>
                     <Button className="gap-2" onClick={() => {
                         setEditingCliente(null)
-                        setNewCliente({ nome: '', razao_social: '', documento: '', inscricao_estadual: '', email: '', telefone: '', endereco: '', limite_credito: 0 })
+                        setNewCliente({ nome: '', razao_social: '', documento: '', inscricao_estadual: '', email: '', telefone: '', endereco: '', limite_credito: 0, vendedor_id: '' })
                         setIsModalOpen(true)
                     }}>
                         <Plus className="w-4 h-4" /> Novo Cliente
@@ -392,6 +441,15 @@ export function Clientes() {
                                     onChange={e => setFilterCadastroFim(e.target.value)}
                                     className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm" />
                             </div>
+                            {atendente?.perm_config && (
+                                <div className="space-y-1">
+                                    <Label className="text-[10px] uppercase font-bold text-muted-foreground">Vendedor (Admin)</Label>
+                                    <select className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm" value={filterVendedorId} onChange={e => setFilterVendedorId(e.target.value)}>
+                                        <option value="all">Todos os Vendedores</option>
+                                        {vendedores.map(v => <option key={v.id} value={v.id}>{v.nome}</option>)}
+                                    </select>
+                                </div>
+                            )}
                             <div className="flex items-end">
                                 <div className="text-xs text-muted-foreground bg-primary/5 border border-primary/20 rounded-lg px-3 py-2 w-full text-center">
                                     <span className="font-bold text-primary text-base">{filteredClientes.length}</span>
@@ -409,10 +467,21 @@ export function Clientes() {
                         <Table>
                             <TableHeader>
                                 <TableRow>
+                                    <TableHead className="w-[40px]">
+                                        <input
+                                            type="checkbox"
+                                            className="rounded border-input text-primary focus:ring-primary w-4 h-4 cursor-pointer"
+                                            checked={selectedIds.length === paginatedClientes.length && paginatedClientes.length > 0}
+                                            onChange={(e) => {
+                                                if (e.target.checked) setSelectedIds(paginatedClientes.map(p => p.id))
+                                                else setSelectedIds([])
+                                            }}
+                                        />
+                                    </TableHead>
                                     <TableHead>Cliente</TableHead>
                                     <TableHead>Documento</TableHead>
                                     <TableHead>Contato</TableHead>
-                                    <TableHead>Localização</TableHead>
+                                    <TableHead>Vendedor</TableHead>
                                     <TableHead>Saldo Haver</TableHead>
                                     <TableHead>Limite Crédito</TableHead>
                                     <TableHead>Cadastro</TableHead>
@@ -431,7 +500,17 @@ export function Clientes() {
                                         </TableCell>
                                     </TableRow>
                                 ) : paginatedClientes.map((cliente) => (
-                                    <TableRow key={cliente.id} className="group">
+                                    <TableRow key={cliente.id} className={cn("group transition-colors", selectedIds.includes(cliente.id) && "bg-primary/5")}>
+                                        <TableCell>
+                                            <input
+                                                type="checkbox"
+                                                className="rounded border-input text-primary focus:ring-primary w-4 h-4 cursor-pointer"
+                                                checked={selectedIds.includes(cliente.id)}
+                                                onChange={() => {
+                                                    setSelectedIds(prev => prev.includes(cliente.id) ? prev.filter(id => id !== cliente.id) : [...prev, cliente.id])
+                                                }}
+                                            />
+                                        </TableCell>
                                         <TableCell>
                                             <div className="flex items-center gap-3">
                                                 <div className="bg-primary/10 p-2 rounded-full shrink-0">
@@ -469,8 +548,10 @@ export function Clientes() {
                                             </div>
                                         </TableCell>
                                         <TableCell>
-                                            <div className="flex items-center gap-1.5 text-xs text-muted-foreground max-w-[180px] truncate">
-                                                {cliente.endereco ? (<><MapPin className="w-3 h-3 shrink-0" />{cliente.endereco}</>) : "—"}
+                                            <div className="flex items-center gap-1.5">
+                                                <Badge variant="outline" className="text-[10px] py-0 font-bold border-primary/20 bg-primary/5">
+                                                    {cliente.vendedor?.nome || "Sem Vendedor"}
+                                                </Badge>
                                             </div>
                                         </TableCell>
                                         <TableCell>
@@ -565,6 +646,19 @@ export function Clientes() {
                             onChange={e => setNewCliente({ ...newCliente, limite_credito: parseFloat(e.target.value) || 0 })} />
                         <p className="text-[10px] text-muted-foreground italic">Define o valor máximo permitido para vendas faturadas no boleto.</p>
                     </div>
+                    {atendente?.perm_config && (
+                        <div className="space-y-2">
+                            <Label>Vendedor Responsável</Label>
+                            <select
+                                className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
+                                value={newCliente.vendedor_id}
+                                onChange={e => setNewCliente({ ...newCliente, vendedor_id: e.target.value })}
+                            >
+                                <option value="">Atribuir automaticamente ao logado</option>
+                                {vendedores.map(v => <option key={v.id} value={v.id}>{v.nome}</option>)}
+                            </select>
+                        </div>
+                    )}
                     <div className="flex justify-end gap-3 pt-4 border-t border-border">
                         <Button variant="outline" type="button" onClick={() => setIsModalOpen(false)}>Cancelar</Button>
                         <Button type="submit" disabled={submitting}>

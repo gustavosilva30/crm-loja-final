@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Plus, Truck, Warehouse, Tags, Wallet, Save, Trash2, Users, Search, Database, MapPin, Layers, ChevronRight, Package, Pencil, ShoppingCart } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { useAuthStore } from "@/store/authStore"
-import { ImportadorInteligente } from "@/components/ImportadorInteligente"
+import { Importador } from "./Importador"
 import { Select } from "@/components/ui/select"
 import { Modal } from "@/components/ui/modal"
 
@@ -303,7 +303,7 @@ export function Configuracoes() {
                     <TabsTrigger value="company" className="gap-2 flex-grow sm:flex-grow-0"><Save className="w-4 h-4" /> Dados da Empresa</TabsTrigger>
                     <TabsTrigger value="locations" className="gap-2 flex-grow sm:flex-grow-0"><MapPin className="w-4 h-4" /> Localizações (WMS)</TabsTrigger>
                     <TabsTrigger value="mercadolivre" className="gap-2 flex-grow sm:flex-grow-0 bg-yellow-400/10 text-yellow-700 data-[state=active]:bg-yellow-400 font-bold"><ShoppingCart className="w-4 h-4" /> Mercado Livre</TabsTrigger>
-                    <TabsTrigger value="import" className="gap-2 flex-grow sm:flex-grow-0"><Database className="w-4 h-4" /> Importador Inteligente</TabsTrigger>
+                    <TabsTrigger value="import" className="gap-2 flex-grow sm:flex-grow-0"><Database className="w-4 h-4" /> Importador de Dados</TabsTrigger>
                 </TabsList>
 
                 {/* TRANSPORTADORAS */}
@@ -979,7 +979,7 @@ export function Configuracoes() {
 
                 {/* IMPORTADOR */}
                 <TabsContent value="import">
-                    <ImportadorInteligente />
+                    <Importador />
                 </TabsContent>
             </Tabs>
 

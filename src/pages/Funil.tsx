@@ -74,7 +74,7 @@ export function Funil() {
     const fetchConversas = async () => {
         setLoading(true)
 
-        let query = supabase.from('conversas').select('*').order('updated_at', { ascending: false })
+        let query = supabase.from('conversas').select('*').order('last_message_at', { ascending: false })
 
         if (atendente?.perm_config) {
             query = query.eq('legacy', false)

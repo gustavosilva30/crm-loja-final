@@ -7,12 +7,13 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select } from "@/components/ui/select"
 import { Modal } from "@/components/ui/modal"
-import { Plus, Search, Filter, LayoutGrid, List, Package, Trash2, Pencil, ShoppingCart, FileText, Camera, Upload, X, Shield, Activity, Box, Tag, Ruler, Truck, Info, Settings, Maximize2, ChevronLeft, ChevronRight, ChevronDown, RefreshCw, Car, ImagePlus, Brain } from "lucide-react"
+import { Plus, Search, Filter, LayoutGrid, List, Package, Trash2, Pencil, ShoppingCart, FileText, Camera, Upload, X, Shield, Activity, Box, Tag, Ruler, Truck, Info, Settings, Maximize2, ChevronLeft, ChevronRight, ChevronDown, RefreshCw, Car, ImagePlus, Brain, Check, CheckCircle2 } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { supabase } from "@/lib/supabase"
 import { useAuthStore } from "@/store/authStore"
 import { ImageViewer } from "@/components/ImageViewer"
 import { AIPricingDialog } from "@/components/AIPricingDialog"
+import { cn } from "@/lib/utils"
 
 interface Produto {
   id: string
@@ -927,6 +928,33 @@ export function Produtos() {
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className={cn(
+                  "h-9 font-bold gap-2 transition-all",
+                  selectedIds.length === paginatedProdutos.length && paginatedProdutos.length > 0
+                    ? "bg-primary text-primary-foreground border-primary hover:bg-primary/90"
+                    : "hover:bg-muted"
+                )}
+                onClick={() => {
+                  if (selectedIds.length === paginatedProdutos.length) {
+                    setSelectedIds([]);
+                  } else {
+                    setSelectedIds(paginatedProdutos.map(p => p.id));
+                  }
+                }}
+              >
+                {selectedIds.length === paginatedProdutos.length && paginatedProdutos.length > 0 ? (
+                  <CheckCircle2 className="w-4 h-4" />
+                ) : (
+                  <Check className="w-4 h-4" />
+                )}
+                {selectedIds.length === paginatedProdutos.length && paginatedProdutos.length > 0 ? "Desmarcar Todos" : "Selecionar Filtro"}
+              </Button>
             </div>
 
             {selectedIds.length > 0 && (
